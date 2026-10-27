@@ -11,6 +11,7 @@ import { Registry, newProjectSchema } from './registry.js';
 import { Assistant, chatSchema } from './assistant.js';
 import { Wall, directionsRequestSchema, imageSchema, linkSchema } from './wall.js';
 import { acceptVersion, listVersions, readVersion } from './versions.js';
+import { clearInbox, handlePlugin, readInbox } from './plugin.js';
 import { figmaStatus } from '../../connectors/figma/contract.js';
 import type { RecordInfo } from '../../scripts/runtime.mjs';
 
@@ -18,6 +19,8 @@ export async function createStudioServer(
   options: {
     root: string;
     dev?: boolean;
+    // Code d'appairage du plugin Figma ; absent : routes du plugin fermées.
+    pluginCode?: string;
     control?: { record: RecordInfo; stop: () => void };
   } & (
     | { registry: Registry }
@@ -74,6 +77,10 @@ export async function createStudioServer(
           'Hôte refusé. Utilisez l’adresse 127.0.0.1 affichée au démarrage.',
           403,
         );
+      // Plugin Figma : origine `null`, protégé par son code d'appairage (plugin.ts).
+      const pluginUrl = new URL(req.url ?? '/', origin);
+      if (pluginUrl.pathname.startsWith('/api/plugin/'))
+        return await handlePlugin(req, res, pluginUrl, { registry, code: options.pluginCode ?? null, send });
       if (req.headers.origin && req.headers.origin !== origin)
         throw new StudioError('Origine non autorisée.', 403);
       if (req.headers['sec-fetch-site'] === 'cross-site')
@@ -107,6 +114,7 @@ export async function createStudioServer(
               figma: figmaStatus,
               multi: registry.multi,
               fallback: registry.fallback,
+              plugin: options.pluginCode ?? null,
             });
           if (url.pathname === '/api/projects') return send(200, await registry.list());
           const { store, dir: projectDir, config, brief: project, assistant, wall } = await instance();
@@ -120,6 +128,7 @@ export async function createStudioServer(
           }
           if (url.pathname === '/api/assistant')
             return send(200, { ...assistant.status, messages: await assistant.history() });
+          if (url.pathname === '/api/inbox') return send(200, await readInbox(store.directory));
           if (url.pathname === '/api/versions')
             return send(200, await listVersions(projectDir));
           if (url.pathname === '/api/version') {
@@ -198,6 +207,10 @@ export async function createStudioServer(
         if (url.pathname === '/api/proposals') {
           const b = proposeSchema.parse(body);
           return send(200, store.propose(b.revision, b.changes));
+        }
+        if (url.pathname === '/api/inbox/clear') {
+          await clearInbox(store.directory);
+          return send(200, null);
         }
         if (url.pathname === '/api/import') {
           const b = z

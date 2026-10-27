@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Registry, openInstance } from './registry.js';
 import { createStudioServer } from './http.js';
+import { loadPluginCode } from './plugin.js';
 import { acquireLease } from '../../scripts/runtime.mjs';
 
 const root = path.resolve(
@@ -59,6 +60,7 @@ try {
     root,
     registry,
     dev: process.argv.includes('--dev'),
+    pluginCode: await loadPluginCode(directory),
     control: {
       record: lease.record,
       stop: () => {

@@ -24,6 +24,9 @@ import {
   setProject,
   getVersions,
   getVersion,
+  getInbox,
+  clearInbox,
+  type Inbox,
   propose,
   proposeImport,
   proposeUndo,
@@ -36,7 +39,7 @@ import { Home, Sidebar, useRoute } from './Shell.js';
 import AssistantPanel from './Assistant.js';
 import Wall from './Wall.js';
 import { fontFamilies, loadFonts } from './fonts.js';
-import { ChangesDialog, Corrections, DiffDialog, HistoryPanel } from './Panels.js';
+import { ChangesDialog, Corrections, DiffDialog, FigmaDialog, HistoryPanel } from './Panels.js';
 
 const devices = [
   { label: '320', width: 320 },
@@ -99,10 +102,20 @@ export default function App() {
   const slug = route ?? (boot.multi ? undefined : boot.fallback);
   if (!slug) return <Home onOpen={go} />;
   setProject(slug);
-  return <Workspace key={slug} slug={slug} multi={boot.multi} onOpen={go} />;
+  return <Workspace key={slug} slug={slug} multi={boot.multi} plugin={boot.plugin} onOpen={go} />;
 }
 
-function Workspace({ slug, multi, onOpen }: { slug: string; multi: boolean; onOpen: (slug?: string) => void }) {
+function Workspace({
+  slug,
+  multi,
+  plugin,
+  onOpen,
+}: {
+  slug: string;
+  multi: boolean;
+  plugin: string | null;
+  onOpen: (slug?: string) => void;
+}) {
   const { state, setState, error: stateError } = useCommittedState(slug);
   const [config, setConfig] = useState<Config>();
   const k = (name: string) => `${name}:${slug}`;
@@ -118,6 +131,18 @@ function Workspace({ slug, multi, onOpen }: { slug: string; multi: boolean; onOp
   const [proposal, setProposal] = useState<Proposal>();
   const [versions, setVersions] = useState<VersionSummary[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [figmaOpen, setFigmaOpen] = useState(false);
+  // Fiches envoyées par le plugin Figma : relues au retour sur l'atelier.
+  const [inbox, setInbox] = useState<Inbox | null>(null);
+  const [fromInbox, setFromInbox] = useState(false);
+  useEffect(() => {
+    const load = () => {
+      getInbox().then(setInbox).catch(() => {});
+    };
+    load();
+    window.addEventListener('focus', load);
+    return () => window.removeEventListener('focus', load);
+  }, [slug]);
   // Comparaison affichée : avant d'accepter (état courant / dernière version)
   // ou entre deux versions depuis l'historique.
   const [comparison, setComparison] = useState<{ title: string; hint: string; patches: Patch[]; accept: boolean }>();
@@ -282,6 +307,11 @@ function Workspace({ slug, multi, onOpen }: { slug: string; multi: boolean; onOp
       const next = await commit(proposal!);
       setState(next);
       if (proposal!.source !== 'undo' && proposal!.source !== 'import') clearDrafts();
+      if (fromInbox) {
+        await clearInbox();
+        setInbox(null);
+        setFromInbox(false);
+      }
       setProposal(undefined);
       announce(slug);
       setNotice(`Révision ${next.revision} enregistrée. Annulable depuis l’historique.`);
@@ -322,7 +352,7 @@ function Workspace({ slug, multi, onOpen }: { slug: string; multi: boolean; onOp
       setNotice(
         `Version v${v.revision} acceptée (empreinte ${v.hash.slice(0, 8)})` +
           (v.findings ? `, ${v.findings} écart(s) encore signalé(s)` : '') +
-          '. Pour l’envoyer dans Figma, dis « transfère » à ton agent.',
+          '. Pour l’envoyer dans Figma : plugin DS-Studio dans le fichier cible (bouton Figma).',
       );
     });
   const importFile = (f: File) =>
@@ -359,6 +389,20 @@ function Workspace({ slug, multi, onOpen }: { slug: string; multi: boolean; onOp
           <button aria-pressed={assistantOpen} onClick={() => toggleAssistant(!assistantOpen)}>
             Assistant
           </button>
+          {inbox && (
+            <button
+              className="inbox"
+              onClick={() =>
+                run(async () => {
+                  setFromInbox(true);
+                  setProposal(await proposeImport(state.revision, inbox.file));
+                })
+              }
+            >
+              Fiches reçues de Figma ({Object.keys(inbox.file.components).length})
+            </button>
+          )}
+          <button onClick={() => setFigmaOpen(true)}>Figma</button>
           <button onClick={() => file.current?.click()}>Importer</button>
           <input
             ref={file}
@@ -460,7 +504,10 @@ function Workspace({ slug, multi, onOpen }: { slug: string; multi: boolean; onOp
         <DiffDialog
           proposal={proposal}
           busy={busy}
-          onCancel={() => setProposal(undefined)}
+          onCancel={() => {
+            setProposal(undefined);
+            setFromInbox(false);
+          }}
           onValidate={validate}
         />
       )}
@@ -478,6 +525,7 @@ function Workspace({ slug, multi, onOpen }: { slug: string; multi: boolean; onOp
           onCompare={compareVersions}
         />
       )}
+      {figmaOpen && <FigmaDialog code={plugin} config={config} onClose={() => setFigmaOpen(false)} />}
       {comparison && (
         <ChangesDialog
           title={comparison.title}

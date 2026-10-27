@@ -3,6 +3,7 @@ import type { Patch, Proposal, State, TokenValue } from '../shared/model.js';
 import { rules, type Finding } from '../shared/rules.js';
 import type { ComponentDoc } from '../shared/components.js';
 import type { VersionSummary } from './api.js';
+import type { Config } from '../shared/project.js';
 
 const sourceLabel: Record<string, string> = {
   manual: 'manuel',
@@ -298,5 +299,55 @@ export function HistoryPanel({
         </ol>
       </aside>
     </div>
+  );
+}
+
+// Plugin Figma DS-Studio : où l'installer, le code d'appairage, la cible du projet.
+export function FigmaDialog({
+  code,
+  config,
+  onClose,
+}: {
+  code: string | null;
+  config: Config | undefined;
+  onClose: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    dialog.current?.showModal();
+  }, []);
+  const target = config?.figma;
+  return (
+    <dialog ref={dialog} className="diff figma-dialog" aria-labelledby="figma-title" onCancel={onClose}>
+      <h2 id="figma-title">Plugin Figma DS-Studio</h2>
+      <p className="hint">
+        {target ? (
+          <>
+            Fichier cible : <code>{target.fileKey}</code>, page « {target.page} ». Le plugin refuse tout autre fichier.
+          </>
+        ) : (
+          'Ce projet n’a pas de fichier Figma cible : le plugin peut lire ses composants, pas y transférer.'
+        )}
+      </p>
+      <p>
+        Code d’appairage : <code className="pair">{code ?? 'plugin désactivé'}</code>
+      </p>
+      <ol>
+        <li>
+          Figma Desktop → Plugins → Développement → Importer un plugin depuis un manifeste… →{' '}
+          <code>studio/figma-plugin/manifest.json</code> (une seule fois).
+        </li>
+        <li>Ouvre le fichier cible, lance DS-Studio, colle le code.</li>
+        <li>
+          « Transférer » écrit la dernière version acceptée ; « Envoyer les composants » les renvoie ici, à relire par
+          diff.
+        </li>
+      </ol>
+      <div className="dialog-actions">
+        <button onClick={onClose} autoFocus>
+          Fermer
+        </button>
+      </div>
+    </dialog>
   );
 }

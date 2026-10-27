@@ -5,6 +5,8 @@ export interface Bootstrap {
   figma: { label: string; connected: boolean };
   multi: boolean;
   fallback: string;
+  // Code d'appairage du plugin Figma, affiché dans l'atelier seulement.
+  plugin: string | null;
 }
 export interface ProjectSummary {
   slug: string;
@@ -83,6 +85,14 @@ export const commit = (proposal: Proposal) =>
 export const accept = (revision: number) =>
   request<VersionSummary>('accept', { revision });
 export const getVersions = () => request<VersionSummary[]>('versions');
+// Fiches envoyées par le plugin Figma, en attente d'import par diff.
+export interface Inbox {
+  receivedAt: string;
+  report: string[];
+  file: { format: 'ds-studio-components/1'; source?: string; components: Record<string, unknown> };
+}
+export const getInbox = () => request<Inbox | null>('inbox');
+export const clearInbox = () => request<null>('inbox/clear', {});
 export const getVersion = (revision: number) =>
   request<VersionSummary & { set: TokenSet }>(`version?revision=${revision}`);
 export async function exportSet(name: string) {

@@ -174,6 +174,30 @@ test('acceptation : bloquée par un brouillon, puis version figée', async ({ pa
   await expect(page.getByRole('button', { name: /^v\d+ acceptée$/ })).toBeDisabled();
 });
 
+test('plugin Figma : code affiché, version calculée, fiches reçues relues par diff', async ({ page }) => {
+  await page.getByRole('button', { name: 'Figma', exact: true }).click();
+  const code = (await page.locator('.figma-dialog .pair').textContent()) ?? '';
+  expect(code).toMatch(/^[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}$/);
+  await page.getByRole('dialog').getByRole('button', { name: 'Fermer' }).click();
+  // Requêtes telles que le plugin les envoie depuis Figma (origine `null`).
+  const headers = { Origin: 'null', 'X-DS-Plugin': code };
+  const payload = await (await page.request.get('/api/plugin/payload?project=marmotte', { headers })).json();
+  expect(payload.collections.map((c: { name: string }) => c.name)).toEqual(['Primitives', 'Tokens', 'Typography']);
+  const sent = await page.request.post('/api/plugin/components?project=marmotte', {
+    headers,
+    data: { source: 'Figma test', components: [{ name: 'badge statut', props: { Variant: ['Info', 'Alerte'] }, variables: ['bg/brand'] }] },
+  });
+  expect((await sent.json()).count).toBe(1);
+  await page.reload();
+  await page.getByRole('button', { name: 'Fiches reçues de Figma (1)' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('Fiches : 1 ajouté(s)')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Valider et enregistrer' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('button', { name: /Fiches reçues de Figma/ })).toHaveCount(0);
+  await expect(page.locator('.fiches .fiche h3', { hasText: 'BadgeStatus' })).toBeVisible();
+});
+
 test('nomenclature et mobile 375 px sans défilement horizontal', async ({ page }) => {
   await page.getByLabel('Noms à vérifier, un par ligne').fill('card projet\nButton');
   await expect(page.getByText('1 nom(s) à revoir sur 2.')).toBeVisible();

@@ -18,8 +18,9 @@
 > interface sombre (fait), assistant en conversation (fait, éprouvé avec
 > DeepSeek V4.1 Flash), mur des DA : inspirations (images, captures de
 > liens), 1 à 3 DA avec polices Google, preview réelle, écarts et choix en
-> brouillon (fait, éprouvé : 3 DA en 70 s, 0 changement écarté). Reste :
-> plugin Figma DS-Studio.
+> brouillon (fait, éprouvé : 3 DA en 70 s, 0 changement écarté). Plugin
+> Figma DS-Studio (`figma-plugin/`, à éprouver dans Figma) ; ensuite, code
+> du projet sur GitHub.
 >
 > | Fait (2026-10-27) | Reste |
 > | --- | --- |
@@ -211,6 +212,13 @@ depuis un dossier temporaire vide. L’authentification reste gérée par le CLI
 Détails et limites : [SECURITY](docs/SECURITY.md), [AGENTS](docs/AGENT_ADAPTERS.md).
 
 ### Figma
+
+Plugin DS-Studio (développement) : Figma Desktop → Plugins → Développement →
+Importer un plugin depuis un manifeste → `figma-plugin/manifest.json`. Code
+d'appairage : bouton **Figma** de l'atelier. Le plugin écrit la dernière
+version acceptée (variables, Button) dans le fichier cible du projet, page
+dédiée seulement, et renvoie les composants du fichier comme fiches à relire
+par diff. Il refuse tout autre fichier et ne supprime rien.
 
 Figma reste la source de vérité du DS réel de votre PFE. Lisière est un exemple local,
 pas une copie de votre fichier. Aucun fichier personnel autorisé n’a été fourni ;

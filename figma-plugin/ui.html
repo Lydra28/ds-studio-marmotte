@@ -1,0 +1,243 @@
+<style>
+  :root {
+    color-scheme: light dark;
+  }
+  body {
+    margin: 0;
+    padding: 12px;
+    font: 12px/1.45 Inter, system-ui, sans-serif;
+    color: var(--figma-color-text, #222);
+    background: var(--figma-color-bg, #fff);
+  }
+  h1 {
+    font-size: 13px;
+    margin: 0 0 8px;
+  }
+  h2 {
+    font-size: 12px;
+    margin: 14px 0 6px;
+  }
+  label {
+    display: block;
+    margin: 6px 0 2px;
+    color: var(--figma-color-text-secondary, #666);
+  }
+  input,
+  select,
+  button {
+    font: inherit;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--figma-color-border, #ccc);
+    background: var(--figma-color-bg, #fff);
+    color: inherit;
+  }
+  button {
+    cursor: pointer;
+    margin-top: 8px;
+  }
+  button.primary {
+    background: var(--figma-color-bg-brand, #0d99ff);
+    color: var(--figma-color-text-onbrand, #fff);
+    border-color: transparent;
+    font-weight: 600;
+  }
+  button:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .card {
+    border: 1px solid var(--figma-color-border, #ddd);
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-top: 8px;
+  }
+  .ok {
+    color: var(--figma-color-text-success, #14ae5c);
+  }
+  .ko {
+    color: var(--figma-color-text-danger, #f24822);
+  }
+  .muted {
+    color: var(--figma-color-text-secondary, #666);
+  }
+  code {
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+  }
+  ul {
+    margin: 4px 0;
+    padding-left: 16px;
+  }
+  #error {
+    white-space: pre-wrap;
+  }
+  .row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .row input[type='checkbox'] {
+    width: auto;
+  }
+</style>
+
+<h1>DS-Studio</h1>
+<p class="muted">Écrit la dernière version acceptée de l’atelier dans ce fichier, et renvoie ses composants à l’atelier.</p>
+
+<form id="connect">
+  <label for="addr">Adresse de l’atelier</label>
+  <input id="addr" value="http://127.0.0.1:4310" />
+  <label for="code">Code d’appairage (bouton « Figma » dans l’atelier)</label>
+  <input id="code" placeholder="xxxx-xxxx-xxxx" autocomplete="off" />
+  <button type="submit">Connecter</button>
+</form>
+
+<div id="main" hidden>
+  <label for="project">Projet</label>
+  <select id="project"></select>
+  <div id="details"></div>
+</div>
+<p id="status" class="muted"></p>
+<p id="error" class="ko" role="alert"></p>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const send = (msg) => parent.postMessage({ pluginMessage: msg }, '*');
+  const state = { file: null, projects: [], payload: null };
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const setError = (m) => ($('error').textContent = m || '');
+  const setStatus = (m) => ($('status').textContent = m || '');
+
+  async function api(route, body) {
+    const res = await fetch($('addr').value.replace(/\/+$/, '') + '/api/plugin/' + route, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: { 'X-DS-Plugin': $('code').value.trim(), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
+    return data;
+  }
+  const slug = () => $('project').value;
+
+  $('connect').onsubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    try {
+      state.projects = await api('projects');
+      send({ type: 'save-settings', settings: { addr: $('addr').value, code: $('code').value.trim(), project: slug() } });
+      $('project').innerHTML = state.projects.map((p) => `<option value="${esc(p.slug)}">${esc(p.name)}</option>`).join('');
+      // Projet dont la cible est ce fichier, sinon le dernier choisi.
+      const mine = state.projects.find((p) => p.figma && p.figma.fileKey === (state.file && state.file.key));
+      if (mine) $('project').value = mine.slug;
+      else if (state.saved && state.projects.some((p) => p.slug === state.saved)) $('project').value = state.saved;
+      $('main').hidden = false;
+      setStatus(`Connecté · ${state.projects.length} projet(s)`);
+      await loadProject();
+    } catch (err) {
+      setError(`Atelier injoignable ou code refusé : ${err.message}`);
+    }
+  };
+  $('project').onchange = () => {
+    send({ type: 'save-settings', settings: { addr: $('addr').value, code: $('code').value.trim(), project: slug() } });
+    loadProject();
+  };
+
+  async function loadProject() {
+    setError('');
+    const p = state.projects.find((x) => x.slug === slug());
+    state.payload = null;
+    let html = '';
+    const file = state.file || {};
+    const target = p.figma && p.figma.fileKey;
+    const match = target && file.key === target;
+    html += `<div class="card"><strong>Fichier ouvert</strong> · ${esc(file.name || '')}<br><code>${esc(file.key || 'non identifié')}</code>${file.key && !file.native ? ' <span class="muted">(lié)</span>' : ''}<br>`;
+    html += target
+      ? `Cible du projet : <code>${esc(target)}</code> · <span class="${match ? 'ok' : 'ko'}">${match ? 'c’est ce fichier' : 'autre fichier'}</span>`
+      : '<span class="muted">Ce projet n’a pas de cible Figma : transfert impossible.</span>';
+    if (target && !file.key)
+      html += `<div class="row"><input type="checkbox" id="confirm-link"><label for="confirm-link">Ce fichier est bien la cible de ${esc(p.name)}</label></div><button id="link">Lier ce fichier au projet</button>`;
+    html += '</div>';
+
+    if (p.version && target) {
+      try {
+        state.payload = await api(`payload?project=${encodeURIComponent(p.slug)}`);
+        const v = state.payload;
+        const comps = (v.components || []).filter((c) => c.status === 'figma').map((c) => c.name);
+        html += `<h2>Transférer</h2><div class="card">Version <strong>v${v.revision}</strong> · ${new Date(v.acceptedAt).toLocaleString('fr-FR')} · <code>${v.hash.slice(0, 8)}</code>${v.findings ? ` · ${v.findings} écart(s)` : ''}<ul>`;
+        for (const c of v.collections) html += `<li>${esc(c.name)} : ${c.variables.length} variables · ${c.modes.map(esc).join(' / ')}</li>`;
+        html += `<li>Composants : ${comps.length ? comps.map(esc).join(', ') : 'aucun'}</li></ul>`;
+        html += `<span class="muted">Écrit dans la page « ${esc(v.target.page)} » et ces trois collections. Rien n’est supprimé ni renommé.</span>`;
+        if (v.transferred && v.transferred.hash === v.hash)
+          html += `<br><span class="ok">Déjà transférée le ${new Date(v.transferred.date).toLocaleString('fr-FR')}.</span>`;
+        html += `<button class="primary" id="transfer" ${match ? '' : 'disabled'}>Transférer v${v.revision}${v.transferred && v.transferred.hash === v.hash ? ' à nouveau' : ''}</button></div>`;
+      } catch (err) {
+        html += `<p class="ko">${esc(err.message)}</p>`;
+      }
+    } else if (!p.version) html += '<p class="muted">Aucune version acceptée : accepte une version dans l’atelier.</p>';
+
+    html += `<h2>Envoyer les composants</h2><div class="card"><span class="muted">Lit les composants de ce fichier (lecture seule) et les envoie à l’atelier comme fiches à relire. Rien n’est écrit sans ton diff.</span><button id="components">Envoyer les composants à ${esc(p.name)}</button></div>`;
+    $('details').innerHTML = html;
+
+    if ($('link'))
+      $('link').onclick = () => {
+        if (!$('confirm-link').checked) return setError('Coche la confirmation avant de lier ce fichier.');
+        send({ type: 'link-file', fileKey: target });
+      };
+    if ($('transfer'))
+      $('transfer').onclick = () => {
+        $('transfer').disabled = true;
+        setStatus('Transfert en cours…');
+        send({ type: 'transfer', payload: state.payload });
+      };
+    $('components').onclick = () => {
+      $('components').disabled = true;
+      setStatus('Lecture des composants du fichier…');
+      send({ type: 'read-components' });
+    };
+  }
+
+  onmessage = async (event) => {
+    const msg = event.data.pluginMessage;
+    if (!msg) return;
+    try {
+      if (msg.type === 'init') {
+        state.file = msg.file;
+        state.saved = msg.settings.project;
+        if (msg.settings.addr) $('addr').value = msg.settings.addr;
+        if (msg.settings.code) {
+          $('code').value = msg.settings.code;
+          $('connect').requestSubmit();
+        }
+      } else if (msg.type === 'file') {
+        state.file = msg.file;
+        await loadProject();
+      } else if (msg.type === 'transferred') {
+        const r = msg.report;
+        const v = state.payload;
+        await api(`transfer?project=${encodeURIComponent(slug())}`, { revision: v.revision, hash: v.hash, fileKey: v.target.fileKey, report: r });
+        setStatus(
+          `v${v.revision} transférée : ${r.created} variable(s) créée(s), ${r.updated} mise(s) à jour` +
+            (r.components.length ? `, ${r.components.join(', ')} construit` : '') +
+            (r.extra.length ? ` · ${r.extra.length} variable(s) Figma hors version, conservée(s)` : '') +
+            (r.skipped.length ? `\nÀ voir : ${r.skipped.join(' ; ')}` : ''),
+        );
+        await loadProject();
+      } else if (msg.type === 'components') {
+        const res = await api(`components?project=${encodeURIComponent(slug())}`, msg.raw);
+        setStatus(`${res.count} fiche(s) envoyée(s) à l’atelier : ouvre-le, bouton « Fiches reçues de Figma », puis relis le diff.`);
+        $('components').disabled = false;
+      } else if (msg.type === 'error') {
+        setStatus('');
+        await loadProject();
+        setError(msg.message);
+      }
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  send({ type: 'init' });
+</script>
