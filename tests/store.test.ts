@@ -22,6 +22,7 @@ import {
 } from '../app/shared/model.js';
 import { checkComponentName, checkNames, runRules } from '../app/shared/rules.js';
 import { acceptVersion, listVersions, versionHash } from '../app/server/versions.js';
+import { componentsSchema } from '../app/shared/components.js';
 
 const v1Seed = JSON.parse(
   await readFile(
@@ -345,4 +346,53 @@ test('ajout et retrait de tokens : diff puis commit, retrait refusé tant qu’u
   assert.deepEqual(r.patches.map((x) => [x.key, !!x.after]), [[unused, false]]);
   await store.commit(r.id);
   assert.equal(store.snapshot().set.tokens[unused], undefined);
+});
+
+test('fiches de composants : migration annulable, édition et import par diff, figées dans la version', async (t) => {
+  const components = componentsSchema.parse(
+    JSON.parse(await readFile(new URL('../projects/marmotte/components.json', import.meta.url), 'utf8')),
+  );
+  // Instance existante sans fiches : elles arrivent par une révision « migration ».
+  const { dir } = await fixture(t, marmotte);
+  const reopened = new Store(dir, { ...marmotte, components });
+  await reopened.init();
+  const s1 = reopened.snapshot();
+  assert.equal(s1.revision, 1);
+  assert.equal(s1.history[0].source, 'migration');
+  assert.deepEqual(Object.keys(s1.set.components!).sort(), ['Button', 'Card', 'Input']);
+  // Édition : création, modification, retrait, chacun visible dans le diff.
+  const tag = { ...components.Card, status: 'fiche' as const, role: 'Étiquette courte.' };
+  const p = reopened.propose(1, [
+    { op: 'component', name: 'Tag', component: tag },
+    { op: 'component', name: 'Card', component: null },
+  ]);
+  assert.deepEqual(
+    p.patches.map((x) => [x.kind, x.key, !!x.before, !!x.after]),
+    [['component', 'Card', true, false], ['component', 'Tag', false, true]],
+  );
+  await reopened.commit(p.id);
+  assert.throws(() => reopened.propose(2, [{ op: 'component', name: 'Card', component: null }]), /Composant inconnu/);
+  // Annulation de toute la révision : Card revient, Tag repart.
+  await reopened.commit(reopened.proposeUndo(2, p.id).id);
+  assert.ok(reopened.snapshot().set.components!.Card);
+  // Import d'un fichier de fiches préparé par l'agent : ajoute, ne retire rien.
+  const imp = reopened.proposeImport(3, {
+    format: 'ds-studio-components/1',
+    source: 'Figma test',
+    components: { 'Card/Project': tag },
+  });
+  assert.deepEqual(imp.patches.map((x) => x.key), ['Card/Project']);
+  // Un jeu de tokens importé sans fiches les conserve.
+  assert.throws(() => reopened.proposeImport(3, marmotte), /Aucune modification/);
+  // Nom non conforme refusé par le schéma.
+  assert.throws(() => reopened.propose(3, [{ op: 'component', name: 'card projet', component: tag }]));
+  // Redémarrage : historique mixte tokens + fiches relu sans incohérence.
+  const again = new Store(dir, { ...marmotte, components });
+  await again.init();
+  assert.equal(again.snapshot().revision, 3);
+  // Version : les fiches sont dans le jeu figé, donc dans l'empreinte.
+  const v = await acceptVersion(dir, { name: 'Test', figma: null }, again.snapshot(), 3);
+  const saved = JSON.parse(await readFile(path.join(dir, 'versions', 'v3.json'), 'utf8'));
+  assert.equal(v.hash, versionHash(saved.set));
+  assert.deepEqual(saved.components.map((c: { name: string }) => c.name).sort(), ['Button', 'Card', 'Input']);
 });

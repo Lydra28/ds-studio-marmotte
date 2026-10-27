@@ -15,13 +15,13 @@
 > | --- | --- |
 > | Modèle de tokens v2 : Primitives / Tokens / Typography (desktop, mobile), alias, migration v1 non destructive | Répétition du transfert Figma (variables, planche Foundations, composant Button) |
 > | Règles : espacements multiples de 4, contraste, taille de texte, nommage des composants (propose, n'applique jamais seul) | |
-> | Nomenclature (noms anglais, fiches en français) : Button, Input, Card | Mise à jour des docs d'origine (mentions de Codex) |
+> | Fiches de composants par projet, éditables (diff, historique, version) ; nomenclature (noms anglais, fiches en français) ; import depuis Figma via l'agent (`scripts/components-from-figma.ts`) | Mise à jour des docs d'origine (mentions de Codex) |
 > | Brouillon → diff → validation → historique annulable ; ajout et retrait de tokens ; acceptation de version (empreinte, cible, révision) | Polices Google dans la preview |
 > | `scripts/figma-payload.ts` : prépare le transfert, refuse une version modifiée ; chat Codex retiré | DA de Marmotte (le jeu actuel est neutre) |
 >
 > Instance : [projects/marmotte/](projects/marmotte/) · journal :
 > [DECISIONS.md](projects/marmotte/DECISIONS.md). Tests : `npm test`
-> (24 réussis, 2 ignorés sous Windows) et `npm run test:e2e` (5 parcours navigateur).
+> (26 réussis, 2 ignorés sous Windows) et `npm run test:e2e` (6 parcours navigateur).
 >
 > La suite de ce README est celle du starter d'origine.
 

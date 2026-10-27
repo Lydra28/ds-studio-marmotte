@@ -7,7 +7,6 @@ import {
   type ValueChange,
   type TokenSet,
 } from './model.js';
-import { components } from './components.js';
 
 // Règles de correction : elles signalent et proposent, elles n'appliquent
 // jamais. Ajouter une règle = ajouter une entrée à `rules` et un test.
@@ -172,11 +171,11 @@ export const rules: Rule[] = [
   {
     id: 'nommage-composants',
     label: 'Noms de composants conformes',
-    check: () =>
-      components.flatMap((c) =>
-        checkComponentName(c.name).issues.map((message) => ({
+    check: (set) =>
+      Object.keys(set.components ?? {}).flatMap((name) =>
+        checkComponentName(name).issues.map((message) => ({
           rule: 'nommage-composants',
-          key: c.name,
+          key: name,
           message,
         })),
       ),
@@ -256,7 +255,9 @@ export function checkComponentName(input: string): {
             issues.push(`Mot français « ${w} » : en anglais « ${translations[p]} ».`);
           return translations[p];
         }
-        return w.charAt(0).toUpperCase() + w.slice(1);
+        const ascii = w.normalize('NFD').replace(/[̀-ͯ]/g, '');
+        if (ascii !== w) issues.push('Accents à retirer du nom.');
+        return ascii.charAt(0).toUpperCase() + ascii.slice(1);
       })
       .join('');
   });

@@ -24,3 +24,6 @@ Thumbs.db
 
 # Suivi de reprise local, non destiné à la distribution.
 /PROGRESS.md
+
+# Fiches préparées depuis Figma par l’agent, importées puis validées dans l’atelier.
+projects/*/imports/

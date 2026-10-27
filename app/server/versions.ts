@@ -5,7 +5,6 @@ import { atomicWrite, readPrivate } from './files.js';
 import { StudioError } from './store.js';
 import { canonical, type State, type TokenSet } from '../shared/model.js';
 import { runRules } from '../shared/rules.js';
-import { components } from '../shared/components.js';
 import type { Config } from '../shared/project.js';
 
 // Une version acceptée est figée dans `versions/v<révision>.json`, avec son
@@ -58,7 +57,11 @@ export async function acceptVersion(
     acceptedAt: new Date().toISOString(),
     hash,
     findings,
-    components,
+    // Liste à plat pour l'agent de transfert ; la source reste set.components.
+    components: Object.entries(state.set.components ?? {}).map(([name, c]) => ({
+      name,
+      ...c,
+    })),
     set: state.set,
   };
   await atomicWrite(file, JSON.stringify(version, null, 2) + '\n');

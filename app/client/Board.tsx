@@ -9,8 +9,8 @@ import {
   type TokenType,
   type TokenValue,
 } from '../shared/model.js';
-import type { Finding } from '../shared/rules.js';
-import { components } from '../shared/components.js';
+import { checkComponentName, type Finding } from '../shared/rules.js';
+import { componentName, propNames, type ComponentDoc } from '../shared/components.js';
 import Nomenclature from './Nomenclature.js';
 
 type Edit = (key: string, mode: string, value: TokenValue) => void;
@@ -23,6 +23,8 @@ interface BoardProps {
   onEdit: Edit;
   onAdd: Add;
   onRemove: (key: string) => void;
+  componentDrafts: Map<string, ComponentDoc | null>;
+  onComponent: (name: string, doc: ComponentDoc | null) => void;
 }
 
 // Valeur de départ d'un nouveau token, à régler ensuite sur la planche.
@@ -113,6 +115,133 @@ function AddToken({
         Annuler
       </button>
       {key !== prefix && problem && <small className="add-error">{problem}</small>}
+    </form>
+  );
+}
+
+const emptyDoc: ComponentDoc = {
+  status: 'fiche',
+  props: {},
+  role: '',
+  use: '',
+  avoid: '',
+  a11y: '',
+  tokens: [],
+};
+const splitList = (raw: string) =>
+  raw
+    .split(/[,\s]+/)
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+// Formulaire de fiche : création ou modification, le nom est vérifié en direct
+// par la nomenclature. Rien n'est enregistré avant le diff et la validation.
+function ComponentForm({
+  set,
+  name: initialName = '',
+  doc = emptyDoc,
+  onSave,
+  onCancel,
+}: {
+  set: TokenSet;
+  name?: string;
+  doc?: ComponentDoc;
+  onSave: (name: string, doc: ComponentDoc) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(initialName);
+  const [status, setStatus] = useState(doc.status);
+  const [props, setProps] = useState<Record<string, string>>(
+    Object.fromEntries(propNames.map((p) => [p, (doc.props[p] ?? []).join(', ')])),
+  );
+  const [text, setText] = useState({ role: doc.role, use: doc.use, avoid: doc.avoid, a11y: doc.a11y });
+  const [tokens, setTokens] = useState(doc.tokens.join(', '));
+  const check = checkComponentName(name);
+  const taken = name !== initialName && !!set.components?.[name];
+  const valid = componentName.test(name) && !taken;
+  const unknown = splitList(tokens).filter((t) => !set.tokens[t]);
+  const submit = () => {
+    if (!valid) return;
+    onSave(name, {
+      status,
+      props: Object.fromEntries(
+        propNames
+          .map((p) => [p, splitList(props[p]).map((v) => v.toLowerCase())] as const)
+          .filter(([, v]) => v.length),
+      ),
+      ...text,
+      tokens: splitList(tokens),
+    });
+  };
+  const area = (field: keyof typeof text, label: string) => (
+    <label>
+      {label}
+      <textarea
+        rows={2}
+        value={text[field]}
+        onChange={(e) => setText({ ...text, [field]: e.target.value })}
+      />
+    </label>
+  );
+  return (
+    <form
+      className="fiche fiche-form"
+      aria-label={initialName ? `Modifier ${initialName}` : 'Nouveau composant'}
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+    >
+      <label>
+        Nom (anglais, PascalCase)
+        <input value={name} autoFocus onChange={(e) => setName(e.target.value.trim())} placeholder="Card/Project" />
+      </label>
+      {name && (check.issues.length > 0 || taken) && (
+        <p className="add-error">
+          {taken ? 'Ce composant existe déjà.' : check.issues.join(' ')}{' '}
+          {check.suggestion && check.suggestion !== name && (
+            <button type="button" onClick={() => setName(check.suggestion)}>
+              Utiliser {check.suggestion}
+            </button>
+          )}
+        </p>
+      )}
+      <label>
+        Statut au transfert
+        <select value={status} onChange={(e) => setStatus(e.target.value as ComponentDoc['status'])}>
+          <option value="fiche">Fiche : documenté sur la page</option>
+          <option value="figma">Figma : vrai composant avec variantes</option>
+        </select>
+      </label>
+      <div className="props-edit">
+        {propNames.map((p) => (
+          <label key={p}>
+            {p}
+            <input
+              value={props[p]}
+              placeholder={p === 'State' ? 'default, hover, disabled' : ''}
+              onChange={(e) => setProps({ ...props, [p]: e.target.value })}
+            />
+          </label>
+        ))}
+      </div>
+      {area('role', 'À quoi il sert')}
+      {area('use', 'Quand l’utiliser')}
+      {area('avoid', 'Quand l’éviter')}
+      {area('a11y', 'Accessibilité')}
+      <label>
+        Tokens utilisés (séparés par des virgules)
+        <textarea rows={2} value={tokens} onChange={(e) => setTokens(e.target.value)} />
+      </label>
+      {unknown.length > 0 && <p className="add-error">Absents du jeu : {unknown.join(', ')}</p>}
+      <div className="form-actions">
+        <button type="submit" className="primary" disabled={!valid}>
+          {initialName ? 'Mettre à jour' : 'Ajouter'} en brouillon
+        </button>
+        <button type="button" onClick={onCancel}>
+          Annuler
+        </button>
+      </div>
     </form>
   );
 }
@@ -230,7 +359,19 @@ function Flag({ findings }: { findings: Finding[] }) {
   );
 }
 
-export default function Board({ set, drafts, added, findings, onEdit, onAdd, onRemove }: BoardProps) {
+export default function Board({
+  set,
+  drafts,
+  added,
+  findings,
+  onEdit,
+  onAdd,
+  onRemove,
+  componentDrafts,
+  onComponent,
+}: BoardProps) {
+  // Fiche en cours d'édition : son nom, '' pour une nouvelle, undefined sinon.
+  const [editing, setEditing] = useState<string>();
   const entries = Object.entries(set.tokens);
   const byKey = (key: string) => findings.filter((f) => f.key === key);
   const isDraft = (key: string) =>
@@ -414,43 +555,90 @@ export default function Board({ set, drafts, added, findings, onEdit, onAdd, onR
 
       <section aria-labelledby="h-components">
         <h2 id="h-components">Composants</h2>
-        <p className="hint">Nom anglais, fiche en français. « Figma » : composant créé au transfert ; « Fiche » : documenté seulement.</p>
+        <p className="hint">
+          Nom anglais, fiche en français. « Figma » : composant créé au transfert ; « Fiche » :
+          documenté seulement. Depuis Figma : demande à ton agent « ajoute les composants de mon
+          Figma », puis importe le fichier qu’il prépare.
+        </p>
         <div className="fiches">
-          {components.map((c) => (
-            <article className="fiche" key={c.name}>
-              <header>
-                <h3>{c.name}</h3>
-                <span className={`status ${c.status}`}>{c.status === 'figma' ? 'Figma' : 'Fiche'}</span>
-                <Flag findings={byKey(c.name)} />
-              </header>
-              <p className="props">
-                {Object.entries(c.props).map(([k, v]) => (
-                  <span key={k}>
-                    <code>{k}</code> {v.join(' · ')}
+          {Object.entries(set.components ?? {}).map(([name, c]) =>
+            editing === name ? (
+              <ComponentForm
+                key={name}
+                set={set}
+                name={name}
+                doc={c}
+                onCancel={() => setEditing(undefined)}
+                onSave={(next, doc) => {
+                  if (next !== name) onComponent(name, null);
+                  onComponent(next, doc);
+                  setEditing(undefined);
+                }}
+              />
+            ) : (
+              <article className={`fiche ${componentDrafts.has(name) ? 'is-draft' : ''}`} key={name}>
+                <header>
+                  <h3>{name}</h3>
+                  <span className={`status ${c.status}`}>{c.status === 'figma' ? 'Figma' : 'Fiche'}</span>
+                  <Flag findings={byKey(name)} />
+                  <span className="fiche-actions">
+                    <button className="remove" aria-label={`Modifier ${name}`} title="Modifier la fiche" onClick={() => setEditing(name)}>
+                      ✎
+                    </button>
+                    <button
+                      className="remove"
+                      aria-label={`Retirer ${name}`}
+                      title="Retirer (brouillon : rien n’est supprimé avant validation)"
+                      onClick={() => onComponent(name, null)}
+                    >
+                      ×
+                    </button>
                   </span>
-                ))}
-              </p>
-              <dl>
-                <dt>À quoi il sert</dt>
-                <dd>{c.role}</dd>
-                <dt>Quand l’utiliser</dt>
-                <dd>{c.use}</dd>
-                <dt>Quand l’éviter</dt>
-                <dd>{c.avoid}</dd>
-                <dt>Accessibilité</dt>
-                <dd>{c.a11y}</dd>
-                <dt>Tokens</dt>
-                <dd className="token-list">
-                  {c.tokens.map((t) => (
-                    <code key={t} className={set.tokens[t] ? '' : 'missing'} title={set.tokens[t] ? '' : 'token absent du jeu'}>
-                      {t}
-                    </code>
+                </header>
+                <p className="props">
+                  {Object.entries(c.props).map(([k, v]) => (
+                    <span key={k}>
+                      <code>{k}</code> {v.join(' · ')}
+                    </span>
                   ))}
-                </dd>
-              </dl>
-            </article>
-          ))}
+                </p>
+                <dl>
+                  <dt>À quoi il sert</dt>
+                  <dd>{c.role || '—'}</dd>
+                  <dt>Quand l’utiliser</dt>
+                  <dd>{c.use || '—'}</dd>
+                  <dt>Quand l’éviter</dt>
+                  <dd>{c.avoid || '—'}</dd>
+                  <dt>Accessibilité</dt>
+                  <dd>{c.a11y || '—'}</dd>
+                  <dt>Tokens</dt>
+                  <dd className="token-list">
+                    {c.tokens.map((t) => (
+                      <code key={t} className={set.tokens[t] ? '' : 'missing'} title={set.tokens[t] ? '' : 'token absent du jeu'}>
+                        {t}
+                      </code>
+                    ))}
+                  </dd>
+                </dl>
+              </article>
+            ),
+          )}
+          {editing === '' && (
+            <ComponentForm
+              set={set}
+              onCancel={() => setEditing(undefined)}
+              onSave={(name, doc) => {
+                onComponent(name, doc);
+                setEditing(undefined);
+              }}
+            />
+          )}
         </div>
+        {editing === undefined && (
+          <button className="add" onClick={() => setEditing('')}>
+            + Ajouter un composant
+          </button>
+        )}
       </section>
 
       <section aria-labelledby="h-names">

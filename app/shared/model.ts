@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+  componentName,
+  componentSchema,
+  componentsSchema,
+  type ComponentDoc,
+} from './components.js';
 
 // Jeu de tokens v2 : trois collections calquées sur Figma (Primitives, Tokens,
 // Typography), des modes par collection et des alias `{chemin}` vers une autre
@@ -50,6 +56,7 @@ export const tokenSetSchema = z
   .object({
     modes: modesSchema,
     tokens: z.record(z.string().max(80).regex(pathPattern), tokenSchema),
+    components: componentsSchema.optional(),
   })
   .strict()
   .superRefine((set, ctx) => {
@@ -173,6 +180,14 @@ export const changeSchema = z.union([
   valueChangeSchema,
   z.object({ op: z.literal('add'), key: keySchema, token: tokenSchema }).strict(),
   z.object({ op: z.literal('remove'), key: keySchema }).strict(),
+  // Fiche de composant : création ou remplacement, null = retrait.
+  z
+    .object({
+      op: z.literal('component'),
+      name: z.string().max(60).regex(componentName),
+      component: componentSchema.nullable(),
+    })
+    .strict(),
 ]);
 export type Change = z.infer<typeof changeSchema>;
 export const proposeSchema = z
@@ -189,12 +204,21 @@ export const referrers = (set: TokenSet, key: string) =>
     .map(([k]) => k);
 
 export function applyChanges(set: TokenSet, changes: Change[]): TokenSet {
-  const ids = changes.map((c) => ('op' in c ? `${c.op}:${c.key}` : `${c.key}@${c.mode}`));
+  const ids = changes.map((c) =>
+    !('op' in c) ? `${c.key}@${c.mode}` : c.op === 'component' ? `component:${c.name}` : `${c.op}:${c.key}`,
+  );
   if (new Set(ids).size !== ids.length)
     throw new Error('Un token ne peut apparaître deux fois dans le même mode.');
   const next = structuredClone(set);
   const removed: string[] = [];
   for (const change of changes) {
+    if ('op' in change && change.op === 'component') {
+      const all = (next.components ??= {});
+      if (change.component) all[change.name] = structuredClone(change.component);
+      else if (all[change.name]) delete all[change.name];
+      else throw new Error(`Composant inconnu : ${change.name}.`);
+      continue;
+    }
     if ('op' in change && change.op === 'add') {
       if (next.tokens[change.key])
         throw new Error(`Token déjà existant : ${change.key}.`);
@@ -220,12 +244,16 @@ export function applyChanges(set: TokenSet, changes: Change[]): TokenSet {
   return tokenSetSchema.parse(next);
 }
 
-// Un patch remplace un token entier : null = absent (ajout ou retrait par import).
-export interface Patch {
-  key: string;
-  before: Token | null;
-  after: Token | null;
-}
+// Un patch remplace un token ou une fiche de composant entière : null = absent
+// (ajout ou retrait).
+export type Patch =
+  | { kind?: undefined; key: string; before: Token | null; after: Token | null }
+  | {
+      kind: 'component';
+      key: string;
+      before: ComponentDoc | null;
+      after: ComponentDoc | null;
+    };
 export function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
   if (value && typeof value === 'object')
@@ -238,19 +266,30 @@ export function canonical(value: unknown): string {
       .join(',')}}`;
   return JSON.stringify(value);
 }
-export const sameToken = (a: Token | null | undefined, b: Token | null | undefined) =>
+export const sameToken = (a: unknown, b: unknown) =>
   canonical(a ?? null) === canonical(b ?? null);
+// Valeur actuelle de ce que vise le patch, dans le jeu donné.
+export const patchTarget = (set: TokenSet, p: Patch) =>
+  (p.kind === 'component' ? set.components?.[p.key] : set.tokens[p.key]) ?? null;
 export function diff(before: TokenSet, after: TokenSet): Patch[] {
-  const keys = [
-    ...new Set([...Object.keys(before.tokens), ...Object.keys(after.tokens)]),
-  ].sort();
-  return keys
+  const keysOf = (...maps: (Record<string, unknown> | undefined)[]) =>
+    [...new Set(maps.flatMap((m) => Object.keys(m ?? {})))].sort();
+  const tokens: Patch[] = keysOf(before.tokens, after.tokens)
     .filter((key) => !sameToken(before.tokens[key], after.tokens[key]))
     .map((key) => ({
       key,
       before: before.tokens[key] ?? null,
       after: after.tokens[key] ?? null,
     }));
+  const components: Patch[] = keysOf(before.components, after.components)
+    .filter((key) => !sameToken(before.components?.[key], after.components?.[key]))
+    .map((key) => ({
+      kind: 'component',
+      key,
+      before: before.components?.[key] ?? null,
+      after: after.components?.[key] ?? null,
+    }));
+  return [...tokens, ...components];
 }
 export function applyPatches(
   set: TokenSet,
@@ -259,6 +298,13 @@ export function applyPatches(
 ): TokenSet {
   const next = structuredClone(set);
   for (const patch of patches) {
+    if (patch.kind === 'component') {
+      const doc = patch[side];
+      const all = (next.components ??= {});
+      if (doc) all[patch.key] = structuredClone(doc);
+      else delete all[patch.key];
+      continue;
+    }
     const token = patch[side];
     if (token) next.tokens[patch.key] = structuredClone(token);
     else delete next.tokens[patch.key];
@@ -293,13 +339,23 @@ export interface Proposal {
   source: Revision['source'];
   patches: Patch[];
 }
-const patchSchema = z
-  .object({
-    key: z.string(),
-    before: tokenSchema.nullable(),
-    after: tokenSchema.nullable(),
-  })
-  .strict();
+const patchSchema = z.union([
+  z
+    .object({
+      key: z.string(),
+      before: tokenSchema.nullable(),
+      after: tokenSchema.nullable(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('component'),
+      key: z.string(),
+      before: componentSchema.nullable(),
+      after: componentSchema.nullable(),
+    })
+    .strict(),
+]);
 export const stateSchema = z
   .object({
     version: z.literal(2),

@@ -7,6 +7,7 @@ import {
   tokenSetSchema,
 } from '../shared/model.js';
 import { configSchema } from '../shared/project.js';
+import { componentsSchema } from '../shared/components.js';
 import { Store } from './store.js';
 import { createStudioServer } from './http.js';
 import { acquireLease } from '../../scripts/runtime.mjs';
@@ -46,6 +47,15 @@ try {
   const seed = isV1Tokens(rawSeed)
     ? migrateV1Tokens(rawSeed)
     : tokenSetSchema.parse(rawSeed);
+  // Fiches de départ du projet, facultatives.
+  const rawComponents = await fs
+    .readFile(path.join(projectDir, 'components.json'), 'utf8')
+    .then(JSON.parse)
+    .catch((e: NodeJS.ErrnoException) => {
+      if (e.code === 'ENOENT') return undefined;
+      throw e;
+    });
+  if (rawComponents) seed.components = componentsSchema.parse(rawComponents);
   const config = configSchema.parse(
     await fs
       .readFile(path.join(projectDir, 'project.config.json'), 'utf8')

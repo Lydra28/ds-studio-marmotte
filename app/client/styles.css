@@ -840,3 +840,44 @@ body.preview-body {
   color: var(--c-warn);
   width: 100%;
 }
+
+/* Fiches de composants éditables. */
+.fiche-actions {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 2px;
+}
+.fiche.is-draft {
+  outline: 2px solid var(--c-draft);
+  outline-offset: 2px;
+}
+.fiche-form {
+  display: grid;
+  gap: 10px;
+}
+.fiche-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--c-muted);
+}
+.fiche-form input,
+.fiche-form select,
+.fiche-form textarea {
+  border: 1px solid var(--c-line);
+  border-radius: 6px;
+  padding: 5px 8px;
+  background: var(--c-panel);
+  color: var(--c-text, inherit);
+  font-size: 13px;
+  min-width: 0;
+}
+.props-edit {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+.form-actions {
+  display: flex;
+  gap: 8px;
+}

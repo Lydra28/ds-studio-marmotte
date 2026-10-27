@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { Patch, Proposal, State, TokenValue } from '../shared/model.js';
 import { rules, type Finding } from '../shared/rules.js';
+import type { ComponentDoc } from '../shared/components.js';
 import type { VersionSummary } from './api.js';
 
 const sourceLabel: Record<string, string> = {
@@ -23,7 +24,53 @@ function Value({ v }: { v: TokenValue | undefined }) {
   );
 }
 
+// Champs d'une fiche de composant, dans l'ordre d'affichage du diff.
+const fieldLabel: Record<keyof ComponentDoc, string> = {
+  status: 'statut',
+  props: 'propriétés',
+  role: 'rôle',
+  use: 'quand l’utiliser',
+  avoid: 'quand l’éviter',
+  a11y: 'accessibilité',
+  tokens: 'tokens',
+};
+const fieldText = (doc: ComponentDoc | null, f: keyof ComponentDoc) => {
+  if (!doc) return undefined;
+  if (f === 'props')
+    return Object.entries(doc.props)
+      .map(([k, v]) => `${k}=${v.join('/')}`)
+      .join(' · ');
+  if (f === 'tokens') return doc.tokens.join(', ');
+  return doc[f];
+};
+
+function ComponentRows({ patch }: { patch: Extract<Patch, { kind: 'component' }> }) {
+  const label = !patch.before ? 'ajouté' : !patch.after ? 'retiré' : '';
+  const fields = (Object.keys(fieldLabel) as (keyof ComponentDoc)[]).filter(
+    (f) => (fieldText(patch.before, f) || '') !== (fieldText(patch.after, f) || ''),
+  );
+  return (
+    <>
+      {fields.map((f) => (
+        <tr key={f}>
+          <th scope="row">
+            <code>{patch.key}</code> <small>{fieldLabel[f]}</small>{' '}
+            {label && <small className="tag">{label}</small>}
+          </th>
+          <td>
+            <Value v={fieldText(patch.before, f)} />
+          </td>
+          <td>
+            <Value v={fieldText(patch.after, f)} />
+          </td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
 function PatchRows({ patch }: { patch: Patch }) {
+  if (patch.kind === 'component') return <ComponentRows patch={patch} />;
   const modes = [
     ...new Set([
       ...Object.keys(patch.before?.$values ?? {}),
@@ -71,7 +118,7 @@ export function DiffDialog({
   return (
     <dialog ref={dialog} className="diff" aria-labelledby="diff-title" onCancel={onCancel}>
       <h2 id="diff-title">
-        Diff · {sourceLabel[proposal.source]} · {proposal.patches.length} token(s)
+        Diff · {sourceLabel[proposal.source]} · {proposal.patches.length} changement(s)
       </h2>
       <p className="hint">Rien n’est écrit tant que tu n’as pas validé.</p>
       <div className="table-wrap">
@@ -85,7 +132,7 @@ export function DiffDialog({
           </thead>
           <tbody>
             {proposal.patches.map((p) => (
-              <PatchRows key={p.key} patch={p} />
+              <PatchRows key={`${p.kind ?? 'token'}:${p.key}`} patch={p} />
             ))}
           </tbody>
         </table>

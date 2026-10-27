@@ -78,6 +78,29 @@ test('abandon du brouillon sans écriture, puis annulation depuis l’historique
   expect(await revision(page)).toBe(before + 1);
 });
 
+test('fiches : création au nom corrigé, modification et retrait par diff', async ({ page }) => {
+  await page.getByRole('button', { name: '+ Ajouter un composant' }).click();
+  const form = page.getByRole('form', { name: 'Nouveau composant' });
+  await form.getByLabel('Nom (anglais, PascalCase)').fill('card projet');
+  await form.getByRole('button', { name: 'Utiliser CardProject' }).click();
+  await form.getByLabel('À quoi il sert').fill('Présente un projet du portfolio.');
+  await form.getByRole('button', { name: 'Ajouter en brouillon' }).click();
+  await page.getByRole('button', { name: 'Modifier Card', exact: true }).click();
+  const edit = page.getByRole('form', { name: 'Modifier Card' });
+  await edit.getByLabel('Quand l’éviter').fill('Jamais de carte dans une carte.');
+  await edit.getByRole('button', { name: 'Mettre à jour en brouillon' }).click();
+  await page.getByRole('button', { name: 'Retirer Input', exact: true }).click();
+  await page.getByRole('button', { name: 'Voir le diff et valider' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('3 changement(s)')).toBeVisible();
+  await expect(dialog.getByText('Jamais de carte dans une carte.')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Valider et enregistrer' }).click();
+  await expect(dialog).toBeHidden();
+  await page.reload();
+  const names = page.locator('.fiches .fiche h3');
+  await expect(names).toHaveText(['Button', 'Card', 'CardProject']);
+});
+
 test('acceptation : bloquée par un brouillon, puis version figée', async ({ page }) => {
   const accept = page.getByRole('button', { name: 'Accepter cette version' });
   await page.getByLabel('space/md', { exact: true }).fill('20');

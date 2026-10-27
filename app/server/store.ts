@@ -9,6 +9,7 @@ import {
   isV1Tokens,
   migrateV1State,
   migrateV1Tokens,
+  patchTarget,
   sameToken,
   stateSchema,
   tokenSetSchema,
@@ -18,6 +19,7 @@ import {
   type Proposal,
   type Revision,
 } from '../shared/model.js';
+import { componentsFileSchema, isComponentsFile } from '../shared/components.js';
 
 export class StudioError extends Error {
   constructor(
@@ -78,6 +80,12 @@ export class Store {
       );
       await this.write(this.state);
     } else this.digest = this.hash(raw);
+    // Instance créée avant les fiches éditables : elles arrivent par une
+    // révision « migration », visible et annulable comme les autres.
+    if (!this.state.set.components && this.seed.components) {
+      const next = { ...this.state.set, components: structuredClone(this.seed.components) };
+      await this.commit(this.proposeSet(this.state.revision, next, 'migration').id);
+    }
   }
   snapshot(): State {
     return structuredClone(this.state);
@@ -117,6 +125,16 @@ export class Store {
     return this.proposeSet(revision, next, source);
   }
   proposeImport(revision: number, input: unknown) {
+    if (isComponentsFile(input)) {
+      // Fiches préparées par l'agent : ajoutées ou remplacées, jamais retirées.
+      const file = componentsFileSchema.parse(input);
+      const current = this.state.set;
+      return this.proposeSet(
+        revision,
+        { ...current, components: { ...current.components, ...file.components } },
+        'import',
+      );
+    }
     const set = isV1Tokens(input)
       ? migrateV1Tokens(input)
       : tokenSetSchema.parse(input);
@@ -126,13 +144,16 @@ export class Store {
         throw new StudioError(
           `Modes différents pour ${c} : ${set.modes[c].join(', ')} au lieu de ${current[c].join(', ')}. Une migration est nécessaire.`,
         );
+    // Un jeu de tokens sans fiches ne retire pas les fiches existantes.
+    if (!set.components && this.state.set.components)
+      set.components = structuredClone(this.state.set.components);
     return this.proposeSet(revision, set, 'import');
   }
   proposeUndo(revision: number, id: string) {
     const event = this.state.history.find((r) => r.id === id);
     if (!event) throw new StudioError('Révision inconnue.', 404);
     for (const p of event.patches)
-      if (!sameToken(this.state.set.tokens[p.key], p.after))
+      if (!sameToken(patchTarget(this.state.set, p), p.after))
         throw new StudioError(
           `Conflit sur ${p.key} : un changement plus récent serait perdu.`,
           409,
@@ -218,7 +239,7 @@ export function parseStoredState(raw: string): State {
     if (new Set(r.patches.map((p) => p.key)).size !== r.patches.length)
       throw new Error('Doublon');
     for (const p of r.patches)
-      if (!sameToken(set.tokens[p.key], p.after))
+      if (!sameToken(patchTarget(set, p), p.after))
         throw new Error('Patch incohérent');
     set = applyPatches(set, r.patches, 'before');
   }

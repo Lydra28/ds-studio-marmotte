@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   applyChanges,
   referrers,
+  sameToken,
   type Change,
   type Proposal,
   type State,
@@ -10,6 +11,7 @@ import {
   type TokenValue,
 } from '../shared/model.js';
 import { runRules } from '../shared/rules.js';
+import type { ComponentDoc } from '../shared/components.js';
 import {
   accept,
   bootstrap,
@@ -84,6 +86,9 @@ export default function App() {
   const [structure, setStructure] = useState<Map<string, Token | null>>(() =>
     stored('ds-structure'),
   );
+  const [componentDrafts, setComponentDrafts] = useState<Map<string, ComponentDoc | null>>(() =>
+    stored('ds-components'),
+  );
   const [proposal, setProposal] = useState<Proposal>();
   const [versions, setVersions] = useState<VersionSummary[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -102,10 +107,11 @@ export default function App() {
     try {
       sessionStorage.setItem('ds-drafts', JSON.stringify([...drafts]));
       sessionStorage.setItem('ds-structure', JSON.stringify([...structure]));
+      sessionStorage.setItem('ds-components', JSON.stringify([...componentDrafts]));
     } catch {
       /* Stockage navigateur facultatif : brouillon en mémoire seulement. */
     }
-  }, [drafts, structure]);
+  }, [drafts, structure, componentDrafts]);
 
   const changes: Change[] = [
     ...[...structure].map(([key, token]): Change =>
@@ -115,12 +121,23 @@ export default function App() {
       const at = id.lastIndexOf('@');
       return { key: id.slice(0, at), mode: id.slice(at + 1), value };
     }),
+    ...[...componentDrafts].map(([name, component]): Change => ({ op: 'component', name, component })),
   ];
-  const draftCount = drafts.size + structure.size;
+  const draftCount = drafts.size + structure.size + componentDrafts.size;
   const clearDrafts = () => {
     setDrafts(new Map());
     setStructure(new Map());
+    setComponentDrafts(new Map());
   };
+  const saveComponent = (name: string, doc: ComponentDoc | null) =>
+    setComponentDrafts((d) => {
+      const next = new Map(d);
+      const committed = state?.set.components?.[name];
+      // Retour à l'état enregistré (ou retrait d'une fiche née dans ce brouillon) : plus de brouillon.
+      if (doc ? committed && sameToken(doc, committed) : !committed) next.delete(name);
+      else next.set(name, doc);
+      return next;
+    });
   const { draftSet, draftError } = useMemo(() => {
     if (!state) return { draftSet: undefined, draftError: '' };
     if (!changes.length) return { draftSet: state.set, draftError: '' };
@@ -130,7 +147,7 @@ export default function App() {
       return { draftSet: state.set, draftError: (e as Error).message };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, drafts, structure]);
+  }, [state, drafts, structure, componentDrafts]);
   const findings = useMemo(() => (draftSet ? runRules(draftSet) : []), [draftSet]);
 
   // La preview reçoit le jeu courant, brouillon compris, à chaque changement.
@@ -284,6 +301,8 @@ export default function App() {
           onEdit={edit}
           onAdd={add}
           onRemove={remove}
+          componentDrafts={componentDrafts}
+          onComponent={saveComponent}
         />
         <aside className="side">
           <section className="preview" aria-label="Preview en direct">
