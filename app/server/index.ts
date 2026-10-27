@@ -1,14 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  isV1Tokens,
-  migrateV1Tokens,
-  tokenSetSchema,
-} from '../shared/model.js';
-import { configSchema } from '../shared/project.js';
-import { componentsSchema } from '../shared/components.js';
-import { Store } from './store.js';
+import { Registry, openInstance } from './registry.js';
 import { createStudioServer } from './http.js';
 import { acquireLease } from '../../scripts/runtime.mjs';
 
@@ -16,19 +9,30 @@ const root = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../..',
 );
-// Une instance = un dossier projet (seed, configuration, versions). Par défaut
-// l'exemple d'origine dans workspace/, avec ses données dans .ds-studio/.
-const projectArg =
-  process.argv.find((a) => a.startsWith('--project='))?.slice(10) ??
-  process.env.DS_STUDIO_PROJECT;
+// `--projects=projects` : tous les projets d'un dossier, choisis dans l'atelier.
+// `--project=projects/x` : une seule instance. Sinon l'exemple d'origine dans
+// workspace/, avec ses données dans .ds-studio/.
+const arg = (name: string) =>
+  process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
+const projectsArg = arg('projects') ?? process.env.DS_STUDIO_PROJECTS;
+const projectArg = arg('project') ?? process.env.DS_STUDIO_PROJECT;
+const projectsDir = projectsArg ? path.resolve(root, projectsArg) : null;
 const projectDir = projectArg
   ? path.resolve(root, projectArg)
   : path.join(root, 'workspace');
 const directory = process.env.DS_STUDIO_DATA_DIR
   ? path.resolve(process.env.DS_STUDIO_DATA_DIR)
-  : projectArg
-    ? path.join(projectDir, '.ds-studio')
-    : path.join(root, '.ds-studio');
+  : projectsDir
+    ? path.join(projectsDir, '.ds-studio')
+    : projectArg
+      ? path.join(projectDir, '.ds-studio')
+      : path.join(root, '.ds-studio');
+// Secrets locaux (clé OpenRouter) : `.env` gitignoré, jamais renvoyé au navigateur.
+try {
+  process.loadEnvFile(path.join(root, '.env'));
+} catch {
+  /* Pas de .env : assistant désactivé, le reste de l'atelier marche. */
+}
 const port = Number(process.env.PORT ?? 4310);
 let lease: Awaited<ReturnType<typeof acquireLease>> | undefined;
 try {
@@ -38,49 +42,22 @@ try {
   if ((await fs.lstat(directory)).isSymbolicLink())
     throw new Error('Dossier de données symbolique refusé.');
   lease = await acquireLease(directory, 'server', { root, directory, port });
-  const rawSeed = JSON.parse(
-    await fs.readFile(
-      path.join(projectDir, 'design-system.tokens.json'),
-      'utf8',
-    ),
-  );
-  const seed = isV1Tokens(rawSeed)
-    ? migrateV1Tokens(rawSeed)
-    : tokenSetSchema.parse(rawSeed);
-  // Fiches de départ du projet, facultatives.
-  const rawComponents = await fs
-    .readFile(path.join(projectDir, 'components.json'), 'utf8')
-    .then(JSON.parse)
-    .catch((e: NodeJS.ErrnoException) => {
-      if (e.code === 'ENOENT') return undefined;
-      throw e;
-    });
-  if (rawComponents) seed.components = componentsSchema.parse(rawComponents);
-  const config = configSchema.parse(
-    await fs
-      .readFile(path.join(projectDir, 'project.config.json'), 'utf8')
-      .then(JSON.parse)
-      .catch((e: NodeJS.ErrnoException) => {
-        if (e.code === 'ENOENT') return { name: 'Lisière (exemple)' };
-        throw e;
-      }),
-  );
-  const store = new Store(directory, seed);
-  await store.init();
+  const registry = projectsDir
+    ? Registry.folder(projectsDir, path.join(root, 'templates/blank/design-system.tokens.json'))
+    : Registry.single(await openInstance(path.basename(projectDir) === 'workspace' ? 'exemple' : path.basename(projectDir).toLowerCase().replace(/[^a-z0-9-]/g, '-'), projectDir, directory));
+  const label = projectsDir ? 'projets' : (await registry.get()).config.name;
   let stopping = false;
   const stop = async () => {
     if (stopping) return;
     stopping = true;
     await app.close();
-    await store.flush();
+    await registry.flush();
     await lease!.release();
     process.exit(0);
   };
   const app = await createStudioServer({
     root,
-    store,
-    projectDir,
-    config,
+    registry,
     dev: process.argv.includes('--dev'),
     control: {
       record: lease.record,
@@ -94,7 +71,7 @@ try {
     app.server.listen(port, '127.0.0.1', () => resolve());
   });
   console.log(
-    `DS-Studio · ${config.name} · http://127.0.0.1:${port}\nMode manuel autonome · Figma non connecté · Ctrl+C pour fermer.`,
+    `DS-Studio · ${label} · http://127.0.0.1:${port}\nMode manuel autonome · Figma non connecté · Ctrl+C pour fermer.`,
   );
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);

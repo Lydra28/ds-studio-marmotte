@@ -23,8 +23,60 @@ const previewVar = (page: Page, name: string) =>
     .evaluate((el, n) => el.style.getPropertyValue(n), name);
 
 test.beforeEach(async ({ page }) => {
+  await page.goto('/#/p/marmotte');
+  await expect(page.locator('.bar .project')).toHaveText('Marmotte');
+});
+
+test('accueil : liste des projets, création d’un projet vierge à côté de Marmotte', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByText('Marmotte', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Marmotte r\d+/ })).toBeVisible();
+  await page.getByRole('button', { name: /Nouveau projet/ }).click();
+  const form = page.getByRole('form', { name: 'Nouveau projet' });
+  await form.getByLabel('Nom').fill('Atelier céramique');
+  await form.getByLabel('Doctrine du projet').fill('Artisanal, calme, tons terre.');
+  await form.getByLabel('Fichier Figma cible (facultatif)').fill('pas un lien');
+  await form.getByRole('button', { name: 'Créer le projet' }).click();
+  await expect(form.getByRole('alert')).toContainText('Lien Figma attendu');
+  await form.getByLabel('Fichier Figma cible (facultatif)').fill('');
+  await form.getByRole('button', { name: 'Créer le projet' }).click();
+  await expect(page).toHaveURL(/#\/p\/atelier-ceramique$/);
+  await expect(page.locator('.bar .project')).toHaveText('Atelier céramique');
+  await expect(page.locator('.bar .rev')).toHaveText('r0');
+  await expect(page.getByRole('navigation').getByRole('button', { name: 'Marmotte' })).toBeVisible();
+  // Projets indépendants : Marmotte n'a pas bougé.
+  const other = await page.request.get('/api/state', { headers: { 'X-DS-Project': 'atelier-ceramique' } });
+  expect((await other.json()).set.components).toBeUndefined();
+  await page.getByRole('navigation').getByRole('button', { name: 'Marmotte' }).click();
+  await expect(page.locator('.bar .project')).toHaveText('Marmotte');
+});
+
+test('assistant : panneau ouvert à côté de l’atelier, désactivé proprement sans clé', async ({ page }) => {
+  await page.getByRole('button', { name: 'Assistant', exact: true }).click();
+  const panel = page.getByRole('complementary', { name: 'Assistant' });
+  await expect(panel).toContainText('Assistant désactivé');
+  await expect(panel.getByLabel('Message à l’assistant')).toBeDisabled();
+  await expect(page.locator('.bar .project')).toHaveText('Marmotte');
+  await panel.getByRole('button', { name: 'Fermer l’assistant' }).click();
+  await expect(panel).toBeHidden();
+});
+
+test('mur des DA : image déposée, réduite, retirée ; génération bloquée sans clé', async ({ page }) => {
+  await page.getByRole('navigation').getByRole('button', { name: 'Mur des DA' }).click();
+  await expect(page.getByRole('heading', { name: 'Mur des DA' })).toBeVisible();
+  // PNG 2×2 rouge, assez pour createImageBitmap.
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP4z8AARAwQCgAf7gP9i18U1AAAAABJRU5ErkJggg==',
+    'base64',
+  );
+  await page.locator('.inspiration-add input[type=file]').setInputFiles({ name: 'mood.png', mimeType: 'image/png', buffer: png });
+  const card = page.locator('.inspiration');
+  await expect(card).toHaveCount(1);
+  await expect(card.locator('img')).toHaveJSProperty('complete', true);
+  await expect(page.getByRole('button', { name: /^Proposer \d DA$/ })).toBeDisabled();
+  await card.getByRole('button', { name: 'Retirer mood.png' }).click();
+  await expect(card).toHaveCount(0);
+  await page.getByRole('button', { name: 'Retour à la planche' }).click();
+  await expect(page.getByRole('heading', { name: 'Couleurs · Primitives' })).toBeVisible();
 });
 
 test('boucle : écart signalé, correction essayée, diff validé, preview à jour', async ({ page }) => {
@@ -55,8 +107,9 @@ test('ajout et retrait de tokens, retrait refusé tant qu’un alias y renvoie',
   await page.getByRole('button', { name: 'Retirer space/4xl' }).click();
   await page.getByRole('button', { name: 'Voir le diff et valider' }).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByText('ajouté')).toBeVisible();
-  await expect(dialog.getByText('retiré')).toBeVisible();
+  await expect(dialog.getByText('ajouté', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('retiré', { exact: true })).toBeVisible();
+  await expect(dialog.getByText(/^Tokens : 1 ajouté\(s\), 1 modifié\(s\), 1 retiré\(s\)$/)).toBeVisible();
   await dialog.getByRole('button', { name: 'Valider et enregistrer' }).click();
   await expect(dialog).toBeHidden();
   expect(await previewVar(page, '--bg-brand')).toBe('#FF5500');
@@ -107,7 +160,17 @@ test('acceptation : bloquée par un brouillon, puis version figée', async ({ pa
   await expect(accept).toBeDisabled();
   await page.getByRole('button', { name: 'Abandonner' }).click();
   await accept.click();
+  // Avant d'accepter : ce qui change depuis la dernière version, et l'effet côté Figma.
+  const review = page.getByRole('dialog');
+  await expect(review.getByRole('heading', { name: /^Accepter r\d+ · (comparée à v\d+|première version)$/ })).toBeVisible();
+  await expect(review.getByText(/Le transfert appliquera|Aucune cible Figma/)).toBeVisible();
+  await review.getByRole('button', { name: /^Accepter v\d+$/ }).click();
   await expect(page.getByText(/Version v\d+ acceptée \(empreinte/)).toBeVisible();
+  // Historique : la version se compare à la précédente, ou montre tout son contenu.
+  await page.getByRole('button', { name: 'Historique' }).click();
+  await page.getByRole('button', { name: /^(Comparer avec v\d+|Voir le contenu)$/ }).first().click();
+  await expect(page.getByRole('dialog').getByRole('heading', { name: /^v\d+ (comparée à v\d+|· première version)$/ })).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Fermer' }).click();
   await expect(page.getByRole('button', { name: /^v\d+ acceptée$/ })).toBeDisabled();
 });
 

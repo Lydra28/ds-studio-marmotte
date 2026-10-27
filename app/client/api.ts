@@ -3,7 +3,15 @@ import type { Config } from '../shared/project.js';
 export interface Bootstrap {
   csrf: string;
   figma: { label: string; connected: boolean };
-  config: Config;
+  multi: boolean;
+  fallback: string;
+}
+export interface ProjectSummary {
+  slug: string;
+  name: string;
+  revision: number;
+  accepted: number | null;
+  updatedAt: string;
 }
 export interface VersionSummary {
   revision: number;
@@ -13,6 +21,11 @@ export interface VersionSummary {
   findings: number;
 }
 let csrf = '';
+// Projet ouvert : envoyé à chaque requête, le serveur sert le projet par défaut sinon.
+let project = '';
+export const setProject = (slug: string) => {
+  project = slug;
+};
 export async function request<T>(
   url: string,
   body?: unknown,
@@ -22,10 +35,12 @@ export async function request<T>(
   try {
     response = await fetch(`/api/${url}`, {
       method: body === undefined ? 'GET' : 'POST',
-      headers:
-        body === undefined
+      headers: {
+        ...(project ? { 'X-DS-Project': project } : {}),
+        ...(body === undefined
           ? {}
-          : { 'Content-Type': 'application/json', 'X-DS-Studio': csrf },
+          : { 'Content-Type': 'application/json', 'X-DS-Studio': csrf }),
+      },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
@@ -53,6 +68,10 @@ export async function bootstrap() {
   return b;
 }
 export const getState = () => request<State>('state');
+export const getConfig = () => request<Config>('config');
+export const listProjects = () => request<ProjectSummary[]>('projects');
+export const createProject = (p: { name: string; doctrine: string; ideas: string; figmaUrl: string }) =>
+  request<{ slug: string }>('projects', p);
 export const propose = (revision: number, changes: Change[]) =>
   request<Proposal>('proposals', { revision, changes });
 export const proposeImport = (revision: number, tokens: unknown) =>
@@ -64,6 +83,8 @@ export const commit = (proposal: Proposal) =>
 export const accept = (revision: number) =>
   request<VersionSummary>('accept', { revision });
 export const getVersions = () => request<VersionSummary[]>('versions');
+export const getVersion = (revision: number) =>
+  request<VersionSummary & { set: TokenSet }>(`version?revision=${revision}`);
 export async function exportSet(name: string) {
   const set = await request<TokenSet>('export');
   downloadText(
@@ -80,3 +101,53 @@ export function downloadText(name: string, text: string, type: string) {
   a.click();
   URL.revokeObjectURL(url);
 }
+export interface AssistantMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  date: string;
+  proposal?: { reason: string; changes: Change[] };
+  usage?: { prompt: number; completion: number };
+}
+export interface AssistantState {
+  enabled: boolean;
+  model: string;
+  messages: AssistantMessage[];
+}
+export const getAssistant = () => request<AssistantState>('assistant');
+export const askAssistant = (message: string) =>
+  request<{ messages: AssistantMessage[] }>('assistant/chat', { message });
+export const resetAssistant = () => request<{ messages: AssistantMessage[] }>('assistant/reset', {});
+export interface Inspiration {
+  id: string;
+  kind: 'image' | 'capture';
+  name: string;
+  url?: string;
+}
+export interface Direction {
+  name: string;
+  intention: string;
+  rationale: string;
+  fonts: { heading: string; body: string };
+  changes: Change[];
+  dropped: number;
+  droppedReasons?: string[];
+}
+export interface WallState {
+  enabled: boolean;
+  inspirations: Inspiration[];
+  result?: {
+    date: string;
+    model: string;
+    note: string;
+    directions: Direction[];
+    usage?: { prompt: number; completion: number };
+  };
+}
+export const getWall = () => request<WallState>('wall');
+export const wallFileUrl = (slug: string, id: string) =>
+  `/api/wall/file?project=${encodeURIComponent(slug)}&id=${encodeURIComponent(id)}`;
+export const addImage = (name: string, dataUrl: string) => request<Inspiration>('wall/image', { name, dataUrl });
+export const addLink = (url: string) => request<Inspiration>('wall/link', { url });
+export const removeInspiration = (id: string) => request<WallState>('wall/remove', { id });
+export const proposeDirections = (note: string, count: number) =>
+  request<NonNullable<WallState['result']>>('wall/directions', { note, count });

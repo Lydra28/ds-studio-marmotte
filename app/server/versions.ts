@@ -3,7 +3,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { atomicWrite, readPrivate } from './files.js';
 import { StudioError } from './store.js';
-import { canonical, type State, type TokenSet } from '../shared/model.js';
+import { canonical, tokenSetSchema, type State, type TokenSet } from '../shared/model.js';
 import { runRules } from '../shared/rules.js';
 import type { Config } from '../shared/project.js';
 
@@ -79,6 +79,19 @@ function summarize(
     file,
     findings: v.findings.length,
   };
+}
+
+// Jeu figé d'une version acceptée, pour la comparer à une autre ou à l'état courant.
+export async function readVersion(projectDir: string, revision: number) {
+  const file = path.join(projectDir, 'versions', `v${revision}.json`);
+  try {
+    const v = JSON.parse(await readPrivate(file));
+    return { ...summarize(v, path.basename(file)), set: tokenSetSchema.parse(v.set) };
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT')
+      throw new StudioError(`Version v${revision} introuvable.`, 404);
+    throw e;
+  }
 }
 
 export async function listVersions(projectDir: string) {

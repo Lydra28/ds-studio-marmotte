@@ -21,7 +21,7 @@ import {
   type TokenSet,
 } from '../app/shared/model.js';
 import { checkComponentName, checkNames, runRules } from '../app/shared/rules.js';
-import { acceptVersion, listVersions, versionHash } from '../app/server/versions.js';
+import { acceptVersion, listVersions, readVersion, versionHash } from '../app/server/versions.js';
 import { componentsSchema } from '../app/shared/components.js';
 
 const v1Seed = JSON.parse(
@@ -315,6 +315,9 @@ test('version acceptée : empreinte, cible et révision figées, jamais écrasé
   );
   await assert.rejects(() => acceptVersion(projectDir, config, store.snapshot(), 0), /différente/);
   assert.equal((await listVersions(projectDir)).length, 1);
+  // Relue pour comparaison : le jeu figé revient tel quel, une version absente est refusée.
+  assert.deepEqual((await readVersion(projectDir, 0)).set, marmotte);
+  await assert.rejects(() => readVersion(projectDir, 9), /introuvable/);
 });
 
 test('ajout et retrait de tokens : diff puis commit, retrait refusé tant qu’un alias y renvoie', async (t) => {

@@ -7,20 +7,37 @@ import { proposeSchema } from '../shared/model.js';
 import { Store, StudioError } from './store.js';
 import { ProjectStore } from './project.js';
 import { projectSchema, type Config } from '../shared/project.js';
-import { acceptVersion, listVersions } from './versions.js';
+import { Registry, newProjectSchema } from './registry.js';
+import { Assistant, chatSchema } from './assistant.js';
+import { Wall, directionsRequestSchema, imageSchema, linkSchema } from './wall.js';
+import { acceptVersion, listVersions, readVersion } from './versions.js';
 import { figmaStatus } from '../../connectors/figma/contract.js';
 import type { RecordInfo } from '../../scripts/runtime.mjs';
 
-export async function createStudioServer(options: {
-  root: string;
-  store: Store;
-  projectDir: string;
-  config: Config;
-  dev?: boolean;
-  control?: { record: RecordInfo; stop: () => void };
-}) {
-  const { root, store, projectDir, config } = options;
-  const project = new ProjectStore(store.directory);
+export async function createStudioServer(
+  options: {
+    root: string;
+    dev?: boolean;
+    control?: { record: RecordInfo; stop: () => void };
+  } & (
+    | { registry: Registry }
+    | { store: Store; projectDir: string; config: Config }
+  ),
+) {
+  const { root } = options;
+  // Une instance fixe (tests, --project=) reste servie comme un registre d'un seul projet.
+  const registry =
+    'registry' in options
+      ? options.registry
+      : Registry.single({
+          slug: 'projet',
+          dir: options.projectDir,
+          config: options.config,
+          store: options.store,
+          brief: new ProjectStore(options.store.directory),
+          assistant: new Assistant(options.store.directory, {}),
+          wall: new Wall(options.store.directory, {}),
+        });
   const csrf = randomBytes(32).toString('hex');
   const vite = options.dev
     ? await (
@@ -49,7 +66,7 @@ export async function createStudioServer(options: {
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader(
       'Content-Security-Policy',
-      `default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'${options.dev ? ' ws://127.0.0.1:*' : ''}; frame-ancestors 'self'; base-uri 'none'; form-action 'self'`,
+      `default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'${options.dev ? ' ws://127.0.0.1:*' : ''}; frame-ancestors 'self'; base-uri 'none'; form-action 'self'`,
     );
     try {
       if (req.headers.host !== `127.0.0.1:${port}`)
@@ -80,15 +97,35 @@ export async function createStudioServer(options: {
         throw new StudioError('Route inconnue.', 404);
       }
       if (url.pathname.startsWith('/api/')) {
+        // Projet visé : en-tête X-DS-Project (ou ?project= pour une image), sinon le projet par défaut.
+        const header = req.headers['x-ds-project'] ?? url.searchParams.get('project') ?? undefined;
+        const instance = () => registry.get(typeof header === 'string' ? header : undefined);
         if (req.method === 'GET') {
           if (url.pathname === '/api/bootstrap')
             return send(200, {
               csrf,
               figma: figmaStatus,
-              config,
+              multi: registry.multi,
+              fallback: registry.fallback,
             });
+          if (url.pathname === '/api/projects') return send(200, await registry.list());
+          const { store, dir: projectDir, config, brief: project, assistant, wall } = await instance();
+          if (url.pathname === '/api/config') return send(200, config);
+          if (url.pathname === '/api/wall') return send(200, { ...(await wall.read()), enabled: assistant.status.enabled });
+          if (url.pathname === '/api/wall/file') {
+            const file = await wall.file(z.string().uuid().parse(url.searchParams.get('id')));
+            res.writeHead(200, { 'Content-Type': file.type, 'Cache-Control': 'private, max-age=3600' });
+            res.end(file.data);
+            return;
+          }
+          if (url.pathname === '/api/assistant')
+            return send(200, { ...assistant.status, messages: await assistant.history() });
           if (url.pathname === '/api/versions')
             return send(200, await listVersions(projectDir));
+          if (url.pathname === '/api/version') {
+            const revision = Number(z.string().regex(/^\d{1,9}$/).parse(url.searchParams.get('revision')));
+            return send(200, await readVersion(projectDir, revision));
+          }
           if (url.pathname === '/api/project')
             return send(200, await project.read());
           if (url.pathname === '/api/state') return send(200, store.snapshot());
@@ -109,7 +146,7 @@ export async function createStudioServer(options: {
         let size = 0;
         for await (const chunk of req) {
           size += chunk.length;
-          if (size > 128_000)
+          if (size > (url.pathname === '/api/wall/image' ? 5_200_000 : 128_000))
             throw new StudioError('Requête trop volumineuse.', 413);
           chunks.push(chunk);
         }
@@ -119,6 +156,37 @@ export async function createStudioServer(options: {
           body = JSON.parse(raw);
         } catch {
           throw new StudioError('JSON invalide.');
+        }
+        if (url.pathname === '/api/projects')
+          return send(200, { slug: await registry.create(newProjectSchema.parse(body)) });
+        const { store, dir: projectDir, config, brief: project, assistant, wall } = await instance();
+        if (url.pathname === '/api/wall/image') return send(200, await wall.addImage(imageSchema.parse(body)));
+        if (url.pathname === '/api/wall/link') return send(200, await wall.addLink(linkSchema.parse(body).url));
+        if (url.pathname === '/api/wall/remove') {
+          await wall.remove(z.object({ id: z.string().uuid() }).strict().parse(body).id);
+          return send(200, await wall.read());
+        }
+        if (url.pathname === '/api/wall/directions')
+          return send(
+            200,
+            await wall.directions(directionsRequestSchema.parse(body), {
+              project: (await project.read()).project,
+              name: config.name,
+              set: store.snapshot().set,
+            }),
+          );
+        if (url.pathname === '/api/assistant/chat') {
+          const b = chatSchema.parse(body);
+          const messages = await assistant.chat(b.message, {
+            project: (await project.read()).project,
+            name: config.name,
+            set: store.snapshot().set,
+          });
+          return send(200, { messages });
+        }
+        if (url.pathname === '/api/assistant/reset') {
+          await assistant.reset();
+          return send(200, { messages: [] });
         }
         if (url.pathname === '/api/project') {
           const b = z

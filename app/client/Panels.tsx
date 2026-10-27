@@ -100,6 +100,84 @@ function PatchRows({ patch }: { patch: Patch }) {
   );
 }
 
+// Résumé d'un diff : ce qui est ajouté, modifié ou retiré, tokens et fiches à part.
+export function diffSummary(patches: Patch[]) {
+  const count = (kind: 'token' | 'component', what: 'added' | 'changed' | 'removed') =>
+    patches.filter(
+      (p) =>
+        (p.kind === 'component') === (kind === 'component') &&
+        (what === 'added' ? !p.before : what === 'removed' ? !p.after : p.before && p.after),
+    ).length;
+  const part = (kind: 'token' | 'component', noun: string) => {
+    const [a, c, r] = (['added', 'changed', 'removed'] as const).map((w) => count(kind, w));
+    const bits = [a && `${a} ajouté(s)`, c && `${c} modifié(s)`, r && `${r} retiré(s)`].filter(Boolean);
+    return bits.length ? `${noun} : ${bits.join(', ')}` : '';
+  };
+  return [part('token', 'Tokens'), part('component', 'Fiches')].filter(Boolean).join(' · ') || 'Aucun changement';
+}
+
+// Tableau avant / après d'une liste de patchs : diff d'une proposition,
+// comparaison de deux versions, ou de l'état courant avec la dernière version.
+export function ChangesDialog({
+  title,
+  hint,
+  patches,
+  busy,
+  cancelLabel = 'Annuler',
+  onCancel,
+  confirmLabel,
+  onConfirm,
+}: {
+  title: string;
+  hint: string;
+  patches: Patch[];
+  busy?: boolean;
+  cancelLabel?: string;
+  onCancel: () => void;
+  confirmLabel?: string;
+  onConfirm?: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    dialog.current?.showModal();
+  }, []);
+  return (
+    <dialog ref={dialog} className="diff" aria-labelledby="diff-title" onCancel={onCancel}>
+      <h2 id="diff-title">{title}</h2>
+      <p className="diff-summary">{diffSummary(patches)}</p>
+      <p className="hint">{hint}</p>
+      {patches.length > 0 && (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Token</th>
+                <th scope="col">Avant</th>
+                <th scope="col">Après</th>
+              </tr>
+            </thead>
+            <tbody>
+              {patches.map((p) => (
+                <PatchRows key={`${p.kind ?? 'token'}:${p.key}`} patch={p} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className="dialog-actions">
+        <button onClick={onCancel} autoFocus>
+          {cancelLabel}
+        </button>
+        {onConfirm && (
+          <button className="primary" disabled={busy} onClick={onConfirm}>
+            {confirmLabel}
+          </button>
+        )}
+      </div>
+    </dialog>
+  );
+}
+
 export function DiffDialog({
   proposal,
   busy,
@@ -111,41 +189,16 @@ export function DiffDialog({
   onCancel: () => void;
   onValidate: () => void;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    dialog.current?.showModal();
-  }, []);
   return (
-    <dialog ref={dialog} className="diff" aria-labelledby="diff-title" onCancel={onCancel}>
-      <h2 id="diff-title">
-        Diff · {sourceLabel[proposal.source]} · {proposal.patches.length} changement(s)
-      </h2>
-      <p className="hint">Rien n’est écrit tant que tu n’as pas validé.</p>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Token</th>
-              <th scope="col">Avant</th>
-              <th scope="col">Après</th>
-            </tr>
-          </thead>
-          <tbody>
-            {proposal.patches.map((p) => (
-              <PatchRows key={`${p.kind ?? 'token'}:${p.key}`} patch={p} />
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="dialog-actions">
-        <button onClick={onCancel} autoFocus>
-          Annuler
-        </button>
-        <button className="primary" disabled={busy} onClick={onValidate}>
-          Valider et enregistrer
-        </button>
-      </div>
-    </dialog>
+    <ChangesDialog
+      title={`Diff · ${sourceLabel[proposal.source]} · ${proposal.patches.length} changement(s)`}
+      hint="Rien n’est écrit tant que tu n’as pas validé."
+      patches={proposal.patches}
+      busy={busy}
+      onCancel={onCancel}
+      confirmLabel="Valider et enregistrer"
+      onConfirm={onValidate}
+    />
   );
 }
 
@@ -190,11 +243,13 @@ export function HistoryPanel({
   versions,
   onClose,
   onUndo,
+  onCompare,
 }: {
   state: State;
   versions: VersionSummary[];
   onClose: () => void;
   onUndo: (id: string) => void;
+  onCompare: (revision: number, previous?: number) => void;
 }) {
   return (
     <div className="drawer-backdrop" onClick={onClose}>
@@ -208,11 +263,14 @@ export function HistoryPanel({
         <h3>Versions acceptées</h3>
         {versions.length ? (
           <ul className="versions">
-            {versions.map((v) => (
+            {versions.map((v, i) => (
               <li key={v.file}>
                 <strong>v{v.revision}</strong> · {new Date(v.acceptedAt).toLocaleString('fr-FR')} ·{' '}
                 <code>{v.hash.slice(0, 8)}</code>
                 {v.findings > 0 && <small> · {v.findings} écart(s)</small>}
+                <button onClick={() => onCompare(v.revision, versions[i + 1]?.revision)}>
+                  {versions[i + 1] !== undefined ? `Comparer avec v${versions[i + 1].revision}` : 'Voir le contenu'}
+                </button>
               </li>
             ))}
           </ul>

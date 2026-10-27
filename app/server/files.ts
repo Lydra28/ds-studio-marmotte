@@ -10,7 +10,7 @@ export async function readPrivate(file: string, max = 10_000_000) {
     throw new Error('Fichier non sûr ou trop volumineux : original préservé.');
   return fs.readFile(file, 'utf8');
 }
-export async function atomicWrite(file: string, raw: string) {
+export async function atomicWrite(file: string, raw: string | Buffer) {
   const temporary = path.join(
     path.dirname(file),
     `${path.basename(file)}-${randomUUID()}.tmp`,

@@ -27,3 +27,7 @@ Thumbs.db
 
 # Fiches préparées depuis Figma par l’agent, importées puis validées dans l’atelier.
 projects/*/imports/
+
+# Projets créés dans l'atelier : privés, hors du dépôt public. Marmotte reste l'exemple suivi.
+projects/*
+!projects/marmotte/

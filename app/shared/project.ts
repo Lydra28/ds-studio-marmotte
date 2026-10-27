@@ -4,6 +4,9 @@ export const projectSchema = z
     name: z.string().trim().max(100).default(''),
     audience: z.string().trim().max(1000).default(''),
     goal: z.string().trim().max(2000).default(''),
+    // Doctrine du projet et premières idées : contexte de l'assistant.
+    doctrine: z.string().trim().max(8000).default(''),
+    ideas: z.string().trim().max(4000).default(''),
     figmaUrl: z
       .union([
         z.literal(''),
@@ -25,6 +28,9 @@ export const projectSchema = z
   })
   .strict();
 export type Project = z.infer<typeof projectSchema>;
+// Clé d'un fichier Figma depuis son lien (design, file, board…).
+export const figmaFileKey = (url: string) =>
+  /^https:\/\/www\.figma\.com\/(?:design|file)\/([0-9a-zA-Z]{22,128})(?:[/?#]|$)/.exec(url)?.[1] ?? null;
 export interface ProjectSnapshot {
   project: Project;
   base: string;

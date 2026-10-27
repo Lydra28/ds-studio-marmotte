@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { fontFamilies, loadFonts } from './fonts.js';
 import {
   cssName,
   cssValue,
@@ -204,6 +205,7 @@ export function PreviewPage() {
     const onMessage = (e: MessageEvent) => {
       if (e.origin !== location.origin || e.data?.type !== 'ds-set') return;
       setSet(e.data.set);
+      loadFonts(fontFamilies(e.data.set));
     };
     window.addEventListener('message', onMessage);
     window.parent.postMessage({ type: 'ds-ready' }, location.origin);

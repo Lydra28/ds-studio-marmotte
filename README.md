@@ -2,14 +2,24 @@
 
 > **Personnalisation de Romain (PFE, projet Marmotte).** Fork du starter
 > [ElGrandeXu/DS-Studio](https://github.com/ElGrandeXu/DS-Studio) `v2.0.0` (MIT),
-> transformé en atelier de design system : essai de tokens avec preview en
-> direct → corrections par règles → acceptation d'une version → transfert
-> dans Figma par l'agent (l'application elle-même ne contient pas d'IA et ne
-> se connecte pas à Figma).
+> transformé en atelier de design system multi-projets : essai de tokens
+> avec preview en direct → corrections par règles → acceptation d'une version
+> → transfert dans Figma. Assistant intégré facultatif (OpenRouter, il ne fait
+> que proposer en brouillon).
 >
-> Lancer l'instance Marmotte : `npm install`, puis
-> `npx tsx app/server/index.ts --project=projects/marmotte` →
-> <http://127.0.0.1:4310>.
+> Lancer l'atelier : `npm install`, `npm run build`, puis
+> `npx tsx app/server/index.ts --projects=projects` → <http://127.0.0.1:4310>
+> (accueil avec la liste des projets). Une seule instance :
+> `--project=projects/marmotte`. Assistant : copier `.env.example` en `.env`
+> et y mettre `OPENROUTER_API_KEY` (jamais suivi par git). Projets perso
+> seulement avec l'assistant : rien d'Enov ni de BRiiK.
+>
+> **En cours (cadrage v2, démo du 2026-10-30)** : liste des projets et
+> interface sombre (fait), assistant en conversation (fait, éprouvé avec
+> DeepSeek V4.1 Flash), mur des DA : inspirations (images, captures de
+> liens), 1 à 3 DA avec polices Google, preview réelle, écarts et choix en
+> brouillon (fait, éprouvé : 3 DA en 70 s, 0 changement écarté). Reste :
+> plugin Figma DS-Studio.
 >
 > | Fait (2026-10-27) | Reste |
 > | --- | --- |
@@ -21,7 +31,7 @@
 >
 > Instance : [projects/marmotte/](projects/marmotte/) · journal :
 > [DECISIONS.md](projects/marmotte/DECISIONS.md). Tests : `npm test`
-> (26 réussis, 2 ignorés sous Windows) et `npm run test:e2e` (6 parcours navigateur).
+> (32 réussis, 2 ignorés sous Windows) et `npm run test:e2e` (9 parcours navigateur).
 >
 > La suite de ce README est celle du starter d'origine.
 

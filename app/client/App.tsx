@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   applyChanges,
+  diff,
   referrers,
   sameToken,
   type Change,
+  type Patch,
   type Proposal,
   type State,
   type Token,
@@ -17,16 +19,24 @@ import {
   bootstrap,
   commit,
   exportSet,
+  getConfig,
   getState,
+  setProject,
   getVersions,
+  getVersion,
   propose,
   proposeImport,
   proposeUndo,
   type Bootstrap,
   type VersionSummary,
 } from './api.js';
+import type { Config } from '../shared/project.js';
 import Board from './Board.js';
-import { Corrections, DiffDialog, HistoryPanel } from './Panels.js';
+import { Home, Sidebar, useRoute } from './Shell.js';
+import AssistantPanel from './Assistant.js';
+import Wall from './Wall.js';
+import { fontFamilies, loadFonts } from './fonts.js';
+import { ChangesDialog, Corrections, DiffDialog, HistoryPanel } from './Panels.js';
 
 const devices = [
   { label: '320', width: 320 },
@@ -43,7 +53,7 @@ function stored<V>(name: string): Map<string, V> {
   }
 }
 
-function useCommittedState() {
+function useCommittedState(slug: string) {
   const [state, setState] = useState<State>();
   const [error, setError] = useState('');
   useEffect(() => {
@@ -61,37 +71,72 @@ function useCommittedState() {
     };
     void refresh();
     const timer = setInterval(() => void refresh(), 1500);
-    const channel = new BroadcastChannel('ds-studio');
+    const channel = new BroadcastChannel(`ds-studio:${slug}`);
     channel.onmessage = refresh;
     return () => {
       live = false;
       clearInterval(timer);
       channel.close();
     };
-  }, []);
+  }, [slug]);
   return { state, setState, error };
 }
-function announce() {
-  const c = new BroadcastChannel('ds-studio');
+function announce(slug: string) {
+  const c = new BroadcastChannel(`ds-studio:${slug}`);
   c.postMessage('updated');
   c.close();
 }
 
 export default function App() {
-  const { state, setState, error: stateError } = useCommittedState();
   const [boot, setBoot] = useState<Bootstrap>();
+  const [bootError, setBootError] = useState('');
+  const [route, go] = useRoute();
+  useEffect(() => {
+    bootstrap().then(setBoot).catch((e) => setBootError(e.message));
+  }, []);
+  if (!boot) return <p className="loading" role="alert">{bootError || 'Chargement…'}</p>;
+  // Instance fixe (--project=) : pas d'accueil, son unique projet s'ouvre.
+  const slug = route ?? (boot.multi ? undefined : boot.fallback);
+  if (!slug) return <Home onOpen={go} />;
+  setProject(slug);
+  return <Workspace key={slug} slug={slug} multi={boot.multi} onOpen={go} />;
+}
+
+function Workspace({ slug, multi, onOpen }: { slug: string; multi: boolean; onOpen: (slug?: string) => void }) {
+  const { state, setState, error: stateError } = useCommittedState(slug);
+  const [config, setConfig] = useState<Config>();
+  const k = (name: string) => `${name}:${slug}`;
   // Brouillon : valeurs changées (clé@mode) et structure (token ajouté, ou
   // null pour un token retiré).
-  const [drafts, setDrafts] = useState<Map<string, TokenValue>>(() => stored('ds-drafts'));
+  const [drafts, setDrafts] = useState<Map<string, TokenValue>>(() => stored(k('ds-drafts')));
   const [structure, setStructure] = useState<Map<string, Token | null>>(() =>
-    stored('ds-structure'),
+    stored(k('ds-structure')),
   );
   const [componentDrafts, setComponentDrafts] = useState<Map<string, ComponentDoc | null>>(() =>
-    stored('ds-components'),
+    stored(k('ds-components')),
   );
   const [proposal, setProposal] = useState<Proposal>();
   const [versions, setVersions] = useState<VersionSummary[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Comparaison affichée : avant d'accepter (état courant / dernière version)
+  // ou entre deux versions depuis l'historique.
+  const [comparison, setComparison] = useState<{ title: string; hint: string; patches: Patch[]; accept: boolean }>();
+  const [view, setView] = useState<'board' | 'wall'>('board');
+  const [assistantOpen, setAssistantOpen] = useState(() => {
+    try {
+      return localStorage.getItem('ds-assistant') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleAssistant = (open: boolean) => {
+    setAssistantOpen(open);
+    try {
+      localStorage.setItem('ds-assistant', open ? '1' : '0');
+    } catch {
+      /* Préférence facultative. */
+    }
+  };
   const [device, setDevice] = useState(1);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -100,14 +145,14 @@ export default function App() {
   const file = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    bootstrap().then(setBoot).catch((e) => setError(e.message));
+    getConfig().then(setConfig).catch((e) => setError(e.message));
     getVersions().then(setVersions).catch(() => {});
   }, []);
   useEffect(() => {
     try {
-      sessionStorage.setItem('ds-drafts', JSON.stringify([...drafts]));
-      sessionStorage.setItem('ds-structure', JSON.stringify([...structure]));
-      sessionStorage.setItem('ds-components', JSON.stringify([...componentDrafts]));
+      sessionStorage.setItem(k('ds-drafts'), JSON.stringify([...drafts]));
+      sessionStorage.setItem(k('ds-structure'), JSON.stringify([...structure]));
+      sessionStorage.setItem(k('ds-components'), JSON.stringify([...componentDrafts]));
     } catch {
       /* Stockage navigateur facultatif : brouillon en mémoire seulement. */
     }
@@ -149,11 +194,17 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, drafts, structure, componentDrafts]);
   const findings = useMemo(() => (draftSet ? runRules(draftSet) : []), [draftSet]);
+  // Polices Google du jeu (brouillon compris) aussi dans l'atelier, pour les spécimens.
+  useEffect(() => {
+    if (draftSet) loadFonts(fontFamilies(draftSet));
+  }, [draftSet]);
 
   // La preview reçoit le jeu courant, brouillon compris, à chaque changement.
   const pushPreview = (set: TokenSet | undefined) =>
     set && frame.current?.contentWindow?.postMessage({ type: 'ds-set', set }, location.origin);
-  useEffect(() => pushPreview(draftSet), [draftSet]);
+  useEffect(() => {
+    pushPreview(draftSet);
+  }, [draftSet]);
   useEffect(() => {
     const onReady = (e: MessageEvent) => {
       if (e.origin === location.origin && e.data?.type === 'ds-ready') pushPreview(draftSet);
@@ -214,6 +265,16 @@ export default function App() {
       return next;
     });
   };
+  // Proposition de l'assistant : chaque changement rejoint le brouillon.
+  const draftChanges = (list: Change[]) => {
+    for (const c of list) {
+      if (!('op' in c)) edit(c.key, c.mode, c.value);
+      else if (c.op === 'add') add(c.key, c.token);
+      else if (c.op === 'remove') remove(c.key);
+      else saveComponent(c.name, c.component);
+    }
+    setNotice(`${list.length} changement(s) de l’assistant mis en brouillon : relis le diff avant de valider.`);
+  };
   const reviewDrafts = () =>
     run(async () => setProposal(await propose(state!.revision, changes)));
   const validate = () =>
@@ -222,12 +283,41 @@ export default function App() {
       setState(next);
       if (proposal!.source !== 'undo' && proposal!.source !== 'import') clearDrafts();
       setProposal(undefined);
-      announce();
+      announce(slug);
       setNotice(`Révision ${next.revision} enregistrée. Annulable depuis l’historique.`);
+    });
+  // Jeu figé d'une version, ou jeu vide (même modes) pour la toute première.
+  const versionSet = async (revision?: number): Promise<TokenSet> =>
+    revision !== undefined ? (await getVersion(revision)).set : { modes: state!.set.modes, tokens: {}, components: {} };
+  const reviewAcceptance = () =>
+    run(async () => {
+      const last = versions.find((v) => v.revision < state!.revision);
+      const target = config?.figma
+        ? `Le transfert appliquera ces changements au fichier Figma (page « ${config.figma.page} »).`
+        : 'Aucune cible Figma pour ce projet : accepter fige la version, rien n’est envoyé dans Figma.';
+      setComparison({
+        title: last !== undefined
+          ? `Accepter r${state!.revision} · comparée à v${last.revision}`
+          : `Accepter r${state!.revision} · première version`,
+        hint: target,
+        patches: diff(await versionSet(last?.revision), state!.set),
+        accept: true,
+      });
+    });
+  const compareVersions = (revision: number, previous?: number) =>
+    run(async () => {
+      setHistoryOpen(false);
+      setComparison({
+        title: previous !== undefined ? `v${revision} comparée à v${previous}` : `v${revision} · première version`,
+        hint: previous !== undefined ? `Ce qui a changé entre v${previous} et v${revision}.` : 'Tout le contenu de la première version.',
+        patches: diff(await versionSet(previous), await versionSet(revision)),
+        accept: false,
+      });
     });
   const acceptVersion = () =>
     run(async () => {
       const v = await accept(state!.revision);
+      setComparison(undefined);
       setVersions(await getVersions());
       setNotice(
         `Version v${v.revision} acceptée (empreinte ${v.hash.slice(0, 8)})` +
@@ -243,13 +333,22 @@ export default function App() {
 
   if (!state || !draftSet)
     return <p className="loading" role="alert">{stateError || error || 'Chargement…'}</p>;
-  const name = boot?.config.name ?? '…';
+  const name = config?.name ?? '…';
   const accepted = versions.find((v) => v.revision === state.revision);
   return (
-    <div className="studio">
+    <div className={`studio ${assistantOpen ? 'with-assistant' : ''}`}>
+      <Sidebar
+        current={slug}
+        multi={multi}
+        onOpen={onOpen}
+        onHistory={() => setHistoryOpen(true)}
+        onWall={() => setView('wall')}
+        onBoard={() => setView('board')}
+        view={view}
+      />
+      <div className="work">
       <header className="bar">
         <div className="brand">
-          <strong>DS-Studio</strong>
           <span className="project">{name}</span>
           <span className="rev" title="Révision enregistrée">r{state.revision}</span>
         </div>
@@ -257,7 +356,9 @@ export default function App() {
           <span className={`count ${findings.length ? 'warn' : 'ok'}`}>
             {findings.length ? `${findings.length} écart(s)` : 'Aucun écart'}
           </span>
-          <button onClick={() => setHistoryOpen(true)}>Historique</button>
+          <button aria-pressed={assistantOpen} onClick={() => toggleAssistant(!assistantOpen)}>
+            Assistant
+          </button>
           <button onClick={() => file.current?.click()}>Importer</button>
           <input
             ref={file}
@@ -281,7 +382,7 @@ export default function App() {
                   ? `Déjà acceptée : v${accepted.revision}`
                   : 'Fige cette révision pour le transfert Figma'
             }
-            onClick={acceptVersion}
+            onClick={reviewAcceptance}
           >
             {accepted ? `v${accepted.revision} acceptée` : 'Accepter cette version'}
           </button>
@@ -292,7 +393,18 @@ export default function App() {
           {error || stateError || (draftError && `Brouillon invalide : ${draftError}`) || notice}
         </p>
       )}
-      <main className="layout">
+      {view === 'wall' && (
+        <Wall
+          project={slug}
+          base={state.set}
+          onBack={() => setView('board')}
+          onChoose={(list) => {
+            draftChanges(list);
+            setView('board');
+          }}
+        />
+      )}
+      <main className="layout" hidden={view === 'wall'}>
         <Board
           set={draftSet}
           drafts={drafts}
@@ -331,6 +443,8 @@ export default function App() {
           />
         </aside>
       </main>
+      </div>
+      {assistantOpen && <AssistantPanel onDraft={draftChanges} onClose={() => toggleAssistant(false)} />}
       {draftCount > 0 && (
         <div className="draft-bar" role="region" aria-label="Brouillon">
           <span>
@@ -361,6 +475,19 @@ export default function App() {
               setProposal(await proposeUndo(state.revision, id));
             })
           }
+          onCompare={compareVersions}
+        />
+      )}
+      {comparison && (
+        <ChangesDialog
+          title={comparison.title}
+          hint={comparison.hint}
+          patches={comparison.patches}
+          busy={busy}
+          cancelLabel={comparison.accept ? 'Annuler' : 'Fermer'}
+          onCancel={() => setComparison(undefined)}
+          confirmLabel={`Accepter v${state.revision}`}
+          onConfirm={comparison.accept ? acceptVersion : undefined}
         />
       )}
     </div>
