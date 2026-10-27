@@ -244,7 +244,7 @@ function urlSafeMessage(error: unknown) {
   // Seuls les messages métier connus remontent, jamais de stack.
   const message = (error as Error).message ?? '';
   if (
-    /^(Token inconnu|Mode inconnu|Un token ne peut|Alias circulaire)/.test(message)
+    /^(Token inconnu|Token déjà existant|Token utilisé|Mode inconnu|Un token ne peut|Alias circulaire)/.test(message)
   )
     return message;
   return 'Opération impossible. Aucune validation automatique. Vérifiez les données et relancez si nécessaire.';

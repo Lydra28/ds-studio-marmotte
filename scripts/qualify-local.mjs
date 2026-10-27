@@ -84,13 +84,12 @@ try {
   let post = await session();
   const p = await post('proposals', {
     revision: 0,
-    changes: [{ key: 'color.brand', value: '#8A3B20' }],
+    changes: [{ key: 'bg/brand', mode: 'light', value: '#8A3B20' }],
   });
   await post('commit', { id: p.id });
   assert.equal(
-    JSON.parse(await readFile(path.join(data, 'state.json'), 'utf8')).tokens[
-      'color.brand'
-    ].$value,
+    JSON.parse(await readFile(path.join(data, 'state.json'), 'utf8')).set
+      .tokens['bg/brand'].$values.light,
     '#8A3B20',
   );
   // Un deuxième processus ne doit jamais partager ce dossier de données en écriture.

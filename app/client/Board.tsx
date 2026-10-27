@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import {
   isAlias,
+  isTokenKey,
   resolve,
+  type Collection,
   type Token,
   type TokenSet,
+  type TokenType,
   type TokenValue,
 } from '../shared/model.js';
 import type { Finding } from '../shared/rules.js';
@@ -11,11 +14,120 @@ import { components } from '../shared/components.js';
 import Nomenclature from './Nomenclature.js';
 
 type Edit = (key: string, mode: string, value: TokenValue) => void;
+type Add = (key: string, token: Token) => void;
 interface BoardProps {
   set: TokenSet;
   drafts: Map<string, TokenValue>;
+  added: Map<string, Token | null>;
   findings: Finding[];
   onEdit: Edit;
+  onAdd: Add;
+  onRemove: (key: string) => void;
+}
+
+// Valeur de départ d'un nouveau token, à régler ensuite sur la planche.
+const starter: Record<TokenType, TokenValue> = {
+  color: '#808080',
+  dimension: 16,
+  fontFamily: 'system-ui',
+  fontWeight: 400,
+  number: 100,
+};
+const typeLabel: Record<TokenType, string> = {
+  color: 'couleur',
+  dimension: 'dimension (px)',
+  fontFamily: 'police',
+  fontWeight: 'graisse',
+  number: 'nombre (%)',
+};
+
+function AddToken({
+  set,
+  collection,
+  types,
+  prefix,
+  onAdd,
+}: {
+  set: TokenSet;
+  collection: Collection;
+  types: TokenType[];
+  prefix: string;
+  onAdd: Add;
+}) {
+  const [open, setOpen] = useState(false);
+  const [key, setKey] = useState(prefix);
+  const [type, setType] = useState(types[0]);
+  if (!open)
+    return (
+      <button className="add" onClick={() => setOpen(true)}>
+        + Ajouter un token
+      </button>
+    );
+  const problem = set.tokens[key]
+    ? 'existe déjà'
+    : !isTokenKey(key)
+      ? 'minuscules, chiffres et tirets, « / » entre les niveaux'
+      : '';
+  const submit = () => {
+    if (problem) return;
+    onAdd(key, {
+      $type: type,
+      $collection: collection,
+      $values: Object.fromEntries(set.modes[collection].map((m) => [m, starter[type]])),
+    });
+    setKey(prefix);
+    setOpen(false);
+  };
+  return (
+    <form
+      className="add-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+    >
+      <input
+        aria-label="Nom du nouveau token"
+        autoFocus
+        value={key}
+        onChange={(e) => setKey(e.target.value.trim())}
+        placeholder={`${prefix}nom`}
+      />
+      {types.length > 1 && (
+        <select
+          aria-label="Type du nouveau token"
+          value={type}
+          onChange={(e) => setType(e.target.value as TokenType)}
+        >
+          {types.map((t) => (
+            <option key={t} value={t}>
+              {typeLabel[t]}
+            </option>
+          ))}
+        </select>
+      )}
+      <button type="submit" className="primary" disabled={!!problem}>
+        Ajouter
+      </button>
+      <button type="button" onClick={() => setOpen(false)}>
+        Annuler
+      </button>
+      {key !== prefix && problem && <small className="add-error">{problem}</small>}
+    </form>
+  );
+}
+
+function Remove({ tokenKey, onRemove }: { tokenKey: string; onRemove: (key: string) => void }) {
+  return (
+    <button
+      className="remove"
+      aria-label={`Retirer ${tokenKey}`}
+      title="Retirer (brouillon : rien n’est supprimé avant validation)"
+      onClick={() => onRemove(tokenKey)}
+    >
+      ×
+    </button>
+  );
 }
 
 // Éditeur d'une valeur : alias vers une primitive du même type, ou valeur brute.
@@ -118,11 +230,11 @@ function Flag({ findings }: { findings: Finding[] }) {
   );
 }
 
-export default function Board({ set, drafts, findings, onEdit }: BoardProps) {
+export default function Board({ set, drafts, added, findings, onEdit, onAdd, onRemove }: BoardProps) {
   const entries = Object.entries(set.tokens);
   const byKey = (key: string) => findings.filter((f) => f.key === key);
   const isDraft = (key: string) =>
-    [...drafts.keys()].some((d) => d.startsWith(`${key}@`));
+    added.has(key) || [...drafts.keys()].some((d) => d.startsWith(`${key}@`));
   const ramps = new Map<string, [string, Token][]>();
   for (const [key, token] of entries)
     if (token.$collection === 'primitives' && token.$type === 'color') {
@@ -136,6 +248,10 @@ export default function Board({ set, drafts, findings, onEdit }: BoardProps) {
     ([k, t]) => t.$collection === 'primitives' && t.$type === 'dimension' && !k.startsWith('color/'),
   );
   const scaleGroups = [...new Set(scales.map(([k]) => k.split('/')[0]))];
+  const others = entries.filter(
+    ([, t]) => t.$collection === 'primitives' && t.$type !== 'color' && t.$type !== 'dimension',
+  );
+  const baseFont = set.tokens['font/family/base'] ? String(resolve(set, 'font/family/base')) : undefined;
   const rowClass = (key: string) =>
     `token-row ${isDraft(key) ? 'is-draft' : ''} ${byKey(key).length ? 'has-flag' : ''}`;
 
@@ -150,13 +266,17 @@ export default function Board({ set, drafts, findings, onEdit }: BoardProps) {
             <div className="swatches">
               {list.map(([key, token]) => (
                 <div className={`swatch ${isDraft(key) ? 'is-draft' : ''}`} key={key}>
-                  <span className="name">{key.split('/').at(-1)}</span>
+                  <span className="name">
+                    {key.split('/').at(-1)}
+                    <Remove tokenKey={key} onRemove={onRemove} />
+                  </span>
                   <ValueEditor set={set} tokenKey={key} token={token} mode="default" onEdit={onEdit} label={key} />
                 </div>
               ))}
             </div>
           </div>
         ))}
+        <AddToken set={set} collection="primitives" types={['color']} prefix="color/" onAdd={onAdd} />
       </section>
 
       <section aria-labelledby="h-tokens">
@@ -182,10 +302,18 @@ export default function Board({ set, drafts, findings, onEdit }: BoardProps) {
                     <ValueEditor key={mode} set={set} tokenKey={key} token={token} mode={mode} onEdit={onEdit} label={`${key} ${mode}`} />
                   ))}
                   <Flag findings={byKey(key)} />
+                  <Remove tokenKey={key} onRemove={onRemove} />
                 </div>
               ))}
           </div>
         ))}
+        <AddToken
+          set={set}
+          collection="tokens"
+          types={['color', 'dimension', 'fontWeight', 'number', 'fontFamily']}
+          prefix=""
+          onAdd={onAdd}
+        />
       </section>
 
       <section aria-labelledby="h-type">
@@ -203,7 +331,7 @@ export default function Board({ set, drafts, findings, onEdit }: BoardProps) {
             {key.startsWith('font/size/') ? (
               <span
                 className="specimen"
-                style={{ fontSize: Math.min(Number(resolve(set, key)), 40), fontFamily: String(resolve(set, 'font/family/base')) }}
+                style={{ fontSize: Math.min(Number(resolve(set, key)), 40), fontFamily: baseFont }}
               >
                 Aa
               </span>
@@ -218,8 +346,16 @@ export default function Board({ set, drafts, findings, onEdit }: BoardProps) {
               <ValueEditor key={mode} set={set} tokenKey={key} token={token} mode={mode} onEdit={onEdit} label={`${key} ${mode}`} />
             ))}
             <Flag findings={byKey(key)} />
+            <Remove tokenKey={key} onRemove={onRemove} />
           </div>
         ))}
+        <AddToken
+          set={set}
+          collection="typography"
+          types={['dimension', 'fontWeight', 'number', 'fontFamily']}
+          prefix="font/size/"
+          onAdd={onAdd}
+        />
       </section>
 
       <section aria-labelledby="h-scales">
@@ -243,11 +379,37 @@ export default function Board({ set, drafts, findings, onEdit }: BoardProps) {
                     </span>
                     <ValueEditor set={set} tokenKey={key} token={token} mode="default" onEdit={onEdit} label={key} />
                     <Flag findings={byKey(key)} />
+                    <Remove tokenKey={key} onRemove={onRemove} />
                   </div>
                 );
               })}
           </div>
         ))}
+        <AddToken set={set} collection="primitives" types={['dimension']} prefix="space/" onAdd={onAdd} />
+      </section>
+
+      <section aria-labelledby="h-others">
+        <h2 id="h-others">Autres primitives</h2>
+        <p className="hint">Polices, graisses et nombres bruts, repris par la typographie.</p>
+        {others.map(([key, token]) => (
+          <div className={rowClass(key)} key={key}>
+            <span className="chip chip-dim">{String(token.$values.default).slice(0, 10)}</span>
+            <span className="meta">
+              <code>{key}</code>
+              {token.$description && <small>{token.$description}</small>}
+            </span>
+            <ValueEditor set={set} tokenKey={key} token={token} mode="default" onEdit={onEdit} label={key} />
+            <Flag findings={byKey(key)} />
+            <Remove tokenKey={key} onRemove={onRemove} />
+          </div>
+        ))}
+        <AddToken
+          set={set}
+          collection="primitives"
+          types={['fontWeight', 'fontFamily', 'number']}
+          prefix="font/"
+          onAdd={onAdd}
+        />
       </section>
 
       <section aria-labelledby="h-components">

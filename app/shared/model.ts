@@ -17,6 +17,7 @@ export type TokenValue = string | number;
 export type ModeSelection = Partial<Record<Collection, string>>;
 
 const pathPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/;
+export const isTokenKey = (key: string) => key.length <= 80 && pathPattern.test(key);
 const aliasPattern = /^\{([a-z0-9/-]+)\}$/;
 export const isAlias = (v: TokenValue): v is string =>
   typeof v === 'string' && aliasPattern.test(v);
@@ -161,13 +162,18 @@ export function tokenCss(
   );
 }
 
-export const changeSchema = z
-  .object({
-    key: z.string().max(80).regex(pathPattern),
-    mode: modeName,
-    value: valueSchema,
-  })
+// Trois opérations de brouillon : changer une valeur, ajouter un token, en
+// retirer un. Toutes passent ensuite par diff puis validation humaine.
+const keySchema = z.string().max(80).regex(pathPattern);
+export const valueChangeSchema = z
+  .object({ key: keySchema, mode: modeName, value: valueSchema })
   .strict();
+export type ValueChange = z.infer<typeof valueChangeSchema>;
+export const changeSchema = z.union([
+  valueChangeSchema,
+  z.object({ op: z.literal('add'), key: keySchema, token: tokenSchema }).strict(),
+  z.object({ op: z.literal('remove'), key: keySchema }).strict(),
+]);
 export type Change = z.infer<typeof changeSchema>;
 export const proposeSchema = z
   .object({
@@ -176,17 +182,40 @@ export const proposeSchema = z
   })
   .strict();
 
+// Tokens dont une valeur est un alias vers `key`.
+export const referrers = (set: TokenSet, key: string) =>
+  Object.entries(set.tokens)
+    .filter(([, t]) => Object.values(t.$values).includes(`{${key}}`))
+    .map(([k]) => k);
+
 export function applyChanges(set: TokenSet, changes: Change[]): TokenSet {
-  const ids = changes.map((c) => `${c.key}@${c.mode}`);
+  const ids = changes.map((c) => ('op' in c ? `${c.op}:${c.key}` : `${c.key}@${c.mode}`));
   if (new Set(ids).size !== ids.length)
     throw new Error('Un token ne peut apparaître deux fois dans le même mode.');
   const next = structuredClone(set);
+  const removed: string[] = [];
   for (const change of changes) {
+    if ('op' in change && change.op === 'add') {
+      if (next.tokens[change.key])
+        throw new Error(`Token déjà existant : ${change.key}.`);
+      next.tokens[change.key] = structuredClone(change.token);
+      continue;
+    }
     const token = next.tokens[change.key];
     if (!token) throw new Error(`Token inconnu : ${change.key}.`);
+    if ('op' in change) {
+      delete next.tokens[change.key];
+      removed.push(change.key);
+      continue;
+    }
     if (!(change.mode in token.$values))
       throw new Error(`Mode inconnu pour ${change.key} : ${change.mode}.`);
     token.$values[change.mode] = change.value;
+  }
+  for (const key of removed) {
+    const users = referrers(next, key);
+    if (users.length)
+      throw new Error(`Token utilisé par ${users.join(', ')} : changer ces alias avant de retirer ${key}.`);
   }
   return tokenSetSchema.parse(next);
 }

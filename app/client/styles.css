@@ -792,3 +792,51 @@ body.preview-body {
   display: grid;
   gap: var(--space-sm, 12px);
 }
+
+/* Ajout et retrait de tokens (brouillon). */
+.swatch .name {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.remove {
+  border: 0;
+  background: none;
+  padding: 0 6px;
+  line-height: 1.4;
+  color: var(--c-muted);
+  border-radius: 6px;
+}
+.remove:hover:not(:disabled) {
+  color: var(--c-warn);
+  background: var(--c-warn-bg);
+}
+.add {
+  margin-top: 10px;
+  border-style: dashed;
+  color: var(--c-muted);
+  font-size: 13px;
+}
+.add-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+.add-form input,
+.add-form select {
+  border: 1px solid var(--c-line);
+  border-radius: 6px;
+  padding: 5px 8px;
+  background: var(--c-panel);
+  font-size: 13px;
+}
+.add-form input {
+  width: 220px;
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+}
+.add-error {
+  color: var(--c-warn);
+  width: 100%;
+}

@@ -4,7 +4,7 @@ import {
   isAlias,
   resolve,
   toHsl,
-  type Change,
+  type ValueChange,
   type TokenSet,
 } from './model.js';
 import { components } from './components.js';
@@ -16,7 +16,7 @@ export interface Finding {
   key: string;
   mode?: string;
   message: string;
-  fix?: Change;
+  fix?: ValueChange;
   fixLabel?: string;
 }
 interface Rule {

@@ -315,3 +315,34 @@ test('version acceptée : empreinte, cible et révision figées, jamais écrasé
   await assert.rejects(() => acceptVersion(projectDir, config, store.snapshot(), 0), /différente/);
   assert.equal((await listVersions(projectDir)).length, 1);
 });
+
+test('ajout et retrait de tokens : diff puis commit, retrait refusé tant qu’un alias y renvoie', async (t) => {
+  const { store } = await fixture(t, marmotte);
+  const accent: Change = {
+    op: 'add',
+    key: 'color/accent/500',
+    token: { $type: 'color', $collection: 'primitives', $values: { default: '#FF5500' } },
+  };
+  const p = store.propose(0, [
+    accent,
+    { key: 'bg/brand', mode: 'light', value: '{color/accent/500}' },
+  ]);
+  assert.deepEqual(
+    p.patches.map((x) => [x.key, !!x.before, !!x.after]).sort(),
+    [['bg/brand', true, true], ['color/accent/500', false, true]],
+  );
+  await store.commit(p.id);
+  assert.equal(store.snapshot().set.tokens['color/accent/500'].$values.default, '#FF5500');
+  assert.throws(() => store.propose(1, [accent]), /déjà existant/);
+  assert.throws(
+    () => store.propose(1, [{ op: 'remove', key: 'color/accent/500' }]),
+    /utilisé par bg\/brand/,
+  );
+  const unused = Object.keys(store.snapshot().set.tokens).find(
+    (k) => !Object.values(store.snapshot().set.tokens).some((tk) => Object.values(tk.$values).includes(`{${k}}`)),
+  )!;
+  const r = store.propose(1, [{ op: 'remove', key: unused }]);
+  assert.deepEqual(r.patches.map((x) => [x.key, !!x.after]), [[unused, false]]);
+  await store.commit(r.id);
+  assert.equal(store.snapshot().set.tokens[unused], undefined);
+});

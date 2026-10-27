@@ -3,7 +3,8 @@ export default defineConfig({
   testDir: 'tests/e2e',
   workers: 1,
   fullyParallel: false,
-  timeout: 30_000,
+  // Parcours courts : un test bloqué échoue vite au lieu d'allonger la CI.
+  timeout: 15_000,
   reporter: [['list'], ['json', { outputFile: 'test-results/e2e.json' }]],
   use: {
     baseURL: 'http://127.0.0.1:4318',

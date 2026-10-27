@@ -323,7 +323,7 @@ test(
           }
           const proposal = await post('proposals', {
             revision: 0,
-            changes: [{ key: 'color.brand', value: '#8A3B20' }],
+            changes: [{ key: 'bg/brand', mode: 'light', value: '#8A3B20' }],
           });
           await post('commit', { id: proposal.id });
           saved = await fs.readFile(path.join(data, 'state.json'), 'utf8');
@@ -353,10 +353,12 @@ test(
           browser = await chromium.launch();
           const page = await browser.newPage();
           await page.goto(`http://127.0.0.1:${port}`);
-          await page.getByLabel('Valeur du token').fill('#224477');
+          await page
+            .getByLabel('bg/brand light', { exact: true })
+            .fill('#224477');
           await action('restart');
           await page
-            .getByRole('button', { name: 'Proposer', exact: true })
+            .getByRole('button', { name: 'Voir le diff et valider' })
             .click();
           await page.getByRole('dialog').waitFor();
           assert.match(await page.getByRole('dialog').textContent(), /#224477/);

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   applyChanges,
+  referrers,
   type Change,
   type Proposal,
   type State,
+  type Token,
   type TokenSet,
   type TokenValue,
 } from '../shared/model.js';
@@ -31,6 +33,13 @@ const devices = [
   { label: '1024', width: 1024 },
 ];
 const draftKey = (k: string, m: string) => `${k}@${m}`;
+function stored<V>(name: string): Map<string, V> {
+  try {
+    return new Map(JSON.parse(sessionStorage.getItem(name) || '[]'));
+  } catch {
+    return new Map();
+  }
+}
 
 function useCommittedState() {
   const [state, setState] = useState<State>();
@@ -69,13 +78,12 @@ function announce() {
 export default function App() {
   const { state, setState, error: stateError } = useCommittedState();
   const [boot, setBoot] = useState<Bootstrap>();
-  const [drafts, setDrafts] = useState<Map<string, TokenValue>>(() => {
-    try {
-      return new Map(JSON.parse(sessionStorage.getItem('ds-drafts') || '[]'));
-    } catch {
-      return new Map();
-    }
-  });
+  // Brouillon : valeurs changées (clé@mode) et structure (token ajouté, ou
+  // null pour un token retiré).
+  const [drafts, setDrafts] = useState<Map<string, TokenValue>>(() => stored('ds-drafts'));
+  const [structure, setStructure] = useState<Map<string, Token | null>>(() =>
+    stored('ds-structure'),
+  );
   const [proposal, setProposal] = useState<Proposal>();
   const [versions, setVersions] = useState<VersionSummary[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -93,15 +101,26 @@ export default function App() {
   useEffect(() => {
     try {
       sessionStorage.setItem('ds-drafts', JSON.stringify([...drafts]));
+      sessionStorage.setItem('ds-structure', JSON.stringify([...structure]));
     } catch {
       /* Stockage navigateur facultatif : brouillon en mémoire seulement. */
     }
-  }, [drafts]);
+  }, [drafts, structure]);
 
-  const changes: Change[] = [...drafts].map(([id, value]) => {
-    const at = id.lastIndexOf('@');
-    return { key: id.slice(0, at), mode: id.slice(at + 1), value };
-  });
+  const changes: Change[] = [
+    ...[...structure].map(([key, token]): Change =>
+      token ? { op: 'add', key, token } : { op: 'remove', key },
+    ),
+    ...[...drafts].map(([id, value]) => {
+      const at = id.lastIndexOf('@');
+      return { key: id.slice(0, at), mode: id.slice(at + 1), value };
+    }),
+  ];
+  const draftCount = drafts.size + structure.size;
+  const clearDrafts = () => {
+    setDrafts(new Map());
+    setStructure(new Map());
+  };
   const { draftSet, draftError } = useMemo(() => {
     if (!state) return { draftSet: undefined, draftError: '' };
     if (!changes.length) return { draftSet: state.set, draftError: '' };
@@ -111,7 +130,7 @@ export default function App() {
       return { draftSet: state.set, draftError: (e as Error).message };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, drafts]);
+  }, [state, drafts, structure]);
   const findings = useMemo(() => (draftSet ? runRules(draftSet) : []), [draftSet]);
 
   // La preview reçoit le jeu courant, brouillon compris, à chaque changement.
@@ -138,7 +157,15 @@ export default function App() {
       setBusy(false);
     }
   };
-  const edit = (key: string, mode: string, value: TokenValue) =>
+  const edit = (key: string, mode: string, value: TokenValue) => {
+    const added = structure.get(key);
+    if (added) {
+      // Token ajouté dans ce brouillon : sa valeur vit dans le token lui-même.
+      setStructure((s) =>
+        new Map(s).set(key, { ...added, $values: { ...added.$values, [mode]: value } }),
+      );
+      return;
+    }
     setDrafts((d) => {
       const next = new Map(d);
       const committed = state?.set.tokens[key]?.$values[mode];
@@ -146,13 +173,37 @@ export default function App() {
       else next.set(draftKey(key, mode), value);
       return next;
     });
+  };
+  const add = (key: string, token: Token) =>
+    setStructure((s) => {
+      const next = new Map(s);
+      // Retiré puis rajouté sous le même nom : on remplace l'ancien.
+      if (s.get(key) === null) next.delete(key);
+      return next.set(key, token);
+    });
+  const remove = (key: string) => {
+    const users = draftSet ? referrers(draftSet, key) : [];
+    if (users.length) {
+      setNotice('');
+      setError(`${key} est utilisé par ${users.join(', ')} : change ces alias avant de le retirer.`);
+      return;
+    }
+    setError('');
+    setDrafts((d) => new Map([...d].filter(([id]) => !id.startsWith(`${key}@`))));
+    setStructure((s) => {
+      const next = new Map(s);
+      if (s.get(key)) next.delete(key);
+      else next.set(key, null);
+      return next;
+    });
+  };
   const reviewDrafts = () =>
     run(async () => setProposal(await propose(state!.revision, changes)));
   const validate = () =>
     run(async () => {
       const next = await commit(proposal!);
       setState(next);
-      if (proposal!.source !== 'undo' && proposal!.source !== 'import') setDrafts(new Map());
+      if (proposal!.source !== 'undo' && proposal!.source !== 'import') clearDrafts();
       setProposal(undefined);
       announce();
       setNotice(`Révision ${next.revision} enregistrée. Annulable depuis l’historique.`);
@@ -205,9 +256,9 @@ export default function App() {
           <button onClick={() => run(() => exportSet(name))}>Exporter</button>
           <button
             className="primary"
-            disabled={busy || drafts.size > 0 || !!accepted}
+            disabled={busy || draftCount > 0 || !!accepted}
             title={
-              drafts.size
+              draftCount
                 ? 'Valide ou abandonne le brouillon avant d’accepter.'
                 : accepted
                   ? `Déjà acceptée : v${accepted.revision}`
@@ -225,11 +276,19 @@ export default function App() {
         </p>
       )}
       <main className="layout">
-        <Board set={draftSet} drafts={drafts} findings={findings} onEdit={edit} />
+        <Board
+          set={draftSet}
+          drafts={drafts}
+          added={structure}
+          findings={findings}
+          onEdit={edit}
+          onAdd={add}
+          onRemove={remove}
+        />
         <aside className="side">
           <section className="preview" aria-label="Preview en direct">
             <div className="preview-head">
-              <span>Preview {drafts.size ? '· brouillon' : '· enregistrée'}</span>
+              <span>Preview {draftCount ? '· brouillon' : '· enregistrée'}</span>
               <div className="devices" role="group" aria-label="Largeur d’écran">
                 {devices.map((d, i) => (
                   <button key={d.width} aria-pressed={device === i} onClick={() => setDevice(i)}>
@@ -253,12 +312,12 @@ export default function App() {
           />
         </aside>
       </main>
-      {drafts.size > 0 && (
+      {draftCount > 0 && (
         <div className="draft-bar" role="region" aria-label="Brouillon">
           <span>
-            {drafts.size} changement(s) en brouillon, rien n’est encore enregistré.
+            {draftCount} changement(s) en brouillon, rien n’est encore enregistré.
           </span>
-          <button onClick={() => setDrafts(new Map())}>Abandonner</button>
+          <button onClick={clearDrafts}>Abandonner</button>
           <button className="primary" disabled={busy || !!draftError} onClick={reviewDrafts}>
             Voir le diff et valider
           </button>
