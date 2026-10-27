@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import http from 'node:http';
 import assert from 'node:assert/strict';
 import { cp, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -42,6 +43,19 @@ test('plugin Figma : appairage, version acceptée calculée, reçu de transfert,
   assert.equal((await call('projects', undefined, 'aaaa-bbbb-cccc')).status, 401);
   // Le reste de l'API reste fermé à une origine externe.
   assert.equal((await fetch(base.replace('plugin/', 'state'), { headers: { Origin: 'null' } })).status, 403);
+
+  // Figma impose `localhost` dans le manifeste : accepté pour le plugin, refusé ailleurs.
+  const viaLocalhost = (route: string) =>
+    new Promise<number>((resolve, reject) =>
+      http
+        .get(base.replace('/api/plugin/', route), { headers: { Host: `localhost:${new URL(base).port}`, 'X-DS-Plugin': code } }, (r) => {
+          r.resume();
+          resolve(r.statusCode ?? 0);
+        })
+        .on('error', reject),
+    );
+  assert.equal(await viaLocalhost('/api/plugin/projects'), 200);
+  assert.equal(await viaLocalhost('/api/state'), 403);
 
   const [p] = await (await call('projects')).json();
   assert.equal(p.slug, 'marmotte');

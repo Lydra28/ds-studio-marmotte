@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-27T15:48:21.890Z",
+  "revision": 4,
+  "hash": "e25449dabfcc232523ae70f317c5556d1fbd9edba0e1091ca7be319e9b79a1a2",
+  "fileKey": "N5YMZ1aN6gtSZ0QBjzjdWh",
+  "page": "DS-Studio · Foundations",
+  "by": "plugin",
+  "created": 68,
+  "updated": 0,
+  "extra": [],
+  "components": [
+    "Button"
+  ],
+  "skipped": [
+    "Police « system-ui » absente de Figma : Button en Inter"
+  ]
+}

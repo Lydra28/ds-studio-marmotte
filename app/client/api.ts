@@ -7,6 +7,8 @@ export interface Bootstrap {
   fallback: string;
   // Code d'appairage du plugin Figma, affiché dans l'atelier seulement.
   plugin: string | null;
+  // Jeton GitHub présent côté serveur (jamais sa valeur).
+  github: boolean;
 }
 export interface ProjectSummary {
   slug: string;
@@ -83,7 +85,13 @@ export const proposeUndo = (revision: number, id: string) =>
 export const commit = (proposal: Proposal) =>
   request<State>('commit', { id: proposal.id });
 export const accept = (revision: number) =>
-  request<VersionSummary>('accept', { revision });
+  request<VersionSummary & { github: GithubResult | null }>('accept', { revision });
+// Pull request sur le code du projet après une version acceptée.
+export type GithubResult =
+  | { status: 'opened' | 'updated'; branch: string; url: string }
+  | { status: 'unchanged'; branch: null; url: null }
+  | { status: 'error'; message: string };
+export const publishGithub = (revision: number) => request<GithubResult>('github/publish', { revision });
 export const getVersions = () => request<VersionSummary[]>('versions');
 // Fiches envoyées par le plugin Figma, en attente d'import par diff.
 export interface Inbox {

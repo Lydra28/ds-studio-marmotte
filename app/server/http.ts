@@ -12,6 +12,8 @@ import { Assistant, chatSchema } from './assistant.js';
 import { Wall, directionsRequestSchema, imageSchema, linkSchema } from './wall.js';
 import { acceptVersion, listVersions, readVersion } from './versions.js';
 import { clearInbox, handlePlugin, readInbox } from './plugin.js';
+import { githubFromEnv, publishVersion, type GithubOptions } from './github.js';
+import { atomicWrite } from './files.js';
 import { figmaStatus } from '../../connectors/figma/contract.js';
 import type { RecordInfo } from '../../scripts/runtime.mjs';
 
@@ -21,6 +23,8 @@ export async function createStudioServer(
     dev?: boolean;
     // Code d'appairage du plugin Figma ; absent : routes du plugin fermées.
     pluginCode?: string;
+    // Accès GitHub (jeton, fetch simulé en test) ; par défaut GITHUB_TOKEN de .env.
+    github?: GithubOptions;
     control?: { record: RecordInfo; stop: () => void };
   } & (
     | { registry: Registry }
@@ -42,6 +46,23 @@ export async function createStudioServer(
           wall: new Wall(options.store.directory, {}),
         });
   const csrf = randomBytes(32).toString('hex');
+  const github = options.github ?? githubFromEnv();
+  // Version acceptée → pull request sur le code du projet ; un échec GitHub
+  // n'annule jamais l'acceptation, il est rendu avec la version.
+  const publish = async (projectDir: string, config: Config, revision: number) => {
+    if (!config.github) return null;
+    try {
+      const v = await readVersion(projectDir, revision);
+      const result = await publishVersion(github, config.github, { project: config.name, revision, hash: v.hash, set: v.set });
+      await atomicWrite(
+        path.join(projectDir, 'versions', `v${revision}.github.json`),
+        JSON.stringify({ date: new Date().toISOString(), repo: config.github.repo, ...result }, null, 2) + '\n',
+      );
+      return result;
+    } catch (e) {
+      return { status: 'error' as const, message: (e as Error).message };
+    }
+  };
   const vite = options.dev
     ? await (
         await import('vite')
@@ -72,14 +93,17 @@ export async function createStudioServer(
       `default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'${options.dev ? ' ws://127.0.0.1:*' : ''}; frame-ancestors 'self'; base-uri 'none'; form-action 'self'`,
     );
     try {
-      if (req.headers.host !== `127.0.0.1:${port}`)
+      // Plugin Figma : origine `null`, protégé par son code d'appairage (plugin.ts).
+      // Figma refuse une adresse IP dans le manifeste : le plugin passe par
+      // `localhost`, accepté pour ces routes seulement.
+      const pluginUrl = new URL(req.url ?? '/', origin);
+      const pluginRoute = pluginUrl.pathname.startsWith('/api/plugin/');
+      if (req.headers.host !== `127.0.0.1:${port}` && !(pluginRoute && req.headers.host === `localhost:${port}`))
         throw new StudioError(
           'Hôte refusé. Utilisez l’adresse 127.0.0.1 affichée au démarrage.',
           403,
         );
-      // Plugin Figma : origine `null`, protégé par son code d'appairage (plugin.ts).
-      const pluginUrl = new URL(req.url ?? '/', origin);
-      if (pluginUrl.pathname.startsWith('/api/plugin/'))
+      if (pluginRoute)
         return await handlePlugin(req, res, pluginUrl, { registry, code: options.pluginCode ?? null, send });
       if (req.headers.origin && req.headers.origin !== origin)
         throw new StudioError('Origine non autorisée.', 403);
@@ -115,6 +139,7 @@ export async function createStudioServer(
               multi: registry.multi,
               fallback: registry.fallback,
               plugin: options.pluginCode ?? null,
+              github: !!github.token,
             });
           if (url.pathname === '/api/projects') return send(200, await registry.list());
           const { store, dir: projectDir, config, brief: project, assistant, wall } = await instance();
@@ -242,10 +267,13 @@ export async function createStudioServer(
             .strict()
             .parse(body);
           await store.flush();
-          return send(
-            200,
-            await acceptVersion(projectDir, config, store.snapshot(), b.revision),
-          );
+          const version = await acceptVersion(projectDir, config, store.snapshot(), b.revision);
+          return send(200, { ...version, github: await publish(projectDir, config, version.revision) });
+        }
+        if (url.pathname === '/api/github/publish') {
+          const b = z.object({ revision: z.number().int().nonnegative() }).strict().parse(body);
+          if (!config.github) throw new StudioError('Ce projet n’a pas de dépôt GitHub configuré.', 409);
+          return send(200, await publish(projectDir, config, b.revision));
         }
         throw new StudioError('Route inconnue.', 404);
       }

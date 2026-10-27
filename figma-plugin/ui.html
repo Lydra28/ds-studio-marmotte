@@ -89,7 +89,7 @@
 
 <form id="connect">
   <label for="addr">Adresse de l’atelier</label>
-  <input id="addr" value="http://127.0.0.1:4310" />
+  <input id="addr" value="http://localhost:4310" />
   <label for="code">Code d’appairage (bouton « Figma » dans l’atelier)</label>
   <input id="code" placeholder="xxxx-xxxx-xxxx" autocomplete="off" />
   <button type="submit">Connecter</button>
@@ -179,7 +179,12 @@
       }
     } else if (!p.version) html += '<p class="muted">Aucune version acceptée : accepte une version dans l’atelier.</p>';
 
-    html += `<h2>Envoyer les composants</h2><div class="card"><span class="muted">Lit les composants de ce fichier (lecture seule) et les envoie à l’atelier comme fiches à relire. Rien n’est écrit sans ton diff.</span><button id="components">Envoyer les composants à ${esc(p.name)}</button></div>`;
+    // Composants d'un autre fichier que la cible : jamais envoyés à ce projet.
+    const sendable = !target || match;
+    html += `<h2>Envoyer les composants</h2><div class="card"><span class="muted">Lit les composants de ce fichier (lecture seule) et les envoie à l’atelier comme fiches à relire. Rien n’est écrit sans ton diff.</span>`;
+    if (!sendable) html += `<br><span class="ko">Ce fichier n’est pas celui de ${esc(p.name)} : ouvre son fichier cible pour envoyer ses composants.</span>`;
+    else if (!target) html += `<br><span class="ko">${esc(p.name)} n’a pas de fichier cible : vérifie que « ${esc(file.name || '')} » est bien le sien.</span>`;
+    html += `<button id="components" ${sendable ? '' : 'disabled'}>Envoyer les composants de « ${esc(file.name || 'ce fichier')} » à ${esc(p.name)}</button></div>`;
     $('details').innerHTML = html;
 
     if ($('link'))

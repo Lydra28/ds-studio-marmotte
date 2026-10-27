@@ -25,6 +25,8 @@ import {
   getVersions,
   getVersion,
   getInbox,
+  publishGithub,
+  type GithubResult,
   clearInbox,
   type Inbox,
   propose,
@@ -102,18 +104,20 @@ export default function App() {
   const slug = route ?? (boot.multi ? undefined : boot.fallback);
   if (!slug) return <Home onOpen={go} />;
   setProject(slug);
-  return <Workspace key={slug} slug={slug} multi={boot.multi} plugin={boot.plugin} onOpen={go} />;
+  return <Workspace key={slug} slug={slug} multi={boot.multi} plugin={boot.plugin} github={boot.github} onOpen={go} />;
 }
 
 function Workspace({
   slug,
   multi,
   plugin,
+  github,
   onOpen,
 }: {
   slug: string;
   multi: boolean;
   plugin: string | null;
+  github: boolean;
   onOpen: (slug?: string) => void;
 }) {
   const { state, setState, error: stateError } = useCommittedState(slug);
@@ -132,6 +136,8 @@ function Workspace({
   const [versions, setVersions] = useState<VersionSummary[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [figmaOpen, setFigmaOpen] = useState(false);
+  // Dernière publication GitHub (lien de la PR, ou erreur à réessayer).
+  const [published, setPublished] = useState<{ revision: number; result: GithubResult }>();
   // Fiches envoyées par le plugin Figma : relues au retour sur l'atelier.
   const [inbox, setInbox] = useState<Inbox | null>(null);
   const [fromInbox, setFromInbox] = useState(false);
@@ -325,11 +331,16 @@ function Workspace({
       const target = config?.figma
         ? `Le transfert appliquera ces changements au fichier Figma (page « ${config.figma.page} »).`
         : 'Aucune cible Figma pour ce projet : accepter fige la version, rien n’est envoyé dans Figma.';
+      const code = config?.github
+        ? github
+          ? ` Une pull request sera ouverte sur ${config.github.repo} (branche ds-studio/v${state!.revision}) ; rien n’arrive sur ${config.github.base} sans ton merge.`
+          : ' GITHUB_TOKEN absent de .env : la pull request ne sera pas ouverte.'
+        : '';
       setComparison({
         title: last !== undefined
           ? `Accepter r${state!.revision} · comparée à v${last.revision}`
           : `Accepter r${state!.revision} · première version`,
-        hint: target,
+        hint: target + code,
         patches: diff(await versionSet(last?.revision), state!.set),
         accept: true,
       });
@@ -348,6 +359,7 @@ function Workspace({
     run(async () => {
       const v = await accept(state!.revision);
       setComparison(undefined);
+      if (v.github) setPublished({ revision: v.revision, result: v.github });
       setVersions(await getVersions());
       setNotice(
         `Version v${v.revision} acceptée (empreinte ${v.hash.slice(0, 8)})` +
@@ -432,6 +444,31 @@ function Workspace({
           </button>
         </div>
       </header>
+      {published && (
+        <p className={`message ${published.result.status === 'error' ? 'error' : 'ok'}`} role="status">
+          {published.result.status === 'error' ? (
+            <>
+              GitHub : {published.result.message}{' '}
+              <button
+                onClick={() =>
+                  run(async () => setPublished({ revision: published.revision, result: await publishGithub(published.revision) }))
+                }
+              >
+                Réessayer
+              </button>
+            </>
+          ) : published.result.status === 'unchanged' ? (
+            `GitHub : ${config?.github?.repo} est déjà à jour, aucune pull request ouverte.`
+          ) : (
+            <>
+              Pull request {published.result.status === 'opened' ? 'ouverte' : 'mise à jour'} :{' '}
+              <a href={published.result.url} target="_blank" rel="noreferrer">
+                {published.result.url}
+              </a>
+            </>
+          )}
+        </p>
+      )}
       {(error || notice || stateError || draftError) && (
         <p className={`message ${error || stateError || draftError ? 'error' : 'ok'}`} role={error ? 'alert' : 'status'}>
           {error || stateError || (draftError && `Brouillon invalide : ${draftError}`) || notice}

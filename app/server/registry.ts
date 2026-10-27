@@ -168,6 +168,7 @@ export class Registry {
     const config: Config = {
       name: p.name,
       figma: fileKey ? { fileKey, page: 'DS-Studio · Foundations', protectedPages: [] } : null,
+      github: null,
     };
     await atomicWrite(path.join(dir, 'project.config.json'), JSON.stringify(config, null, 2) + '\n');
     await fs.copyFile(this.template, path.join(dir, 'design-system.tokens.json'));

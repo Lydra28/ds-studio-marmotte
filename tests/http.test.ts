@@ -29,7 +29,7 @@ async function fixture(
     store,
     dev,
     projectDir: directory,
-    config: { name: 'Test', figma: null },
+    config: { name: 'Test', figma: null, github: null },
   });
   await new Promise<void>((r) => app.server.listen(0, '127.0.0.1', r));
   t.after(async () => {

@@ -50,6 +50,24 @@ export const configSchema = z
       .strict()
       .nullable()
       .default(null),
+    // Code du projet sur GitHub : à chaque version acceptée, l'atelier ouvre
+    // une pull request avec les fichiers de tokens générés dans `dir`.
+    github: z
+      .object({
+        repo: z.string().regex(/^[\w.-]+\/[\w.-]+$/),
+        base: z.string().regex(/^[\w./-]+$/).max(100).default('main'),
+        dir: z
+          .string()
+          .regex(/^[\w.-]+(\/[\w.-]+)*$/)
+          .refine((d) => !d.split('/').includes('..'), 'dossier relatif attendu')
+          .max(200),
+        // Préfixes renommés à l'export, pour coller aux noms du code (« bg/ » → « color/bg/ »).
+        rename: z.record(z.string().max(60), z.string().max(60)).default({}),
+        mobileQuery: z.string().max(100).default('(max-width: 767.98px)'),
+      })
+      .strict()
+      .nullable()
+      .default(null),
   })
   .strict();
 export type Config = z.infer<typeof configSchema>;
