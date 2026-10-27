@@ -1,0 +1,40 @@
+{
+  "name": "ds-studio",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Starter pédagogique local pour explorer et faire évoluer un Design System.",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "tsx app/server/index.ts --dev",
+    "build": "tsc --noEmit && vite build",
+    "start": "tsx app/server/index.ts",
+    "launcher": "node scripts/launcher.mjs",
+    "test:launcher": "node --test tests/launcher.test.mjs",
+    "qualify:desktop": "node scripts/qualify-desktop.mjs",
+    "check": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "test:e2e": "playwright test",
+    "scan": "node scripts/scan-public.mjs",
+    "doctor": "node scripts/doctor.mjs",
+    "qualify": "node scripts/qualify-local.mjs",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "prettier": "3.9.10",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vite": "8.3.5"
+  }
+}

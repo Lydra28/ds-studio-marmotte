@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=DS-Studio
+Comment=Démarrer, ouvrir et arrêter votre atelier local
+Exec=sh -c "exec sh \\"\\$(dirname \\"\\$1\\")/launcher/bootstrap.sh\\"" sh %k
+Icon=applications-development
+Terminal=false
+Categories=Education;
+StartupNotify=false

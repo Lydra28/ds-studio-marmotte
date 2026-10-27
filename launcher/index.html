@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>DS-Studio — lancement</title>
+    <link rel="stylesheet" href="/launcher.css" />
+    <script defer src="/launcher.js"></script>
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">VOTRE ATELIER LOCAL</p>
+      <h1>DS-Studio</h1>
+      <p>Démarrez votre atelier, puis ouvrez-le dans un autre onglet.</p>
+      <p id="status" role="status" aria-live="polite">Connexion au lanceur…</p>
+      <section id="setup" hidden>
+        <h2>Préparer le premier lancement</h2>
+        <p>
+          Node.js est détecté. Les dépendances ou la compilation nécessitent une
+          préparation.
+        </p>
+        <p>
+          Le bouton ci-dessous demande votre accord avant de télécharger les
+          dépendances npm et compiler le projet. Internet est nécessaire. Aucun
+          droit administrateur ni compte IA demandé.
+        </p>
+        <button data-action="prepare">Installer / compiler…</button>
+      </section>
+      <div class="buttons">
+        <button data-action="start">Démarrer DS-Studio</button
+        ><button data-action="open">Ouvrir DS-Studio</button
+        ><button data-action="stop">Arrêter DS-Studio</button
+        ><button data-action="restart">Redémarrer DS-Studio</button>
+      </div>
+      <p id="address" hidden>
+        <a id="studio" target="_blank" rel="noopener"
+          >Ouvrir directement l’atelier</a
+        >
+      </p>
+      <p id="error" role="alert"></p>
+      <p>
+        Fermer un onglet n’arrête pas DS-Studio. Pour retrouver ces boutons,
+        double-cliquez sur le même lanceur. <strong>Arrêter</strong> conserve
+        vos données.
+      </p>
+      <details>
+        <summary>Journal et réparation de l’installation</summary>
+        <pre id="output"></pre>
+        <p>
+          Après avoir arrêté l’atelier, vous pouvez refaire sa préparation sans
+          effacer vos données. Une confirmation sera demandée.
+        </p>
+        <button data-action="prepare">Réinstaller / recompiler…</button>
+        <h3>Récupérer les tokens après un incident</h3>
+        <p>Une copie de la révision précédente est conservée avant chaque validation.
+        Arrêtez l’atelier puis restaurez-la si nécessaire. L’état remplacé est archivé,
+        jamais supprimé. Cette copie locale ne remplace pas une sauvegarde externe.</p>
+        <button data-action="restore" disabled>Restaurer la copie précédente…</button>
+      </details>
+      <button class="quiet" data-action="quit">
+        Arrêter et quitter le lanceur
+      </button>
+      <p id="feedback" role="status" aria-live="polite"></p>
+    </main>
+  </body>
+</html>

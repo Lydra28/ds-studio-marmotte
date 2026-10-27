@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="fr">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>Installer DS-Studio</title>
+  <style>
+    body {
+      font: 18px/1.6 system-ui;
+      max-width: 760px;
+      margin: 40px auto;
+      padding: 24px;
+      color: #25372c;
+    }
+    h1,
+    h2 {
+      line-height: 1.2;
+    }
+    a {
+      color: #24513a;
+    }
+    li {
+      margin: 0.7em 0;
+    }
+    code {
+      background: #eee;
+      padding: 3px;
+    }
+  </style>
+  <h1>Préparer DS-Studio, sans terminal</h1>
+  <p>
+    Ce guide reste lisible même sans Node.js. DS-Studio ne demande ni Python, ni
+    Rust, ni compte IA. Le lanceur ne modifie aucun réglage système.
+  </p>
+  <h2>1. Installer Node.js si nécessaire</h2>
+  <ol>
+    <li>
+      Ouvrez
+      <a href="https://nodejs.org/en/download">le site officiel Node.js</a>.
+      Choisissez une version <strong>LTS, 22.12 ou supérieure</strong>, pour
+      votre système et votre processeur.
+    </li>
+    <li>
+      <strong>Windows / macOS :</strong> téléchargez l’installateur officiel,
+      ouvrez-le et conservez npm. Si l’ordinateur est géré par l’école ou
+      demande des droits que vous n’avez pas, contactez l’enseignant ; le
+      lanceur ne contourne pas ces droits.
+    </li>
+    <li>
+      <strong>Linux :</strong> l’installation graphique dépend de la
+      distribution. Si le gestionnaire de logiciels ne propose pas Node.js
+      22.12+, demandez une installation adaptée à l’enseignant. Autre
+      possibilité sans privilège : téléchargez l’archive Linux officielle
+      adaptée au processeur, décompressez-la avec le gestionnaire d’archives,
+      puis placez le dossier complet <code>node-v…-linux-…</code> dans
+      <code>.local/opt</code> de votre dossier personnel (afficher les fichiers
+      cachés). Le lanceur cherche aussi à cet endroit. Ne téléchargez pas un
+      exécutable d’une source inconnue.
+    </li>
+    <li>
+      Double-cliquez de nouveau sur le lanceur. Si le système ne voit pas encore
+      Node, reconnectez votre session puis réessayez.
+    </li>
+  </ol>
+  <h2>2. Ouvrir le bon lanceur</h2>
+  <ul>
+    <li>
+      <strong>Linux :</strong> <code>DS-Studio.desktop</code>. Propriétés →
+      Permissions → Autoriser l’exécution, puis « Faire confiance » / « Lancer »
+      si votre bureau le demande. Le script et le fichier .desktop doivent
+      rester dans le dossier du projet. Certains bureaux n’autorisent pas les
+      .desktop téléchargés ; consultez l’enseignant plutôt que de désactiver une
+      protection.
+    </li>
+    <li>
+      <strong>macOS :</strong> <code>DS-Studio.app</code>, dans le dossier du
+      projet. L’application est légère, non signée et non notariée : le système
+      peut la refuser. Utilisez les options d’ouverture explicites de Finder /
+      Réglages de confidentialité si elles sont autorisées par votre
+      établissement ; ne désactivez jamais Gatekeeper. Ne déplacez pas
+      uniquement le .app.
+    </li>
+    <li>
+      <strong>Windows :</strong> <code>DS-Studio.vbs</code> (icône script
+      Windows). Ce petit lanceur n’affiche pas de console. Windows Script Host /
+      VBScript peut être absent ou bloqué par votre établissement : demandez à
+      l’enseignant une entrée approuvée. Ne réduisez pas les protections
+      Windows. Le lancement terminal historique reste disponible.
+    </li>
+  </ul>
+  <h2>3. Préparer l’atelier</h2>
+  <p>
+    Le panneau s’ouvre dans le navigateur. Cliquez sur
+    <strong>Installer / compiler…</strong>, lisez puis confirmez. Cela exécute
+    <code>npm ci</code> puis <code>npm run build</code> dans ce projet
+    uniquement (les scripts npm des dépendances peuvent s’exécuter). Internet et
+    un dossier accessible en écriture sont nécessaires. Aucune installation
+    privilégiée automatique. Une erreur reste affichée avec son journal.
+  </p>
+  <p>
+    Ensuite : <strong>Démarrer DS-Studio</strong>, puis
+    <strong>Ouvrir DS-Studio</strong>. Pour arrêter, revenez au panneau et
+    cliquez <strong>Arrêter DS-Studio</strong>. Fermer le navigateur ne suffit
+    pas. Un nouveau double-clic retrouve le panneau.
+    <strong>Arrêter et quitter le lanceur</strong> ferme aussi son petit service
+    local.
+  </p>
+  <h2>Dépannage sans perte de données</h2>
+  <ul>
+    <li>
+      <strong>Port occupé :</strong> fermez l’application qui utilise ce port,
+      puis réessayez. Aucun processus n’est tué automatiquement.
+    </li>
+    <li>
+      <strong>Verrou après crash :</strong> une instance morte est récupérée
+      automatiquement. Un PID actif, un verrou mal formé ou une ancienne
+      instance non identifiable est préservé. Arrêtez l’ancienne instance par
+      son terminal / panneau, ou demandez à l’enseignant d’identifier le PID. Ne
+      supprimez jamais <code>state.json</code> et ne tuez pas tous les processus
+      Node.
+    </li>
+    <li>
+      <strong>Navigateur non ouvert :</strong> vérifiez votre navigateur par
+      défaut. Si le panneau est ouvert, son lien « Ouvrir directement l’atelier
+      » reste utilisable même si l’ouverture automatique est bloquée.
+    </li>
+    <li>
+      <strong>Projet déplacé :</strong> arrêtez DS-Studio et quittez le lanceur
+      avant de déplacer tout le dossier. Reprenez le lanceur à son nouvel
+      emplacement.
+    </li>
+  </ul>
+  <p>
+    macOS et Windows : implémentation à valider sur une machine réelle. La
+    présence de ces fichiers n’est pas une preuve de test sur ces OS.
+  </p>
+</html>

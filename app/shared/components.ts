@@ -1,0 +1,80 @@
+// Registre des composants : nom (anglais, PascalCase), propriétés de variantes
+// standard et fiche en français. Source des fiches affichées et transférées.
+export interface ComponentDoc {
+  name: string;
+  status: 'figma' | 'fiche';
+  props: { Variant?: string[]; State?: string[]; Size?: string[] };
+  role: string;
+  use: string;
+  avoid: string;
+  tokens: string[];
+  a11y: string;
+}
+
+export const components: ComponentDoc[] = [
+  {
+    name: 'Button',
+    status: 'figma',
+    props: {
+      Variant: ['primary', 'secondary', 'ghost'],
+      State: ['default', 'hover', 'focus', 'disabled'],
+      Size: ['md'],
+    },
+    role: 'Déclenche une action : valider, continuer, ouvrir.',
+    use: 'Une action principale par écran (primary), les actions de second rang en secondary, les actions discrètes en ghost.',
+    avoid: 'Pour naviguer vers une autre page (utiliser un lien) ; jamais deux primary côte à côte.',
+    tokens: [
+      'bg/brand',
+      'bg/brand-hover',
+      'text/on-brand',
+      'border/default',
+      'border/focus',
+      'radius/control',
+      'space/sm',
+      'space/md',
+      'font/size/label',
+    ],
+    a11y: 'Libellé qui dit l’action (« Valider », pas « OK ») ; contraste du libellé ≥ 4,5:1 ; focus clavier visible ; zone cliquable ≥ 44 px de haut.',
+  },
+  {
+    name: 'Input',
+    status: 'fiche',
+    props: {
+      State: ['default', 'focus', 'error', 'disabled'],
+      Size: ['md'],
+    },
+    role: 'Saisie d’une valeur courte : nom, e-mail, montant.',
+    use: 'Toujours avec un libellé visible au-dessus ; message d’erreur sous le champ, qui dit comment corriger.',
+    avoid: 'Pour un choix parmi une liste connue (utiliser un sélecteur) ; jamais le placeholder comme seul libellé.',
+    tokens: [
+      'bg/surface',
+      'text/primary',
+      'text/muted',
+      'border/interactive',
+      'border/focus',
+      'text/danger',
+      'radius/control',
+      'font/size/body',
+    ],
+    a11y: 'Bordure au repos ≥ 3:1 sur le fond ; erreur annoncée par texte, pas seulement par la couleur ; texte ≥ 16 px en mobile pour éviter le zoom automatique.',
+  },
+  {
+    name: 'Card',
+    status: 'fiche',
+    props: { Variant: ['default', 'elevated'] },
+    role: 'Regroupe une information et ses actions dans un bloc lisible seul.',
+    use: 'Listes d’éléments comparables : un titre, un court texte, une action.',
+    avoid: 'Pour mettre en page une section entière ; pas de carte dans une carte.',
+    tokens: [
+      'bg/surface',
+      'border/default',
+      'text/primary',
+      'text/secondary',
+      'radius/card',
+      'space/md',
+      'space/lg',
+      'font/size/heading',
+    ],
+    a11y: 'Un seul lien ou bouton principal par carte ; titre balisé comme titre ; contraste du texte secondaire ≥ 4,5:1.',
+  },
+];

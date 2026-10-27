@@ -1,0 +1,74 @@
+{
+  "color.brand": {
+    "$type": "color",
+    "$value": "#3154C4"
+  },
+  "color.brandHover": {
+    "$type": "color",
+    "$value": "#243F99"
+  },
+  "color.onBrand": {
+    "$type": "color",
+    "$value": "#FFFFFF"
+  },
+  "color.surface": {
+    "$type": "color",
+    "$value": "#FFFFFF"
+  },
+  "color.canvas": {
+    "$type": "color",
+    "$value": "#F3F5FA"
+  },
+  "color.text": {
+    "$type": "color",
+    "$value": "#19243D"
+  },
+  "color.muted": {
+    "$type": "color",
+    "$value": "#536078"
+  },
+  "color.border": {
+    "$type": "color",
+    "$value": "#BCC5D6"
+  },
+  "color.danger": {
+    "$type": "color",
+    "$value": "#B4233E"
+  },
+  "color.success": {
+    "$type": "color",
+    "$value": "#18734B"
+  },
+  "color.focus": {
+    "$type": "color",
+    "$value": "#7856C8"
+  },
+  "font.family": {
+    "$type": "fontFamily",
+    "$value": "system-ui"
+  },
+  "font.body": {
+    "$type": "dimension",
+    "$value": 16
+  },
+  "font.heading": {
+    "$type": "dimension",
+    "$value": 28
+  },
+  "space.sm": {
+    "$type": "dimension",
+    "$value": 8
+  },
+  "space.md": {
+    "$type": "dimension",
+    "$value": 16
+  },
+  "space.lg": {
+    "$type": "dimension",
+    "$value": 24
+  },
+  "radius.control": {
+    "$type": "dimension",
+    "$value": 10
+  }
+}

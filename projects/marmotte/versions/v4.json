@@ -1,0 +1,625 @@
+{
+  "format": "ds-studio-version/1",
+  "project": "Marmotte",
+  "target": {
+    "fileKey": "N5YMZ1aN6gtSZ0QBjzjdWh",
+    "page": "DS-Studio · Foundations",
+    "protectedPages": []
+  },
+  "revision": 4,
+  "acceptedAt": "2026-10-27T10:13:39.514Z",
+  "hash": "e25449dabfcc232523ae70f317c5556d1fbd9edba0e1091ca7be319e9b79a1a2",
+  "findings": [],
+  "components": [
+    {
+      "name": "Button",
+      "status": "figma",
+      "props": {
+        "Variant": [
+          "primary",
+          "secondary",
+          "ghost"
+        ],
+        "State": [
+          "default",
+          "hover",
+          "focus",
+          "disabled"
+        ],
+        "Size": [
+          "md"
+        ]
+      },
+      "role": "Déclenche une action : valider, continuer, ouvrir.",
+      "use": "Une action principale par écran (primary), les actions de second rang en secondary, les actions discrètes en ghost.",
+      "avoid": "Pour naviguer vers une autre page (utiliser un lien) ; jamais deux primary côte à côte.",
+      "tokens": [
+        "bg/brand",
+        "bg/brand-hover",
+        "text/on-brand",
+        "border/default",
+        "border/focus",
+        "radius/control",
+        "space/sm",
+        "space/md",
+        "font/size/label"
+      ],
+      "a11y": "Libellé qui dit l’action (« Valider », pas « OK ») ; contraste du libellé ≥ 4,5:1 ; focus clavier visible ; zone cliquable ≥ 44 px de haut."
+    },
+    {
+      "name": "Input",
+      "status": "fiche",
+      "props": {
+        "State": [
+          "default",
+          "focus",
+          "error",
+          "disabled"
+        ],
+        "Size": [
+          "md"
+        ]
+      },
+      "role": "Saisie d’une valeur courte : nom, e-mail, montant.",
+      "use": "Toujours avec un libellé visible au-dessus ; message d’erreur sous le champ, qui dit comment corriger.",
+      "avoid": "Pour un choix parmi une liste connue (utiliser un sélecteur) ; jamais le placeholder comme seul libellé.",
+      "tokens": [
+        "bg/surface",
+        "text/primary",
+        "text/muted",
+        "border/interactive",
+        "border/focus",
+        "text/danger",
+        "radius/control",
+        "font/size/body"
+      ],
+      "a11y": "Bordure au repos ≥ 3:1 sur le fond ; erreur annoncée par texte, pas seulement par la couleur ; texte ≥ 16 px en mobile pour éviter le zoom automatique."
+    },
+    {
+      "name": "Card",
+      "status": "fiche",
+      "props": {
+        "Variant": [
+          "default",
+          "elevated"
+        ]
+      },
+      "role": "Regroupe une information et ses actions dans un bloc lisible seul.",
+      "use": "Listes d’éléments comparables : un titre, un court texte, une action.",
+      "avoid": "Pour mettre en page une section entière ; pas de carte dans une carte.",
+      "tokens": [
+        "bg/surface",
+        "border/default",
+        "text/primary",
+        "text/secondary",
+        "radius/card",
+        "space/md",
+        "space/lg",
+        "font/size/heading"
+      ],
+      "a11y": "Un seul lien ou bouton principal par carte ; titre balisé comme titre ; contraste du texte secondaire ≥ 4,5:1."
+    }
+  ],
+  "set": {
+    "modes": {
+      "primitives": [
+        "default"
+      ],
+      "tokens": [
+        "light"
+      ],
+      "typography": [
+        "desktop",
+        "mobile"
+      ]
+    },
+    "tokens": {
+      "color/neutral/0": {
+        "$type": "color",
+        "$collection": "primitives",
+        "$values": {
+          "default": "#FFFFFF"
+        }
+      },
+      "color/neutral/50": {
+        "$type": "color",
+        "$collection": "primitives",
+        "$values": {
+          "default": "#F5F6F7"
+        }
+      },
+      "color/neutral/100": {
+        "$type": "color",
+        "$collection": "primitives",
+        "$values": {
+          "default": "#E9EBEE"
+        }
+      },
+      "color/neutral/200": {
+        "$type": "color",
+        "$collection": "primitives",
+        "$values": {
+          "default": "#D3D7DD"
+        }
+      },
+      "color/neutral/300": {
+        "$type": "color",
+        "$collection": "primitives",
+        "$values": {
+          "default": "#B4BAC4"
+        }
+      },
+      "color/neutral/400": {
+        "$type": "color",
+        "$collection": "primitives",
+        "$values": {
+          "default": "#8C94A1"
+        }
+      },
+      "color/neutral/500": {
+        "$type": "color",
+        "$collection": "primitives",
+        "$values": {
+          "default": "#6B7380"
+        }
+      },
+      "color/neutral/600": {
+        "$type": "color",
+        "$collection": "primitives",
+        "$values": {
+          "default": "#525965"
+        }
+      },
+      "color/neutral/700": {
+        "$type": "color",
+        "$collection": "primitives",
+        "$values": {
+          "default": "#3D434C"
+        }
+      },
+      "color/neutral/800": {
+        "$type": "color",
+        "$collection": "primitives",
+        "$values": {
+          "default": "#292D33"
+        }
+      },
+      "color/neutral/900": {
+        "$type": "color",
+        "$collection": "primitives",
+        "$values": {
+          "default": "#17191C"
+        }
+      },
+      "color/brand/100": {
+        "$type": "color",
+        "$collection": "primitives",
+        "$values": {
+          "default": "#E6EAF2"
+        }
+      },
+      "color/brand/500": {
+        "$type": "color",
+        "$collection": "primitives",
+        "$values": {
+          "default": "#55657F"
+        }
+      },
+      "color/brand/600": {
+        "$type": "color",
+        "$collection": "primitives",
+        "$values": {
+          "default": "#44526A"
+        }
+      },
+      "color/brand/700": {
+        "$type": "color",
+        "$collection": "primitives",
+        "$values": {
+          "default": "#343F52"
+        }
+      },
+      "color/danger/100": {
+        "$type": "color",
+        "$collection": "primitives",
+        "$values": {
+          "default": "#FDECEA"
+        }
+      },
+      "color/danger/600": {
+        "$type": "color",
+        "$collection": "primitives",
+        "$values": {
+          "default": "#B42318"
+        }
+      },
+      "space/3xs": {
+        "$type": "dimension",
+        "$collection": "primitives",
+        "$values": {
+          "default": 2
+        }
+      },
+      "space/2xs": {
+        "$type": "dimension",
+        "$collection": "primitives",
+        "$values": {
+          "default": 4
+        }
+      },
+      "space/xs": {
+        "$type": "dimension",
+        "$collection": "primitives",
+        "$values": {
+          "default": 8
+        }
+      },
+      "space/sm": {
+        "$type": "dimension",
+        "$collection": "primitives",
+        "$values": {
+          "default": 12
+        }
+      },
+      "space/md": {
+        "$type": "dimension",
+        "$collection": "primitives",
+        "$values": {
+          "default": 16
+        }
+      },
+      "space/lg": {
+        "$type": "dimension",
+        "$collection": "primitives",
+        "$values": {
+          "default": 24
+        }
+      },
+      "space/xl": {
+        "$type": "dimension",
+        "$collection": "primitives",
+        "$values": {
+          "default": 32
+        }
+      },
+      "space/2xl": {
+        "$type": "dimension",
+        "$collection": "primitives",
+        "$values": {
+          "default": 48
+        }
+      },
+      "space/3xl": {
+        "$type": "dimension",
+        "$collection": "primitives",
+        "$values": {
+          "default": 64
+        }
+      },
+      "space/4xl": {
+        "$type": "dimension",
+        "$collection": "primitives",
+        "$values": {
+          "default": 96
+        }
+      },
+      "radius/none": {
+        "$type": "dimension",
+        "$collection": "primitives",
+        "$values": {
+          "default": 0
+        }
+      },
+      "radius/xs": {
+        "$type": "dimension",
+        "$collection": "primitives",
+        "$values": {
+          "default": 4
+        }
+      },
+      "radius/sm": {
+        "$type": "dimension",
+        "$collection": "primitives",
+        "$values": {
+          "default": 8
+        }
+      },
+      "radius/md": {
+        "$type": "dimension",
+        "$collection": "primitives",
+        "$values": {
+          "default": 12
+        }
+      },
+      "radius/lg": {
+        "$type": "dimension",
+        "$collection": "primitives",
+        "$values": {
+          "default": 16
+        }
+      },
+      "radius/full": {
+        "$type": "dimension",
+        "$collection": "primitives",
+        "$values": {
+          "default": 999
+        }
+      },
+      "border-width/thin": {
+        "$type": "dimension",
+        "$collection": "primitives",
+        "$values": {
+          "default": 1
+        }
+      },
+      "border-width/medium": {
+        "$type": "dimension",
+        "$collection": "primitives",
+        "$values": {
+          "default": 2
+        }
+      },
+      "font/family/sans": {
+        "$type": "fontFamily",
+        "$collection": "primitives",
+        "$values": {
+          "default": "system-ui"
+        }
+      },
+      "font/weight/regular": {
+        "$type": "fontWeight",
+        "$collection": "primitives",
+        "$values": {
+          "default": 400
+        }
+      },
+      "font/weight/medium": {
+        "$type": "fontWeight",
+        "$collection": "primitives",
+        "$values": {
+          "default": 500
+        }
+      },
+      "font/weight/bold": {
+        "$type": "fontWeight",
+        "$collection": "primitives",
+        "$values": {
+          "default": 700
+        }
+      },
+      "bg/canvas": {
+        "$type": "color",
+        "$collection": "tokens",
+        "$description": "Fond de page",
+        "$values": {
+          "light": "{color/neutral/50}"
+        }
+      },
+      "bg/surface": {
+        "$type": "color",
+        "$collection": "tokens",
+        "$description": "Carte, bloc, champ",
+        "$values": {
+          "light": "{color/neutral/0}"
+        }
+      },
+      "bg/surface-hover": {
+        "$type": "color",
+        "$collection": "tokens",
+        "$description": "Survol d'une surface",
+        "$values": {
+          "light": "{color/neutral/100}"
+        }
+      },
+      "bg/brand": {
+        "$type": "color",
+        "$collection": "tokens",
+        "$description": "Bouton principal",
+        "$values": {
+          "light": "{color/brand/600}"
+        }
+      },
+      "bg/brand-hover": {
+        "$type": "color",
+        "$collection": "tokens",
+        "$description": "Survol du bouton principal",
+        "$values": {
+          "light": "{color/brand/700}"
+        }
+      },
+      "bg/brand-subtle": {
+        "$type": "color",
+        "$collection": "tokens",
+        "$description": "Fond teinté de marque",
+        "$values": {
+          "light": "{color/brand/100}"
+        }
+      },
+      "bg/danger-subtle": {
+        "$type": "color",
+        "$collection": "tokens",
+        "$description": "Fond d'erreur",
+        "$values": {
+          "light": "{color/danger/100}"
+        }
+      },
+      "text/primary": {
+        "$type": "color",
+        "$collection": "tokens",
+        "$description": "Texte courant",
+        "$values": {
+          "light": "{color/neutral/900}"
+        }
+      },
+      "text/secondary": {
+        "$type": "color",
+        "$collection": "tokens",
+        "$description": "Texte secondaire",
+        "$values": {
+          "light": "{color/neutral/700}"
+        }
+      },
+      "text/muted": {
+        "$type": "color",
+        "$collection": "tokens",
+        "$description": "Métadonnées, aide",
+        "$values": {
+          "light": "{color/neutral/600}"
+        }
+      },
+      "text/on-brand": {
+        "$type": "color",
+        "$collection": "tokens",
+        "$description": "Texte sur fond de marque",
+        "$values": {
+          "light": "{color/neutral/0}"
+        }
+      },
+      "text/brand": {
+        "$type": "color",
+        "$collection": "tokens",
+        "$description": "Lien, mise en avant",
+        "$values": {
+          "light": "{color/brand/600}"
+        }
+      },
+      "text/danger": {
+        "$type": "color",
+        "$collection": "tokens",
+        "$description": "Message d'erreur",
+        "$values": {
+          "light": "{color/danger/600}"
+        }
+      },
+      "border/default": {
+        "$type": "color",
+        "$collection": "tokens",
+        "$description": "Bordure de carte, séparateur",
+        "$values": {
+          "light": "{color/neutral/200}"
+        }
+      },
+      "border/interactive": {
+        "$type": "color",
+        "$collection": "tokens",
+        "$description": "Champ au repos",
+        "$values": {
+          "light": "{color/neutral/500}"
+        }
+      },
+      "border/focus": {
+        "$type": "color",
+        "$collection": "tokens",
+        "$description": "Focus clavier",
+        "$values": {
+          "light": "{color/brand/500}"
+        }
+      },
+      "radius/control": {
+        "$type": "dimension",
+        "$collection": "tokens",
+        "$description": "Bouton, champ",
+        "$values": {
+          "light": "{radius/sm}"
+        }
+      },
+      "radius/card": {
+        "$type": "dimension",
+        "$collection": "tokens",
+        "$description": "Carte",
+        "$values": {
+          "light": "{radius/md}"
+        }
+      },
+      "font/family/base": {
+        "$type": "fontFamily",
+        "$collection": "typography",
+        "$description": "Police du site",
+        "$values": {
+          "desktop": "{font/family/sans}",
+          "mobile": "{font/family/sans}"
+        }
+      },
+      "font/size/display": {
+        "$type": "dimension",
+        "$collection": "typography",
+        "$values": {
+          "desktop": 48,
+          "mobile": 32
+        }
+      },
+      "font/size/heading": {
+        "$type": "dimension",
+        "$collection": "typography",
+        "$values": {
+          "desktop": 28,
+          "mobile": 22
+        }
+      },
+      "font/size/title": {
+        "$type": "dimension",
+        "$collection": "typography",
+        "$values": {
+          "desktop": 20,
+          "mobile": 18
+        }
+      },
+      "font/size/body": {
+        "$type": "dimension",
+        "$collection": "typography",
+        "$values": {
+          "desktop": 16,
+          "mobile": 16
+        }
+      },
+      "font/size/label": {
+        "$type": "dimension",
+        "$collection": "typography",
+        "$values": {
+          "desktop": 14,
+          "mobile": 14
+        }
+      },
+      "font/size/caption": {
+        "$type": "dimension",
+        "$collection": "typography",
+        "$values": {
+          "desktop": 12,
+          "mobile": 12
+        }
+      },
+      "font/weight/heading": {
+        "$type": "fontWeight",
+        "$collection": "typography",
+        "$values": {
+          "desktop": "{font/weight/bold}",
+          "mobile": "{font/weight/bold}"
+        }
+      },
+      "font/weight/body": {
+        "$type": "fontWeight",
+        "$collection": "typography",
+        "$values": {
+          "desktop": "{font/weight/regular}",
+          "mobile": "{font/weight/regular}"
+        }
+      },
+      "font/line-height/heading": {
+        "$type": "number",
+        "$collection": "typography",
+        "$values": {
+          "desktop": 120,
+          "mobile": 120
+        }
+      },
+      "font/line-height/body": {
+        "$type": "number",
+        "$collection": "typography",
+        "$values": {
+          "desktop": 150,
+          "mobile": 150
+        }
+      }
+    }
+  }
+}
