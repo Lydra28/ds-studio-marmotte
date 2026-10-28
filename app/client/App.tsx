@@ -37,7 +37,7 @@ import {
 } from './api.js';
 import type { Config } from '../shared/project.js';
 import Board from './Board.js';
-import { Home, Sidebar, useRoute } from './Shell.js';
+import { foldable, Home, SectionBar, TopNav, useRoute, type View } from './Shell.js';
 import AssistantPanel from './Assistant.js';
 import { brandColor, MascotDock } from './Mascot.js';
 import Wall from './Wall.js';
@@ -45,7 +45,7 @@ import { SiteFrame, SiteFullscreen, SiteView, type Device } from './Site.js';
 import { fontFamilies, loadFonts } from './fonts.js';
 import CompareView, { type Source } from './Compare.js';
 import TimelineView from './Timeline.js';
-import { ChangesDialog, Corrections, DiffDialog, FigmaDialog, HistoryPanel } from './Panels.js';
+import { ChangesDialog, Corrections, DiffDialog, FigmaDialog, History } from './Panels.js';
 
 const devices = [
   { label: '320', width: 320 },
@@ -140,7 +140,6 @@ function Workspace({
   );
   const [proposal, setProposal] = useState<Proposal>();
   const [versions, setVersions] = useState<VersionSummary[]>([]);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [figmaOpen, setFigmaOpen] = useState(false);
   // Dernière publication GitHub (lien de la PR, ou erreur à réessayer).
   const [published, setPublished] = useState<{ revision: number; result: GithubResult }>();
@@ -158,7 +157,54 @@ function Workspace({
   // Comparaison affichée : avant d'accepter (état courant / dernière version)
   // ou entre deux versions depuis l'historique.
   const [comparison, setComparison] = useState<{ title: string; hint: string; patches: Patch[]; accept: boolean }>();
-  const [view, setView] = useState<'board' | 'wall' | 'site' | 'compare' | 'timeline'>('board');
+  const [view, setView] = useState<View>('board');
+  // Vue Versions : onglet ouvert, et révision visée depuis la frise.
+  const [versionsTab, setVersionsTab] = useState<'history' | 'timeline' | 'compare'>('history');
+  const [timelineAt, setTimelineAt] = useState<number>();
+  // Sections repliées de la planche, gardées par projet dans ce navigateur.
+  const [folded, setFolded] = useState<Set<string>>(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(k('ds-folds')) || '[]'));
+    } catch {
+      return new Set();
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(k('ds-folds'), JSON.stringify([...folded]));
+    } catch {
+      /* Préférence facultative. */
+    }
+  }, [folded]);
+  const toggleFold = (id: string) =>
+    setFolded((f) => {
+      const next = new Set(f);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  const jump = (id: string) => {
+    setView('board');
+    setFolded((f) => {
+      const next = new Set(f);
+      next.delete(id);
+      return next;
+    });
+    setTimeout(() => void document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
+  const openVersions = (tab: 'history' | 'timeline' | 'compare', at?: number) => {
+    setVersionsTab(tab);
+    setTimelineAt(at);
+    setView('versions');
+  };
+  // Hauteur de la barre du haut (elle passe à la ligne en étroit) : ancres, preview collante.
+  const top = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = top.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => document.documentElement.style.setProperty('--top-h', `${el.offsetHeight}px`));
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
   // Côtés imposés depuis l'historique ; sinon la vue choisit les siens.
   const [compareFrom, setCompareFrom] = useState<[Source, Source]>();
   const [assistantOpen, setAssistantOpen] = useState(() => {
@@ -365,7 +411,6 @@ function Workspace({
     });
   const compareVersions = (revision: number, previous?: number) =>
     run(async () => {
-      setHistoryOpen(false);
       setComparison({
         title: previous !== undefined ? `v${revision} comparée à v${previous}` : `v${revision} · première version`,
         hint: previous !== undefined ? `Ce qui a changé entre v${previous} et v${revision}.` : 'Tout le contenu de la première version.',
@@ -398,29 +443,20 @@ function Workspace({
   const accepted = versions.find((v) => v.revision === state.revision);
   return (
     <div className={`studio ${assistantOpen ? 'with-assistant' : ''}`}>
-      <Sidebar
+      <div className="work">
+      <div className="top" ref={top}>
+      <TopNav
         current={slug}
+        name={name}
+        revision={state.revision}
         multi={multi}
         onOpen={onOpen}
-        onHistory={() => setHistoryOpen(true)}
-        onWall={() => setView('wall')}
-        onSite={relay && config?.site ? () => setView('site') : undefined}
-        onCompare={() => {
-          setCompareFrom(undefined);
-          setView('compare');
-        }}
-        onTimeline={() => setView('timeline')}
-        versions={versions.map((v) => v.revision)}
-        onBoard={() => setView('board')}
         view={view}
-      />
-      <div className="work">
-      <header className="bar">
-        <div className="brand">
-          <span className="project">{name}</span>
-          <span className="rev" title="Révision enregistrée">r{state.revision}</span>
-        </div>
-        <div className="actions">
+        onView={(v) => (v === 'versions' ? openVersions(versionsTab) : setView(v))}
+        site={!!(relay && config?.site)}
+        versions={versions.map((v) => v.revision)}
+        onVersion={(revision) => openVersions('timeline', revision)}
+      >
           <span className={`count ${findings.length ? 'warn' : 'ok'}`}>
             {findings.length ? `${findings.length} écart(s)` : 'Aucun écart'}
           </span>
@@ -465,8 +501,11 @@ function Workspace({
           >
             {accepted ? `v${accepted.revision} acceptée` : 'Accepter cette version'}
           </button>
-        </div>
-      </header>
+      </TopNav>
+      {view === 'board' && (
+        <SectionBar folded={folded} onJump={jump} onFoldAll={(fold) => setFolded(new Set(fold ? foldable : []))} />
+      )}
+      </div>
       {published && (
         <p className={`message ${published.result.status === 'error' ? 'error' : 'ok'}`} role="status">
           {published.result.status === 'error' ? (
@@ -511,30 +550,67 @@ function Workspace({
       {view === 'site' && relay && config?.site && draftSet && (
         <SiteView slug={slug} relay={relay} config={config} set={draftSet} draft={draftCount > 0} onBack={() => setView('board')} />
       )}
-      {view === 'compare' && config && (
-        <CompareView
-          slug={slug}
-          relay={relay}
-          config={config}
-          state={state}
-          versions={versions}
-          draftSet={draftSet}
-          draft={draftCount > 0}
-          initial={compareFrom}
-          onBack={() => setView('board')}
-        />
-      )}
-      {view === 'timeline' && config && (
-        <TimelineView
-          slug={slug}
-          relay={relay}
-          config={config}
-          state={state}
-          versions={versions}
-          draftSet={draftSet}
-          draft={draftCount > 0}
-          onBack={() => setView('board')}
-        />
+      {view === 'versions' && config && (
+        <div className="versions-view">
+          <div className="tabs" role="tablist" aria-label="Versions">
+            {(
+              [
+                ['history', 'Historique'],
+                ['timeline', 'Évolution'],
+                ['compare', 'Comparer'],
+              ] as const
+            ).map(([tab, label]) => (
+              <button
+                key={tab}
+                role="tab"
+                aria-selected={versionsTab === tab}
+                onClick={() => {
+                  if (tab === 'compare') setCompareFrom(undefined);
+                  openVersions(tab);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {versionsTab === 'history' && (
+            <History
+              state={state}
+              versions={versions}
+              onUndo={(id) => run(async () => setProposal(await proposeUndo(state.revision, id)))}
+              onCompare={compareVersions}
+              onSideBySide={(revision, previous) => {
+                setCompareFrom([previous ?? revision, revision]);
+                openVersions('compare');
+              }}
+            />
+          )}
+          {versionsTab === 'timeline' && (
+            <TimelineView
+              key={timelineAt ?? 'last'}
+              slug={slug}
+              relay={relay}
+              config={config}
+              state={state}
+              versions={versions}
+              draftSet={draftSet}
+              draft={draftCount > 0}
+              initial={timelineAt}
+            />
+          )}
+          {versionsTab === 'compare' && (
+            <CompareView
+              slug={slug}
+              relay={relay}
+              config={config}
+              state={state}
+              versions={versions}
+              draftSet={draftSet}
+              draft={draftCount > 0}
+              initial={compareFrom}
+            />
+          )}
+        </div>
       )}
       <main className="layout" hidden={view !== 'board'}>
         <Board
@@ -547,6 +623,8 @@ function Workspace({
           onRemove={remove}
           componentDrafts={componentDrafts}
           onComponent={saveComponent}
+          folded={folded}
+          onFold={toggleFold}
         />
         <aside className="side">
           <section className="preview" aria-label="Preview en direct">
@@ -633,25 +711,6 @@ function Workspace({
             setFromInbox(false);
           }}
           onValidate={validate}
-        />
-      )}
-      {historyOpen && (
-        <HistoryPanel
-          state={state}
-          versions={versions}
-          onClose={() => setHistoryOpen(false)}
-          onUndo={(id) =>
-            run(async () => {
-              setHistoryOpen(false);
-              setProposal(await proposeUndo(state.revision, id));
-            })
-          }
-          onCompare={compareVersions}
-          onSideBySide={(revision, previous) => {
-            setHistoryOpen(false);
-            setCompareFrom([previous ?? revision, revision]);
-            setView('compare');
-          }}
         />
       )}
       {figmaOpen && <FigmaDialog code={plugin} config={config} onClose={() => setFigmaOpen(false)} />}

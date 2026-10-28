@@ -971,73 +971,34 @@ dialog.diff::backdrop,
   font-weight: 500;
 }
 
-/* Coquille : barre latérale, zone de travail, preview */
+/* Coquille : barre du haut collante (étapes, sous-barre des sections), zone de travail, preview */
 .studio {
   display: grid;
-  grid-template-columns: 208px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   min-height: 100vh;
-}
-.sidebar {
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  overflow: auto;
-  border-right: 1px solid var(--c-line);
-  padding: 14px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-}
-.sidebar .logo {
-  border: 0;
-  background: none;
-  text-align: left;
-  font-weight: 600;
-  padding: 4px 8px 10px;
-}
-.sidebar .logo:disabled {
-  opacity: 1;
-  cursor: default;
-}
-.side-label {
-  margin: 12px 8px 4px;
-  font-size: 11px;
-  color: var(--c-muted);
-}
-.nav-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 1px;
-}
-.nav-list button {
-  width: 100%;
-  text-align: left;
-  border: 0;
-  background: none;
-  padding: 5px 8px;
-  border-radius: 6px;
-  color: #b5b7bc;
-}
-.nav-list button:hover:not(:disabled) {
-  background: var(--c-raised);
-  color: var(--c-text);
-}
-.nav-list button[aria-current='page'] {
-  background: var(--c-raised);
-  color: var(--c-text);
-}
-.nav-list .nav-new {
-  color: var(--c-draft);
 }
 .work {
   min-width: 0;
 }
-.bar {
-  background: rgba(14, 15, 17, 0.9);
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(14, 15, 17, 0.94);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--c-line);
+}
+.top .bar {
+  position: static;
+  background: none;
+  backdrop-filter: none;
+  border-bottom: 0;
+  justify-content: flex-start;
   padding: 10px 20px;
+  gap: 12px 20px;
+}
+.top .bar .actions {
+  margin-left: auto;
 }
 .brand .project {
   color: var(--c-text);
@@ -1051,18 +1012,14 @@ dialog.diff::backdrop,
   gap: 20px;
 }
 .side {
-  top: 60px;
+  top: calc(var(--top-h, 60px) + 16px);
+  max-height: calc(100vh - var(--top-h, 60px) - 32px);
 }
-@media (max-width: 760px) {
-  .studio {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .sidebar {
-    position: static;
-    height: auto;
-    border-right: 0;
-    border-bottom: 1px solid var(--c-line);
-  }
+.message {
+  top: calc(var(--top-h, 60px) + 12px);
+}
+.board section {
+  scroll-margin-top: calc(var(--top-h, 100px) + 12px);
 }
 
 /* Accueil : liste des projets */
@@ -1153,7 +1110,7 @@ dialog.diff::backdrop,
 
 /* Assistant : panneau ancré à droite, l'atelier reste visible */
 .studio.with-assistant {
-  grid-template-columns: 208px minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) 360px;
 }
 .assistant {
   position: sticky;
@@ -1275,7 +1232,7 @@ dialog.diff::backdrop,
 }
 @media (max-width: 1100px) {
   .studio.with-assistant {
-    grid-template-columns: 208px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
   .assistant {
     position: fixed;

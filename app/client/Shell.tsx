@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { createProject, listProjects, type ProjectSummary } from './api.js';
 
 // Route dans le hash : `#/p/<projet>` ouvre un projet, sinon l'accueil.
@@ -25,7 +25,8 @@ function useProjects() {
   return { projects, error };
 }
 
-const sections = [
+// Sections de la planche dans la sous-barre, numérotées comme les étapes d'un DS.
+export const sections = [
   ['h-colors', 'Primitives'],
   ['h-tokens', 'Tokens sémantiques'],
   ['h-type', 'Typographie'],
@@ -33,117 +34,161 @@ const sections = [
   ['h-components', 'Composants'],
   ['h-names', 'Nomenclature'],
 ] as const;
+// Sections repliables : celles de la sous-barre et « Autres primitives ».
+export const foldable = ['h-colors', 'h-tokens', 'h-type', 'h-scales', 'h-others', 'h-components', 'h-names'];
 
-export function Sidebar({
+export type View = 'wall' | 'board' | 'site' | 'versions';
+const NEW = '__new';
+
+// Barre du haut, dans l'ordre du travail : s'inspirer, construire, voir, versionner.
+export function TopNav({
   current,
+  name,
+  revision,
   multi,
   onOpen,
-  onHistory,
-  onWall,
-  onSite,
-  onCompare,
-  onTimeline,
-  onBoard,
   view,
-  versions = [],
+  onView,
+  site,
+  versions,
+  onVersion,
+  children,
 }: {
   current: string;
+  name: string;
+  revision: number;
   multi: boolean;
   onOpen: (slug?: string) => void;
-  onHistory: () => void;
-  onWall: () => void;
-  // Absent : le projet n'a pas de site configuré (ou relais arrêté).
-  onSite?: () => void;
-  onCompare: () => void;
-  onTimeline: () => void;
-  onBoard: () => void;
-  view: 'board' | 'wall' | 'site' | 'compare' | 'timeline';
+  view: View;
+  onView: (view: View) => void;
+  // Faux : pas de site configuré (ou relais arrêté), l'étape est masquée.
+  site: boolean;
   // Révisions des versions acceptées : une marche de « chaleur » chacune.
-  versions?: number[];
+  versions: number[];
+  onVersion: (revision: number) => void;
+  children: ReactNode;
 }) {
   const { projects } = useProjects();
+  const steps: [View, string][] = [
+    ['wall', 'Mur des DA'],
+    ['board', 'Design system'],
+    ...(site ? [['site', 'Site en direct'] as [View, string]] : []),
+    ['versions', 'Versions'],
+  ];
   return (
-    <nav className="sidebar" aria-label="Projets et sections">
-      <button className="logo" onClick={() => multi && onOpen()} disabled={!multi}>
-        DS-Studio
-      </button>
-      {multi && (
-        <>
-          <p className="side-label">Projets</p>
-          <ul className="nav-list">
-            {projects?.map((p) => (
-              <li key={p.slug}>
-                <button aria-current={p.slug === current ? 'page' : undefined} onClick={() => onOpen(p.slug)}>
+    <header className="bar">
+      <div className="brand">
+        <button className="logo" onClick={() => multi && onOpen()} disabled={!multi} aria-label="DS-Studio, accueil">
+          DS-Studio
+        </button>
+        {/* Sélecteur natif sous le nom : accessible, et le nom garde le style des titres. */}
+        <label className={`project-pick ${multi ? '' : 'is-fixed'}`}>
+          <span className="project">{name}</span>
+          {multi && (
+            <select
+              aria-label="Projet"
+              value={current}
+              onChange={(e) => onOpen(e.target.value === NEW ? '' : e.target.value)}
+            >
+              {!projects?.some((p) => p.slug === current) && <option value={current}>{name}</option>}
+              {projects?.map((p) => (
+                <option key={p.slug} value={p.slug}>
                   {p.name}
-                </button>
-              </li>
-            ))}
-            <li>
-              <button className="nav-new" onClick={() => onOpen('')}>
-                + Nouveau projet
+                </option>
+              ))}
+              <option value={NEW}>+ Nouveau projet</option>
+            </select>
+          )}
+        </label>
+        <span className="rev" title="Révision enregistrée">r{revision}</span>
+      </div>
+      <nav className="steps" aria-label="Étapes du projet">
+        <ol>
+          {steps.map(([v, label]) => (
+            <li key={v}>
+              <button aria-current={view === v ? 'page' : undefined} onClick={() => onView(v)}>
+                {label}
               </button>
             </li>
-          </ul>
-        </>
-      )}
-      <p className="side-label">Ce projet</p>
-      <ul className="nav-list">
-        <li>
-          <button aria-current={view === 'wall' ? 'page' : undefined} onClick={onWall}>
-            Mur des DA
-          </button>
-        </li>
-        {onSite && (
-          <li>
-            <button aria-current={view === 'site' ? 'page' : undefined} onClick={onSite}>
-              Site en direct
-            </button>
-          </li>
-        )}
-        <li>
-          <button aria-current={view === 'compare' ? 'page' : undefined} onClick={onCompare}>
-            Comparer
-          </button>
-        </li>
-        <li>
-          <button aria-current={view === 'timeline' ? 'page' : undefined} onClick={onTimeline}>
-            Évolution
-          </button>
-        </li>
+          ))}
+        </ol>
+        {versions.length > 0 && <Stairs versions={versions} onVersion={onVersion} />}
+      </nav>
+      <div className="actions">{children}</div>
+    </header>
+  );
+}
+
+// Frise des versions (DA « Atelier 8-bit ») : une marche par version acceptée,
+// gamme « chaleur », les six dernières ; une marche ouvre l'évolution à sa révision.
+function Stairs({ versions, onVersion }: { versions: number[]; onVersion: (revision: number) => void }) {
+  const shown = [...versions].sort((a, b) => a - b).slice(-6);
+  return (
+    <div className="stairs" role="group" aria-label={`${versions.length} version(s) acceptée(s)`}>
+      {shown.map((v, i) => (
+        <button
+          key={v}
+          style={{ height: 6 + 4 * (i + 1), background: `var(--c-heat-${Math.min(5, i + 1)})` }}
+          aria-label={`Voir v${v} dans l’évolution`}
+          title={`v${v}`}
+          onClick={() => onVersion(v)}
+        />
+      ))}
+      <small>v{shown[shown.length - 1]}</small>
+    </div>
+  );
+}
+
+// Sous-barre de la planche : sections numérotées, celle à l'écran surlignée.
+export function SectionBar({
+  folded,
+  onJump,
+  onFoldAll,
+}: {
+  folded: Set<string>;
+  onJump: (id: string) => void;
+  onFoldAll: (fold: boolean) => void;
+}) {
+  const [active, setActive] = useState<string>(sections[0][0]);
+  useEffect(() => {
+    let frame = 0;
+    const on = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        // Dernière section dont le haut est passé sous la barre.
+        const top = (document.querySelector('.top') as HTMLElement | null)?.offsetHeight ?? 0;
+        let current: string = sections[0][0];
+        for (const [id] of sections) {
+          const el = document.getElementById(id);
+          if (el && el.getBoundingClientRect().top <= top + 24) current = id;
+        }
+        setActive(current);
+      });
+    };
+    on();
+    window.addEventListener('scroll', on, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', on);
+    };
+  }, []);
+  const anyOpen = foldable.some((id) => !folded.has(id));
+  return (
+    <nav className="section-bar" aria-label="Sections du design system">
+      <ol>
         {sections.map(([id, label], i) => (
           <li key={id}>
-            <button
-              onClick={() => {
-                onBoard();
-                setTimeout(() => void document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-              }}
-            >
+            <button aria-current={active === id ? 'location' : undefined} onClick={() => onJump(id)}>
               {i < 5 && <span className="nav-num">0{i + 1}</span>}
               {label}
             </button>
           </li>
         ))}
-        <li>
-          <button onClick={onHistory}>Historique</button>
-        </li>
-      </ul>
-      {versions.length > 0 && <Stairs versions={versions} />}
+      </ol>
+      <button className="fold-all" onClick={() => onFoldAll(anyOpen)}>
+        {anyOpen ? 'Tout replier' : 'Tout déplier'}
+      </button>
     </nav>
-  );
-}
-
-// Sprites de version (DA « Atelier 8-bit ») : une marche par version acceptée,
-// couleurs de la gamme « chaleur », les six dernières seulement.
-function Stairs({ versions }: { versions: number[] }) {
-  const shown = [...versions].sort((a, b) => a - b).slice(-6);
-  const label = `${versions.length} version(s) acceptée(s)`;
-  return (
-    <div className="stairs" role="img" aria-label={label} title={label}>
-      {shown.map((v, i) => (
-        <i key={v} style={{ height: 12 * (i + 1), background: `var(--c-heat-${Math.min(5, i + 1)})` }} />
-      ))}
-      <small>v{shown[shown.length - 1]}</small>
-    </div>
   );
 }
 

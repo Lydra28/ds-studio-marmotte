@@ -20,7 +20,7 @@ export default function TimelineView({
   versions,
   draftSet,
   draft,
-  onBack,
+  initial,
 }: {
   slug: string;
   relay: number | null;
@@ -29,11 +29,12 @@ export default function TimelineView({
   versions: VersionSummary[];
   draftSet: TokenSet;
   draft: boolean;
-  onBack: () => void;
+  // Révision affichée à l'ouverture (marche de la frise) ; sinon la dernière.
+  initial?: number;
 }) {
   const sets = useMemo(() => setsByRevision(state), [state]);
   const last = state.revision + (draft ? 1 : 0);
-  const [at, setAt] = useState(last);
+  const [at, setAt] = useState(initial !== undefined ? Math.min(initial, last) : last);
   useEffect(() => {
     setAt((a) => Math.min(a, last));
   }, [last]);
@@ -95,7 +96,6 @@ export default function TimelineView({
   return (
     <section className="site-view timeline" aria-label="Évolution du design system">
       <div className="site-view__head">
-        <button onClick={onBack}>← Atelier</button>
         <h2>Évolution</h2>
         {site && (
           <div className="devices" role="group" aria-label="Contenu rejoué">

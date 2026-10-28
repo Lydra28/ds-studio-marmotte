@@ -42,11 +42,12 @@ test('accueil : liste des projets, création d’un projet vierge à côté de M
   await expect(page).toHaveURL(/#\/p\/atelier-ceramique$/);
   await expect(page.locator('.bar .project')).toHaveText('Atelier céramique');
   await expect(page.locator('.bar .rev')).toHaveText('r0');
-  await expect(page.getByRole('navigation').getByRole('button', { name: 'Marmotte' })).toBeVisible();
+  const picker = page.getByRole('combobox', { name: 'Projet' });
+  await expect(picker.locator('option', { hasText: 'Marmotte' })).toHaveCount(1);
   // Projets indépendants : Marmotte n'a pas bougé.
   const other = await page.request.get('/api/state', { headers: { 'X-DS-Project': 'atelier-ceramique' } });
   expect((await other.json()).set.components).toBeUndefined();
-  await page.getByRole('navigation').getByRole('button', { name: 'Marmotte' }).click();
+  await picker.selectOption('marmotte');
   await expect(page.locator('.bar .project')).toHaveText('Marmotte');
 });
 
@@ -130,11 +131,13 @@ test('abandon du brouillon sans écriture, puis annulation depuis l’historique
   await page.getByRole('button', { name: 'Abandonner' }).click();
   await expect(page.getByLabel('space/md', { exact: true })).not.toHaveValue('20');
   expect(await revision(page)).toBe(before);
-  await page.getByRole('button', { name: 'Historique' }).click();
+  await page.getByRole('button', { name: 'Versions', exact: true }).click();
+  await page.getByRole('tab', { name: 'Historique' }).click();
   await page.getByRole('button', { name: 'Annuler cette révision' }).first().click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('code').filter({ hasText: 'color/accent/500' })).toBeVisible();
   await dialog.getByRole('button', { name: 'Valider et enregistrer' }).click();
+  await page.getByRole('button', { name: 'Design system', exact: true }).click();
   await expect(page.getByLabel('space/4xl', { exact: true })).toBeVisible();
   expect(await revision(page)).toBe(before + 1);
 });
@@ -175,7 +178,8 @@ test('acceptation : bloquée par un brouillon, puis version figée', async ({ pa
   await review.getByRole('button', { name: /^Accepter v\d+$/ }).click();
   await expect(page.getByText(/Version v\d+ acceptée \(empreinte/)).toBeVisible();
   // Historique : la version se compare à la précédente, ou montre tout son contenu.
-  await page.getByRole('button', { name: 'Historique' }).click();
+  await page.getByRole('button', { name: 'Versions', exact: true }).click();
+  await page.getByRole('tab', { name: 'Historique' }).click();
   await page.getByRole('button', { name: /^(Comparer avec v\d+|Voir le contenu)$/ }).first().click();
   await expect(page.getByRole('dialog').getByRole('heading', { name: /^v\d+ (comparée à v\d+|· première version)$/ })).toBeVisible();
   await page.getByRole('dialog').getByRole('button', { name: 'Fermer' }).click();
@@ -240,7 +244,8 @@ test('générateur de gamme : couleur gardée à son palier, paliers manquants a
 test('comparaison côte à côte : brouillon face à l’état enregistré, inversion, rien d’écrit', async ({ page }) => {
   const before = await revision(page);
   await page.getByLabel('space/md', { exact: true }).fill('28');
-  await page.getByRole('button', { name: 'Comparer' }).click();
+  await page.getByRole('button', { name: 'Versions', exact: true }).click();
+  await page.getByRole('tab', { name: 'Comparer' }).click();
   const view = page.getByRole('region', { name: 'Comparaison côte à côte' });
   await expect(view.getByLabel('Version après')).toHaveValue('draft');
   await expect(view.getByText('Tokens : 1 modifié(s)')).toBeVisible();
@@ -260,14 +265,15 @@ test('comparaison côte à côte : brouillon face à l’état enregistré, inve
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('code').filter({ hasText: 'space/md' })).toBeVisible();
   await dialog.getByRole('button', { name: 'Fermer' }).click();
-  await view.getByRole('button', { name: '← Atelier' }).click();
+  await page.getByRole('button', { name: 'Design system', exact: true }).click();
   await page.getByRole('button', { name: 'Abandonner' }).click();
   expect(await revision(page)).toBe(before);
 });
 
 test('évolution : le curseur rejoue le DS révision après révision, sans rien écrire', async ({ page }) => {
   const before = await revision(page);
-  await page.getByRole('button', { name: 'Évolution' }).click();
+  await page.getByRole('button', { name: 'Versions', exact: true }).click();
+  await page.getByRole('tab', { name: 'Évolution' }).click();
   const view = page.getByRole('region', { name: 'Évolution du design system' });
   const slider = view.getByLabel('Révision affichée');
   await expect(slider).toHaveValue(String(before));
@@ -287,5 +293,30 @@ test('évolution : le curseur rejoue le DS révision après révision, sans rien
   await expect(view.getByRole('button', { name: 'Mettre en pause' })).toBeVisible();
   await expect(slider).toHaveValue('1', { timeout: 3000 });
   await view.getByRole('button', { name: 'Mettre en pause' }).click();
+  // Frise de la barre du haut : une marche ouvre l'évolution à sa version.
+  const step = page.getByRole('button', { name: /^Voir v\d+ dans l’évolution$/ }).first();
+  const v = /v(\d+)/.exec((await step.getAttribute('aria-label'))!)![1];
+  await step.click();
+  await expect(slider).toHaveValue(v);
   expect(await revision(page)).toBe(before);
+});
+
+test('planche : sections repliables, gardées au rechargement, rouvertes par la sous-barre', async ({ page }) => {
+  const type = page.getByRole('button', { name: 'Typographie', exact: true });
+  await expect(type).toHaveAttribute('aria-expanded', 'true');
+  await type.click();
+  await expect(type).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#h-type-body')).toBeHidden();
+  await page.reload();
+  await expect(type).toHaveAttribute('aria-expanded', 'false');
+  await page.getByRole('navigation', { name: 'Sections du design system' }).getByRole('button', { name: /Typographie/ }).click();
+  await expect(type).toHaveAttribute('aria-expanded', 'true');
+  // Repliée, une section garde ses brouillons en vue.
+  await page.getByLabel('space/md', { exact: true }).fill('20');
+  await page.getByRole('button', { name: 'Tout replier' }).click();
+  await expect(page.locator('.fold-body:visible')).toHaveCount(0);
+  await expect(page.locator('section', { has: page.locator('#h-scales') }).getByText('1 en brouillon')).toBeVisible();
+  await page.getByRole('button', { name: 'Tout déplier' }).click();
+  await expect(page.locator('.fold[aria-expanded="false"]')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Abandonner' }).click();
 });

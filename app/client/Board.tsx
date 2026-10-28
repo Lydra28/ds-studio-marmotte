@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   isAlias,
   isTokenKey,
@@ -26,6 +26,53 @@ interface BoardProps {
   onRemove: (key: string) => void;
   componentDrafts: Map<string, ComponentDoc | null>;
   onComponent: (name: string, doc: ComponentDoc | null) => void;
+  // Sections repliées (id du titre) ; persistées par l'atelier, par projet.
+  folded: Set<string>;
+  onFold: (id: string) => void;
+}
+
+// Section repliable : le titre est le bouton ; repliée, elle garde ses écarts
+// et ses brouillons en vue pour ne rien cacher.
+function Fold({
+  id,
+  title,
+  num,
+  folded,
+  onFold,
+  flags,
+  drafts,
+  children,
+}: {
+  id: string;
+  title: string;
+  num?: string;
+  folded: boolean;
+  onFold: (id: string) => void;
+  flags: number;
+  drafts: number;
+  children: ReactNode;
+}) {
+  return (
+    <section aria-labelledby={id} className={folded ? 'is-folded' : undefined}>
+      <div className="fold-head">
+        <h2 id={id}>
+          <button className="fold" aria-expanded={!folded} aria-controls={`${id}-body`} onClick={() => onFold(id)}>
+            {num && <span className="nav-num" aria-hidden="true">{num}</span>}
+            {title}
+          </button>
+        </h2>
+        {folded && (flags > 0 || drafts > 0) && (
+          <span className="fold-meta">
+            {flags > 0 && <span className="count warn">{flags} écart(s)</span>}
+            {drafts > 0 && <span className="count draft">{drafts} en brouillon</span>}
+          </span>
+        )}
+      </div>
+      <div id={`${id}-body`} className="fold-body" hidden={folded}>
+        {children}
+      </div>
+    </section>
+  );
 }
 
 // Valeur de départ d'un nouveau token, à régler ensuite sur la planche.
@@ -370,6 +417,8 @@ export default function Board({
   onRemove,
   componentDrafts,
   onComponent,
+  folded,
+  onFold,
 }: BoardProps) {
   // Fiche en cours d'édition : son nom, '' pour une nouvelle, undefined sinon.
   const [editing, setEditing] = useState<string>();
@@ -399,10 +448,31 @@ export default function Board({
   const rowClass = (key: string) =>
     `token-row ${isDraft(key) ? 'is-draft' : ''} ${byKey(key).length ? 'has-flag' : ''}`;
 
+  // Clés de chaque section : compteurs affichés quand elle est repliée.
+  const keysOf: Record<string, string[]> = {
+    'h-colors': [...ramps.values()].flat().map(([k]) => k),
+    'h-tokens': semantic.map(([k]) => k),
+    'h-type': typography.map(([k]) => k),
+    'h-scales': scales.map(([k]) => k),
+    'h-others': others.map(([k]) => k),
+    'h-components': Object.keys(set.components ?? {}),
+  };
+  const fold = (id: string, title: string, num?: string) => {
+    const keys = keysOf[id] ?? [];
+    return {
+      id,
+      title,
+      num,
+      folded: folded.has(id),
+      onFold,
+      flags: findings.filter((f) => keys.includes(f.key)).length,
+      drafts: id === 'h-components' ? componentDrafts.size : keys.filter(isDraft).length,
+    };
+  };
+
   return (
     <div className="board">
-      <section aria-labelledby="h-colors">
-        <h2 id="h-colors">Couleurs · Primitives</h2>
+      <Fold {...fold('h-colors', 'Couleurs · Primitives', '01')}>
         <p className="hint">Valeurs brutes. Les tokens sémantiques y renvoient : change une primitive, tout suit.</p>
         {[...ramps].map(([ramp, list]) => (
           <div className="ramp" key={ramp}>
@@ -436,10 +506,9 @@ export default function Board({
             + Nouvelle gamme
           </button>
         )}
-      </section>
+      </Fold>
 
-      <section aria-labelledby="h-tokens">
-        <h2 id="h-tokens">Tokens sémantiques</h2>
+      <Fold {...fold('h-tokens', 'Tokens sémantiques', '02')}>
         <p className="hint">Nommés par l’usage, jamais par la teinte. Seule couche utilisée par les composants.</p>
         {groups.map((group) => (
           <div className="token-group" key={group}>
@@ -473,10 +542,9 @@ export default function Board({
           prefix=""
           onAdd={onAdd}
         />
-      </section>
+      </Fold>
 
-      <section aria-labelledby="h-type">
-        <h2 id="h-type">Typographie</h2>
+      <Fold {...fold('h-type', 'Typographie', '03')}>
         <p className="hint">Un mode par écran : {set.modes.typography.join(' / ')}. La preview passe en mobile sous 768 px.</p>
         <div className="type-head token-row">
           <span />
@@ -515,10 +583,9 @@ export default function Board({
           prefix="font/size/"
           onAdd={onAdd}
         />
-      </section>
+      </Fold>
 
-      <section aria-labelledby="h-scales">
-        <h2 id="h-scales">Espacements, rayons, contours</h2>
+      <Fold {...fold('h-scales', 'Espacements, rayons, contours', '04')}>
         {scaleGroups.map((group) => (
           <div className="token-group" key={group}>
             <h3>{group}/</h3>
@@ -545,10 +612,9 @@ export default function Board({
           </div>
         ))}
         <AddToken set={set} collection="primitives" types={['dimension']} prefix="space/" onAdd={onAdd} />
-      </section>
+      </Fold>
 
-      <section aria-labelledby="h-others">
-        <h2 id="h-others">Autres primitives</h2>
+      <Fold {...fold('h-others', 'Autres primitives')}>
         <p className="hint">Polices, graisses et nombres bruts, repris par la typographie.</p>
         {others.map(([key, token]) => (
           <div className={rowClass(key)} key={key}>
@@ -569,10 +635,9 @@ export default function Board({
           prefix="font/"
           onAdd={onAdd}
         />
-      </section>
+      </Fold>
 
-      <section aria-labelledby="h-components">
-        <h2 id="h-components">Composants</h2>
+      <Fold {...fold('h-components', 'Composants', '05')}>
         <p className="hint">
           Nom anglais, fiche en français. « Figma » : composant créé au transfert ; « Fiche » :
           documenté seulement. Depuis Figma : demande à ton agent « ajoute les composants de mon
@@ -657,12 +722,11 @@ export default function Board({
             + Ajouter un composant
           </button>
         )}
-      </section>
+      </Fold>
 
-      <section aria-labelledby="h-names">
-        <h2 id="h-names">Nomenclature</h2>
+      <Fold {...fold('h-names', 'Nomenclature')}>
         <Nomenclature />
-      </section>
+      </Fold>
     </div>
   );
 }

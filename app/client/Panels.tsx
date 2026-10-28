@@ -239,30 +239,22 @@ export function Corrections({
   );
 }
 
-export function HistoryPanel({
+export function History({
   state,
   versions,
-  onClose,
   onUndo,
   onCompare,
   onSideBySide,
 }: {
   state: State;
   versions: VersionSummary[];
-  onClose: () => void;
   onUndo: (id: string) => void;
   onCompare: (revision: number, previous?: number) => void;
   onSideBySide: (revision: number, previous?: number) => void;
 }) {
   return (
-    <div className="drawer-backdrop" onClick={onClose}>
-      <aside className="drawer" aria-label="Historique" onClick={(e) => e.stopPropagation()}>
-        <header>
-          <h2>Historique</h2>
-          <button onClick={onClose} aria-label="Fermer l’historique">
-            Fermer
-          </button>
-        </header>
+    <div className="history" role="region" aria-label="Historique">
+      <section>
         <h3>Versions acceptées</h3>
         {versions.length ? (
           <ul className="versions">
@@ -281,6 +273,8 @@ export function HistoryPanel({
         ) : (
           <p className="hint">Aucune version acceptée.</p>
         )}
+      </section>
+      <section>
         <h3>Révisions</h3>
         <ol className="revisions" reversed>
           {[...state.history].reverse().map((r) => (
@@ -300,7 +294,7 @@ export function HistoryPanel({
             </li>
           ))}
         </ol>
-      </aside>
+      </section>
     </div>
   );
 }

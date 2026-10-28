@@ -69,7 +69,6 @@ export default function CompareView({
   draftSet,
   draft,
   initial,
-  onBack,
 }: {
   slug: string;
   relay: number | null;
@@ -79,7 +78,6 @@ export default function CompareView({
   draftSet: TokenSet;
   draft: boolean;
   initial?: [Source, Source];
-  onBack: () => void;
 }) {
   const [[left, right], setSources] = useState<[Source, Source]>(() => initial ?? defaultSources(state, versions, draft));
   useEffect(() => {
@@ -164,7 +162,6 @@ export default function CompareView({
   return (
     <section className="site-view compare" aria-label="Comparaison côte à côte">
       <div className="site-view__head">
-        <button onClick={onBack}>← Atelier</button>
         <h2>Comparer côte à côte</h2>
         <label>
           Avant
