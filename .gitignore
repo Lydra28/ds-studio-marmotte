@@ -31,3 +31,7 @@ projects/*/imports/
 # Projets créés dans l'atelier : privés, hors du dépôt public. Marmotte reste l'exemple suivi.
 projects/*
 !projects/marmotte/
+
+# App desktop : serveur compilé et installateurs générés.
+desktop/build/
+release/

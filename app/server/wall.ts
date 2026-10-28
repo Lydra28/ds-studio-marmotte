@@ -8,6 +8,7 @@ import type { Project } from '../shared/project.js';
 import { atomicWrite, readPrivate } from './files.js';
 import { StudioError } from './store.js';
 import { callOpenRouter, DEFAULT_MODEL, type AssistantOptions } from './assistant.js';
+import { captureInDesktop, inDesktop } from './desktop.js';
 
 // Mur des DA d'un projet : inspirations (images fournies, captures de liens)
 // et dernière génération de 1 à 3 directions. Tout reste dans les données
@@ -82,7 +83,7 @@ export class Wall {
   constructor(
     directory: string,
     private options: AssistantOptions,
-    private capture: (url: string) => Promise<Buffer> = captureWithPlaywright,
+    private capture: (url: string) => Promise<Buffer> = inDesktop ? captureInDesktop : captureWithPlaywright,
   ) {
     this.dir = path.join(directory, 'wall');
   }

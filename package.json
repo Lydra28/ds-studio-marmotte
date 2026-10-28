@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "description": "Starter pédagogique local pour explorer et faire évoluer un Design System.",
+  "main": "desktop/main.mjs",
+  "author": "Romain",
   "engines": {
     "node": ">=22.12.0"
   },
@@ -20,7 +22,10 @@
     "scan": "node scripts/scan-public.mjs",
     "doctor": "node scripts/doctor.mjs",
     "qualify": "node scripts/qualify-local.mjs",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "desktop": "npm run build && node scripts/build-desktop.mjs && electron .",
+    "dist:win": "npm run build && node scripts/build-desktop.mjs && electron-builder --win nsis",
+    "test:desktop": "node scripts/build-desktop.mjs && playwright test --config tests/desktop/playwright.config.ts"
   },
   "dependencies": {
     "react": "19.3.1",
@@ -34,9 +39,43 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/three": "^0.186.0",
+    "electron": "45.1.0",
+    "electron-builder": "26.18.0",
     "prettier": "3.9.10",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
     "vite": "8.3.5"
+  },
+  "build": {
+    "appId": "local.dsstudio.atelier",
+    "productName": "DS-Studio",
+    "directories": {
+      "output": "release"
+    },
+    "asar": false,
+    "files": [
+      "package.json",
+      "desktop/main.mjs",
+      "desktop/icon.png",
+      "desktop/build/**",
+      "dist/**",
+      "templates/**",
+      "projects/marmotte/**",
+      "!projects/marmotte/.ds-studio/**",
+      "!**/node_modules/**"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "desktop/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DS-Studio",
+      "artifactName": "DS-Studio-Setup-${version}.exe"
+    }
   }
 }

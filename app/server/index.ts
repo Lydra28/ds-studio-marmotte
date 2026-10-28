@@ -6,11 +6,13 @@ import { createStudioServer } from './http.js';
 import { loadPluginCode } from './plugin.js';
 import { createSiteRelay } from './site-relay.js';
 import { acquireLease } from '../../scripts/runtime.mjs';
+import { desktopReady, onDesktopStop } from './desktop.js';
 
-const root = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../..',
-);
+// L'app Electron donne la racine (serveur compilé en un seul fichier) et le
+// chemin du `.env` (dans les réglages de l'utilisateur, jamais dans l'exe).
+const root = process.env.DS_STUDIO_ROOT
+  ? path.resolve(process.env.DS_STUDIO_ROOT)
+  : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 // `--projects=projects` : tous les projets d'un dossier, choisis dans l'atelier.
 // `--project=projects/x` : une seule instance. Sinon l'exemple d'origine dans
 // workspace/, avec ses données dans .ds-studio/.
@@ -31,7 +33,7 @@ const directory = process.env.DS_STUDIO_DATA_DIR
       : path.join(root, '.ds-studio');
 // Secrets locaux (clé OpenRouter) : `.env` gitignoré, jamais renvoyé au navigateur.
 try {
-  process.loadEnvFile(path.join(root, '.env'));
+  process.loadEnvFile(process.env.DS_STUDIO_ENV_FILE || path.join(root, '.env'));
 } catch {
   /* Pas de .env : assistant désactivé, le reste de l'atelier marche. */
 }
@@ -93,6 +95,8 @@ try {
   console.log(
     `DS-Studio · ${label} · http://127.0.0.1:${port}\nMode manuel autonome · Figma non connecté · Ctrl+C pour fermer.`,
   );
+  onDesktopStop(() => void stop());
+  desktopReady(port);
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);
 } catch (e) {
