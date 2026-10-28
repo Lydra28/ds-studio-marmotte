@@ -245,12 +245,14 @@ export function HistoryPanel({
   onClose,
   onUndo,
   onCompare,
+  onSideBySide,
 }: {
   state: State;
   versions: VersionSummary[];
   onClose: () => void;
   onUndo: (id: string) => void;
   onCompare: (revision: number, previous?: number) => void;
+  onSideBySide: (revision: number, previous?: number) => void;
 }) {
   return (
     <div className="drawer-backdrop" onClick={onClose}>
@@ -272,6 +274,7 @@ export function HistoryPanel({
                 <button onClick={() => onCompare(v.revision, versions[i + 1]?.revision)}>
                   {versions[i + 1] !== undefined ? `Comparer avec v${versions[i + 1].revision}` : 'Voir le contenu'}
                 </button>
+                <button onClick={() => onSideBySide(v.revision, versions[i + 1]?.revision)}>Côte à côte</button>
               </li>
             ))}
           </ul>

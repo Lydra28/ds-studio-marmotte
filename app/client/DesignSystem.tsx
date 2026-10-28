@@ -202,14 +202,30 @@ export function PreviewScreen({ set }: { set: TokenSet }) {
 export function PreviewPage() {
   const [set, setSet] = useState<TokenSet>();
   useEffect(() => {
+    // Défilement lié (comparaison côte à côte), même protocole que le site en direct.
+    let quiet = 0;
+    const room = () => Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
     const onMessage = (e: MessageEvent) => {
-      if (e.origin !== location.origin || e.data?.type !== 'ds-set') return;
-      setSet(e.data.set);
-      loadFonts(fontFamilies(e.data.set));
+      if (e.origin !== location.origin) return;
+      if (e.data?.type === 'ds-set') {
+        setSet(e.data.set);
+        loadFonts(fontFamilies(e.data.set));
+      }
+      if (e.data?.type === 'ds-scroll-to') {
+        quiet = Date.now() + 200;
+        window.scrollTo(0, Math.min(1, Math.max(0, Number(e.data.y) || 0)) * room());
+      }
+    };
+    const onScroll = () => {
+      if (Date.now() > quiet) window.parent.postMessage({ type: 'ds-scroll', y: window.scrollY / room() }, location.origin);
     };
     window.addEventListener('message', onMessage);
+    window.addEventListener('scroll', onScroll, { passive: true });
     window.parent.postMessage({ type: 'ds-ready' }, location.origin);
-    return () => window.removeEventListener('message', onMessage);
+    return () => {
+      window.removeEventListener('message', onMessage);
+      window.removeEventListener('scroll', onScroll);
+    };
   }, []);
   return set ? <PreviewScreen set={set} /> : <p>Chargement de l’aperçu…</p>;
 }

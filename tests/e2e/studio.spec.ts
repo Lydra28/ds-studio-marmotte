@@ -228,3 +228,31 @@ test('générateur de gamme : couleur gardée à son palier, paliers manquants a
   await expect(dialog).toBeHidden();
   expect(await previewVar(page, '--color-brand-600')).toBe('#2F6BFF');
 });
+
+test('comparaison côte à côte : brouillon face à l’état enregistré, inversion, rien d’écrit', async ({ page }) => {
+  const before = await revision(page);
+  await page.getByLabel('space/md', { exact: true }).fill('28');
+  await page.getByRole('button', { name: 'Comparer' }).click();
+  const view = page.getByRole('region', { name: 'Comparaison côte à côte' });
+  await expect(view.getByLabel('Version après')).toHaveValue('draft');
+  await expect(view.getByText('Tokens : 1 modifié(s)')).toBeVisible();
+  // Chaque cadre reçoit son propre jeu.
+  const spaceIn = (side: string) =>
+    view
+      .frameLocator(`iframe[title^="${side} :"]`)
+      .locator('.ds')
+      .first()
+      .evaluate((el) => el.style.getPropertyValue('--space-md'));
+  expect(await spaceIn('Droite')).toBe('28px');
+  expect(await spaceIn('Gauche')).not.toBe('28px');
+  await view.getByRole('button', { name: 'Inverser avant et après' }).click();
+  await expect(view.getByLabel('Version avant')).toHaveValue('draft');
+  expect(await spaceIn('Gauche')).toBe('28px');
+  await view.getByRole('button', { name: 'Détail' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('code').filter({ hasText: 'space/md' })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Fermer' }).click();
+  await view.getByRole('button', { name: '← Atelier' }).click();
+  await page.getByRole('button', { name: 'Abandonner' }).click();
+  expect(await revision(page)).toBe(before);
+});

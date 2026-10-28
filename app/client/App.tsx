@@ -42,6 +42,7 @@ import AssistantPanel from './Assistant.js';
 import Wall from './Wall.js';
 import { SiteFrame, SiteFullscreen, SiteView, type Device } from './Site.js';
 import { fontFamilies, loadFonts } from './fonts.js';
+import CompareView, { type Source } from './Compare.js';
 import { ChangesDialog, Corrections, DiffDialog, FigmaDialog, HistoryPanel } from './Panels.js';
 
 const devices = [
@@ -155,7 +156,9 @@ function Workspace({
   // Comparaison affichée : avant d'accepter (état courant / dernière version)
   // ou entre deux versions depuis l'historique.
   const [comparison, setComparison] = useState<{ title: string; hint: string; patches: Patch[]; accept: boolean }>();
-  const [view, setView] = useState<'board' | 'wall' | 'site'>('board');
+  const [view, setView] = useState<'board' | 'wall' | 'site' | 'compare'>('board');
+  // Côtés imposés depuis l'historique ; sinon la vue choisit les siens.
+  const [compareFrom, setCompareFrom] = useState<[Source, Source]>();
   const [assistantOpen, setAssistantOpen] = useState(() => {
     try {
       return localStorage.getItem('ds-assistant') === '1';
@@ -394,6 +397,10 @@ function Workspace({
         onHistory={() => setHistoryOpen(true)}
         onWall={() => setView('wall')}
         onSite={relay && config?.site ? () => setView('site') : undefined}
+        onCompare={() => {
+          setCompareFrom(undefined);
+          setView('compare');
+        }}
         onBoard={() => setView('board')}
         view={view}
       />
@@ -497,6 +504,19 @@ function Workspace({
       {view === 'site' && relay && config?.site && draftSet && (
         <SiteView slug={slug} relay={relay} config={config} set={draftSet} draft={draftCount > 0} onBack={() => setView('board')} />
       )}
+      {view === 'compare' && config && (
+        <CompareView
+          slug={slug}
+          relay={relay}
+          config={config}
+          state={state}
+          versions={versions}
+          draftSet={draftSet}
+          draft={draftCount > 0}
+          initial={compareFrom}
+          onBack={() => setView('board')}
+        />
+      )}
       <main className="layout" hidden={view !== 'board'}>
         <Board
           set={draftSet}
@@ -598,6 +618,11 @@ function Workspace({
             })
           }
           onCompare={compareVersions}
+          onSideBySide={(revision, previous) => {
+            setHistoryOpen(false);
+            setCompareFrom([previous ?? revision, revision]);
+            setView('compare');
+          }}
         />
       )}
       {figmaOpen && <FigmaDialog code={plugin} config={config} onClose={() => setFigmaOpen(false)} />}

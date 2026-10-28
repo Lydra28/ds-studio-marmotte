@@ -1746,3 +1746,24 @@ dialog.diff .diff-summary {
 .site-full__close {
   margin-left: auto;
 }
+
+/* Comparaison côte à côte : deux cadres identiques, résumé du diff à droite. */
+.compare__frames {
+  overflow-x: visible;
+  justify-content: center;
+}
+.compare__frames figcaption strong {
+  color: var(--c-text);
+}
+.compare__summary {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--c-muted);
+}
+.compare__summary button {
+  padding: 2px 8px;
+  font-size: 12px;
+}

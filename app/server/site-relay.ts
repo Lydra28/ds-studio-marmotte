@@ -17,11 +17,24 @@ export const liveScript = (atelier: string) => `(() => {
   const atelier = ${JSON.stringify(atelier)};
   const style = document.createElement('style');
   style.id = 'ds-studio-live';
+  // Défilement lié (comparaison côte à côte) : position en fraction de la page,
+  // sans renvoyer l'écho d'un défilement demandé par l'atelier.
+  let quiet = 0;
+  const room = () => Math.max(1, document.documentElement.scrollHeight - innerHeight);
   addEventListener('message', (e) => {
-    if (e.origin !== atelier || !e.data || e.data.type !== 'ds-css') return;
-    style.textContent = String(e.data.css);
-    document.head.appendChild(style);
+    if (e.origin !== atelier || !e.data) return;
+    if (e.data.type === 'ds-css') {
+      style.textContent = String(e.data.css);
+      document.head.appendChild(style);
+    }
+    if (e.data.type === 'ds-scroll-to') {
+      quiet = Date.now() + 200;
+      scrollTo(0, Math.min(1, Math.max(0, Number(e.data.y) || 0)) * room());
+    }
   });
+  addEventListener('scroll', () => {
+    if (Date.now() > quiet) parent.postMessage({ type: 'ds-scroll', y: scrollY / room() }, atelier);
+  }, { passive: true });
   parent.postMessage({ type: 'ds-site-ready', path: location.pathname }, atelier);
 })();
 `;

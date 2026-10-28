@@ -19,6 +19,8 @@ export function SiteFrame({
   height,
   scale = 1,
   title,
+  onScroll,
+  follow,
 }: {
   slug: string;
   relay: number;
@@ -29,6 +31,9 @@ export function SiteFrame({
   height: number;
   scale?: number;
   title: string;
+  // Défilement lié : position remontée par le site, position à suivre (fraction).
+  onScroll?: (y: number) => void;
+  follow?: number;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const origin = siteOrigin(slug, relay);
@@ -47,12 +52,17 @@ export function SiteFrame({
   }, [css]);
   useEffect(() => {
     // Chaque page chargée dans le cadre (navigation comprise) redemande le CSS.
-    const onReady = (e: MessageEvent) => {
-      if (e.origin === origin && e.source === frame.current?.contentWindow && e.data?.type === 'ds-site-ready') push();
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin !== origin || e.source !== frame.current?.contentWindow) return;
+      if (e.data?.type === 'ds-site-ready') push();
+      if (e.data?.type === 'ds-scroll' && typeof e.data.y === 'number') onScroll?.(e.data.y);
     };
-    window.addEventListener('message', onReady);
-    return () => window.removeEventListener('message', onReady);
-  }, [css, origin]);
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [css, origin, onScroll]);
+  useEffect(() => {
+    if (follow !== undefined) frame.current?.contentWindow?.postMessage({ type: 'ds-scroll-to', y: follow }, origin);
+  }, [follow]);
   return (
     <div className="site-frame" style={{ width: width * scale, height: height * scale }}>
       <iframe
@@ -65,7 +75,7 @@ export function SiteFrame({
   );
 }
 
-const devices = {
+export const devices = {
   desktop: { label: 'Desktop · 1440', width: 1440, height: 900 },
   mobile: { label: 'Mobile · 375', width: 375, height: 812 },
 };
