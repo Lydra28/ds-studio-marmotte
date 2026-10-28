@@ -50,14 +50,16 @@ test('accueil : liste des projets, création d’un projet vierge à côté de M
   await expect(page.locator('.bar .project')).toHaveText('Marmotte');
 });
 
-test('assistant : panneau ouvert à côté de l’atelier, désactivé proprement sans clé', async ({ page }) => {
-  await page.getByRole('button', { name: 'Assistant', exact: true }).click();
+test('assistant : ouvert par la mascotte, désactivé proprement sans clé, mascotte rendue à la fermeture', async ({ page }) => {
+  await page.getByRole('button', { name: 'Ouvrir l’assistant' }).click();
+  await expect(page.getByRole('button', { name: 'Ouvrir l’assistant' })).toHaveCount(0); // une seule scène 3D
   const panel = page.getByRole('complementary', { name: 'Assistant' });
   await expect(panel).toContainText('Assistant désactivé');
   await expect(panel.getByLabel('Message à l’assistant')).toBeDisabled();
   await expect(page.locator('.bar .project')).toHaveText('Marmotte');
   await panel.getByRole('button', { name: 'Fermer l’assistant' }).click();
   await expect(panel).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Ouvrir l’assistant' })).toBeVisible();
 });
 
 test('mur des DA : image déposée, réduite, retirée ; génération bloquée sans clé', async ({ page }) => {
@@ -83,11 +85,17 @@ test('boucle : écart signalé, correction essayée, diff validé, preview à jo
   const sm = page.getByLabel('space/sm', { exact: true });
   await sm.fill('15');
   await expect(page.getByText('1 écart(s)', { exact: true })).toBeVisible();
+  const mascot = page.locator('.mascot-dock');
+  await expect(mascot.locator('.mascot-badge')).toHaveText('1');
+  await expect(mascot.getByRole('status')).toHaveText('1 écart(s) : regarde « Corrections ».');
   expect(await previewVar(page, '--space-sm')).toBe('15px');
   await page.getByRole('button', { name: 'Essayer 16 px' }).click();
   await expect(page.getByText('Aucun écart', { exact: true })).toBeVisible();
+  await expect(mascot.getByRole('status')).toHaveText('Plus aucun écart !');
+  await expect(mascot.locator('.mascot-badge')).toHaveCount(0);
   await validate(page);
   await expect(page.getByText(/Révision 1 enregistrée/)).toBeVisible();
+  await expect(mascot.getByRole('status')).toHaveText('Enregistré, bien joué !');
   await page.reload();
   await expect(page.getByLabel('space/sm', { exact: true })).toHaveValue('16');
   expect(await previewVar(page, '--space-sm')).toBe('16px');

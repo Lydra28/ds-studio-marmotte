@@ -39,6 +39,7 @@ import type { Config } from '../shared/project.js';
 import Board from './Board.js';
 import { Home, Sidebar, useRoute } from './Shell.js';
 import AssistantPanel from './Assistant.js';
+import { brandColor, MascotDock } from './Mascot.js';
 import Wall from './Wall.js';
 import { SiteFrame, SiteFullscreen, SiteView, type Device } from './Site.js';
 import { fontFamilies, loadFonts } from './fonts.js';
@@ -236,6 +237,10 @@ function Workspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, drafts, structure, componentDrafts]);
   const findings = useMemo(() => (draftSet ? runRules(draftSet) : []), [draftSet]);
+  // Mascotte : couleur de marque du brouillon, fête des enregistrements.
+  const mascotColor = useMemo(() => (draftSet ? brandColor(draftSet) : '#7C5CFF'), [draftSet]);
+  const [cheer, setCheer] = useState({ n: 0, text: '' });
+  const celebrate = (text: string) => setCheer((c) => ({ n: c.n + 1, text }));
   // Polices Google du jeu (brouillon compris) aussi dans l'atelier, pour les spécimens.
   useEffect(() => {
     if (draftSet) loadFonts(fontFamilies(draftSet));
@@ -332,6 +337,7 @@ function Workspace({
       setProposal(undefined);
       announce(slug);
       setNotice(`Révision ${next.revision} enregistrée. Annulable depuis l’historique.`);
+      celebrate('Enregistré, bien joué !');
     });
   // Jeu figé d'une version, ou jeu vide (même modes) pour la toute première.
   const versionSet = async (revision?: number): Promise<TokenSet> =>
@@ -371,6 +377,7 @@ function Workspace({
       const v = await accept(state!.revision);
       setComparison(undefined);
       if (v.github) setPublished({ revision: v.revision, result: v.github });
+      celebrate(`v${v.revision} figée, bravo !`);
       setVersions(await getVersions());
       setNotice(
         `Version v${v.revision} acceptée (empreinte ${v.hash.slice(0, 8)})` +
@@ -414,9 +421,6 @@ function Workspace({
           <span className={`count ${findings.length ? 'warn' : 'ok'}`}>
             {findings.length ? `${findings.length} écart(s)` : 'Aucun écart'}
           </span>
-          <button aria-pressed={assistantOpen} onClick={() => toggleAssistant(!assistantOpen)}>
-            Assistant
-          </button>
           {inbox && (
             <button
               className="inbox"
@@ -583,7 +587,17 @@ function Workspace({
         </aside>
       </main>
       </div>
-      {assistantOpen && <AssistantPanel onDraft={draftChanges} onClose={() => toggleAssistant(false)} />}
+      {assistantOpen ? (
+        <AssistantPanel color={mascotColor} onDraft={draftChanges} onClose={() => toggleAssistant(false)} />
+      ) : (
+        <MascotDock
+          color={mascotColor}
+          findings={findings.length}
+          cheer={cheer}
+          raised={draftCount > 0}
+          onOpen={() => toggleAssistant(true)}
+        />
+      )}
       {draftCount > 0 && (
         <div className="draft-bar" role="region" aria-label="Brouillon">
           <span>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { Change } from '../shared/model.js';
 import { askAssistant, getAssistant, resetAssistant, type AssistantMessage, type AssistantState } from './api.js';
+import { Mascot } from './Mascot.js';
 
 const describe = (c: Change) =>
   'op' in c
@@ -62,9 +63,11 @@ const starters = [
 // Panneau de l'assistant : questions libres, propositions mises en brouillon
 // sur demande. Rien n'est enregistré sans le diff.
 export default function AssistantPanel({
+  color,
   onDraft,
   onClose,
 }: {
+  color: string;
   onDraft: (changes: Change[]) => void;
   onClose: () => void;
 }) {
@@ -107,6 +110,7 @@ export default function AssistantPanel({
   return (
     <aside className="assistant" aria-label="Assistant">
       <header className="assistant-head">
+        <Mascot color={color} mood={busy ? 'thinking' : 'idle'} />
         <div>
           <strong>Assistant</strong>
           {state && <small className="mono">{state.model}</small>}
