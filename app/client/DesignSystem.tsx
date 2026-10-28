@@ -197,6 +197,219 @@ export function PreviewScreen({ set }: { set: TokenSet }) {
   );
 }
 
+// Écrans d'exemple : le DS appliqué à des interfaces crédibles, pour tout
+// projet (avec ou sans site). Seulement des tokens sémantiques, comme la planche.
+export const screens = [
+  ['ds', 'Composants'],
+  ['dashboard', 'Tableau de bord'],
+  ['form', 'Formulaire'],
+  ['article', 'Article'],
+] as const;
+export type Screen = (typeof screens)[number][0];
+const isScreen = (v: string | null): v is Screen => screens.some(([id]) => id === v);
+export const previewSrc = (screen: Screen) => (screen === 'ds' ? '/?preview=1' : `/?preview=1&screen=${screen}`);
+
+// Choix du contenu d'un cadre : écrans d'exemple, et le site en direct s'il existe.
+export function ScreenPicker({
+  value,
+  onChange,
+  site = false,
+  label = 'Écran de la preview',
+}: {
+  value: Screen | 'site';
+  onChange: (value: Screen | 'site') => void;
+  site?: boolean;
+  label?: string;
+}) {
+  return (
+    <select
+      className="screen-pick"
+      aria-label={label}
+      value={value}
+      onChange={(e) => onChange(e.target.value as Screen | 'site')}
+    >
+      {site && <option value="site">Site en direct</option>}
+      {screens.map(([id, name]) => (
+        <option key={id} value={id}>
+          {name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function DemoTop({ current }: { current: string }) {
+  return (
+    <header className="ds-top">
+      <strong>Projet</strong>
+      <nav aria-label="Navigation de démonstration">
+        {['Accueil', 'Suivi', 'Profil'].map((n) => (
+          <a key={n} href={`#${n.toLowerCase()}`} aria-current={n === current ? 'page' : undefined}>
+            {n}
+          </a>
+        ))}
+      </nav>
+    </header>
+  );
+}
+
+const activity = [
+  ['Palette mise à jour', 'Il y a 2 h', 'ok', 'Validé'],
+  ['Contraste du bouton secondaire', 'Hier', 'alert', 'À revoir'],
+  ['Nouvelle typo de titre', 'Lundi', 'ok', 'Validé'],
+  ['Espacements mobiles', 'La semaine dernière', 'wait', 'En cours'],
+] as const;
+
+function DashboardScreen({ set }: { set: TokenSet }) {
+  return (
+    <DSScope set={set} className="ds-screen">
+      <DemoTop current="Accueil" />
+      <main>
+        <div className="ds-head">
+          <div className="ds-intro">
+            <p className="ds-kicker">Tableau de bord</p>
+            <h1>Bonjour Camille</h1>
+          </div>
+          <Button>Nouvelle tâche</Button>
+        </div>
+        <div className="ds-stats">
+          {[
+            ['Projets actifs', '12', '+2 ce mois-ci'],
+            ['Tâches en retard', '3', 'Dont 1 urgente'],
+            ['Satisfaction', '94 %', 'Sur 128 avis'],
+          ].map(([label, value, note]) => (
+            <article key={label} className="ds-card ds-stat">
+              <p className="ds-kicker">{label}</p>
+              <strong>{value}</strong>
+              <p className="ds-text">{note}</p>
+            </article>
+          ))}
+        </div>
+        <section className="ds-card ds-list" aria-label="Activité récente">
+          <div className="ds-head">
+            <h3>Activité récente</h3>
+            <Button variant="ghost">Tout voir</Button>
+          </div>
+          <ul>
+            {activity.map(([title, when, tone, status]) => (
+              <li key={title}>
+                <span>
+                  <strong>{title}</strong>
+                  <small>{when}</small>
+                </span>
+                <span className={`ds-badge ${tone}`}>{status}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+        <div className="ds-banner">
+          <p>
+            <strong>Une alerte demande ton attention.</strong> Le contraste du bouton secondaire est sous 4,5:1.
+          </p>
+          <Button variant="secondary">Corriger</Button>
+        </div>
+      </main>
+    </DSScope>
+  );
+}
+
+function FormScreen({ set }: { set: TokenSet }) {
+  const [plan, setPlan] = useState('pro');
+  const [sent, setSent] = useState(false);
+  return (
+    <DSScope set={set} className="ds-screen">
+      <DemoTop current="Profil" />
+      <main>
+        <div className="ds-intro">
+          <p className="ds-kicker">Inscription · étape 2 sur 3</p>
+          <h1>Ton espace</h1>
+          <p className="ds-lead">Quelques informations pour préparer ton compte.</p>
+        </div>
+        <div className="ds-progress" aria-hidden="true">
+          <span className="done" />
+          <span className="done" />
+          <span />
+        </div>
+        <form
+          className="ds-form ds-form--wide"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setSent(true);
+          }}
+        >
+          <div className="ds-fields">
+            <Input label="Prénom" placeholder="Camille" />
+            <Input label="Nom" placeholder="Martin" />
+          </div>
+          <Input label="Adresse e-mail" type="email" placeholder="camille@" error="Ajoute une adresse complète." />
+          <fieldset className="ds-choices">
+            <legend>Formule</legend>
+            {[
+              ['solo', 'Solo', 'Un projet, gratuit'],
+              ['pro', 'Pro', 'Projets illimités'],
+              ['team', 'Équipe', 'Jusqu’à 10 personnes'],
+            ].map(([id, name, detail]) => (
+              <label key={id} className={plan === id ? 'is-selected' : ''}>
+                <input type="radio" name="plan" value={id} checked={plan === id} onChange={() => setPlan(id)} />
+                <strong>{name}</strong>
+                <small>{detail}</small>
+              </label>
+            ))}
+          </fieldset>
+          <label className="ds-check">
+            <input type="checkbox" defaultChecked /> Recevoir les nouveautés une fois par mois
+          </label>
+          <div className="ds-row">
+            <Button variant="secondary">Retour</Button>
+            <Button>{sent ? 'Enregistré ✓' : 'Continuer'}</Button>
+          </div>
+        </form>
+      </main>
+    </DSScope>
+  );
+}
+
+function ArticleScreen({ set }: { set: TokenSet }) {
+  return (
+    <DSScope set={set} className="ds-screen">
+      <DemoTop current="Suivi" />
+      <main className="ds-article">
+        <p className="ds-kicker">Journal · 6 min de lecture</p>
+        <h1>Construire un design system qui dure</h1>
+        <p className="ds-lead">
+          Deux couches de tokens, des règles vérifiées à chaque essai, et des versions qu’on peut comparer.
+        </p>
+        <div className="ds-cover" aria-hidden="true" />
+        <p>
+          Les primitives décrivent ce qui existe : une gamme de couleurs, une échelle d’espacements. Les tokens
+          sémantiques disent à quoi elles servent : le fond d’une carte, le texte d’un bouton.
+        </p>
+        <h3>Nommer par l’usage</h3>
+        <p>Un token nommé par l’usage survit à un changement de marque. On change la valeur, pas les écrans.</p>
+        <blockquote>« Le DS n’est pas une palette, c’est un ensemble de décisions. »</blockquote>
+        <p>
+          Chaque version acceptée devient une référence : on la transfère dans Figma, et le code la reçoit par une
+          pull request.
+        </p>
+        <aside className="ds-cta">
+          <div>
+            <strong>Prêt à essayer ?</strong>
+            <p>Change une couleur dans l’atelier et regarde cette page suivre.</p>
+          </div>
+          <Button variant="secondary">Commencer</Button>
+        </aside>
+      </main>
+    </DSScope>
+  );
+}
+
+const screenOf: Record<Screen, (props: { set: TokenSet }) => ReactNode> = {
+  ds: PreviewScreen,
+  dashboard: DashboardScreen,
+  form: FormScreen,
+  article: ArticleScreen,
+};
+
 // Page chargée dans l'iframe : elle reçoit le jeu de tokens (brouillon
 // compris) par postMessage, même origine uniquement.
 export function PreviewPage() {
@@ -227,5 +440,7 @@ export function PreviewPage() {
       window.removeEventListener('scroll', onScroll);
     };
   }, []);
-  return set ? <PreviewScreen set={set} /> : <p>Chargement de l’aperçu…</p>;
+  const param = new URLSearchParams(location.search).get('screen');
+  const Shown = screenOf[isScreen(param) ? param : 'ds'];
+  return set ? <Shown set={set} /> : <p>Chargement de l’aperçu…</p>;
 }

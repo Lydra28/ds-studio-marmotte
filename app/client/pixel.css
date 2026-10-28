@@ -761,3 +761,50 @@ dialog.diff h2 {
     transition: none;
   }
 }
+
+/* Sélecteur d'écran (preview, Comparer, Évolution) : étiquette pixel. */
+.screen-pick {
+  font-family: var(--f-label);
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--c-text);
+  background: var(--c-panel);
+  border: 1px solid var(--c-line);
+  padding: 6px 8px;
+  min-height: 32px;
+}
+.screen-pick:hover {
+  border-color: var(--c-text);
+}
+
+/* Export du code : onglets de format, code défilant. */
+.export-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--c-line);
+  margin-bottom: 12px;
+}
+.export-tabs [role='tab'] {
+  border: 0;
+  border-bottom: 4px solid transparent;
+  padding: 8px 14px 6px;
+  color: var(--c-soft);
+}
+.export-tabs [role='tab'][aria-selected='true'] {
+  color: var(--c-text);
+  background: var(--c-raised);
+  border-bottom-color: var(--c-accent);
+}
+.export-code {
+  margin: 0 0 16px;
+  max-height: min(52vh, 480px);
+  overflow: auto;
+  padding: 16px;
+  background: var(--c-bg);
+  border: 1px solid var(--c-line);
+  font-family: var(--c-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--c-soft);
+  white-space: pre;
+}

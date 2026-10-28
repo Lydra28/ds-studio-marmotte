@@ -116,14 +116,6 @@ export const getInbox = () => request<Inbox | null>('inbox');
 export const clearInbox = () => request<null>('inbox/clear', {});
 export const getVersion = (revision: number) =>
   request<VersionSummary & { set: TokenSet }>(`version?revision=${revision}`);
-export async function exportSet(name: string) {
-  const set = await request<TokenSet>('export');
-  downloadText(
-    `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.tokens.json`,
-    JSON.stringify(set, null, 2) + '\n',
-    'application/json',
-  );
-}
 export function downloadText(name: string, text: string, type: string) {
   const url = URL.createObjectURL(new Blob([text], { type }));
   const a = document.createElement('a');

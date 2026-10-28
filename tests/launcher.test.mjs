@@ -353,6 +353,8 @@ test(
           browser = await chromium.launch();
           const page = await browser.newPage();
           await page.goto(`http://127.0.0.1:${port}`);
+          // Sections repliées au lancement : on les ouvre avant de saisir.
+          await page.getByRole('button', { name: 'Tout déplier' }).click();
           await page
             .getByLabel('bg/brand light', { exact: true })
             .fill('#224477');

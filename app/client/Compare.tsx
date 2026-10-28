@@ -4,6 +4,7 @@ import type { Config } from '../shared/project.js';
 import { getVersion, type VersionSummary } from './api.js';
 import { ChangesDialog, diffSummary } from './Panels.js';
 import { devices, SiteFrame, type Device } from './Site.js';
+import { previewSrc, ScreenPicker, type Screen } from './DesignSystem.js';
 
 // Comparaison côte à côte : deux états du jeu (version acceptée, état
 // enregistré ou brouillon) rendus dans deux cadres identiques, défilement lié.
@@ -14,6 +15,7 @@ export type Source = 'draft' | 'state' | number;
 // Écran générique du DS (même page que la preview latérale), pour un jeu donné.
 export function DsFrame({
   set,
+  screen = 'ds',
   width,
   height,
   scale,
@@ -22,6 +24,7 @@ export function DsFrame({
   follow,
 }: {
   set: TokenSet;
+  screen?: Screen;
   width: number;
   height: number;
   scale: number;
@@ -48,7 +51,7 @@ export function DsFrame({
   }, [follow]);
   return (
     <div className="site-frame" style={{ width: width * scale, height: height * scale }}>
-      <iframe ref={frame} title={title} src="/?preview=1" style={{ width, height, transform: `scale(${scale})` }} />
+      <iframe ref={frame} title={title} src={previewSrc(screen)} style={{ width, height, transform: `scale(${scale})` }} />
     </div>
   );
 }
@@ -108,7 +111,7 @@ export default function CompareView({
   const [detail, setDetail] = useState(false);
 
   const site = relay && config.site ? config.site : null;
-  const [content, setContent] = useState<'site' | 'ds'>(site ? 'site' : 'ds');
+  const [content, setContent] = useState<Screen | 'site'>(site ? 'site' : 'ds');
   const [device, setDevice] = useState<Device>('desktop');
   const [page, setPage] = useState(site?.pages[0] ?? '/');
   const [linked, setLinked] = useState(true);
@@ -153,7 +156,7 @@ export default function CompareView({
         ) : content === 'site' && site ? (
           <SiteFrame key={`${device}-${page}`} slug={slug} relay={relay!} config={config} set={set} page={page} {...props} />
         ) : (
-          <DsFrame key={device} set={set} {...props} />
+          <DsFrame key={device} set={set} screen={content === 'site' ? 'ds' : content} {...props} />
         )}
       </figure>
     );
@@ -188,16 +191,7 @@ export default function CompareView({
         </label>
       </div>
       <div className="site-view__head">
-        {site && (
-          <div className="devices" role="group" aria-label="Contenu comparé">
-            <button aria-pressed={content === 'site'} onClick={() => setContent('site')}>
-              Site
-            </button>
-            <button aria-pressed={content === 'ds'} onClick={() => setContent('ds')}>
-              DS
-            </button>
-          </div>
-        )}
+        <ScreenPicker value={content} onChange={setContent} site={!!site} label="Contenu comparé" />
         <div className="devices" role="group" aria-label="Appareil">
           {(Object.keys(devices) as Device[]).map((d) => (
             <button key={d} aria-pressed={device === d} onClick={() => setDevice(d)}>

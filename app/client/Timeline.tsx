@@ -3,6 +3,7 @@ import { setsByRevision, type State, type TokenSet } from '../shared/model.js';
 import type { Config } from '../shared/project.js';
 import type { VersionSummary } from './api.js';
 import { DsFrame } from './Compare.js';
+import { ScreenPicker, type Screen } from './DesignSystem.js';
 import { sourceLabel } from './Panels.js';
 import { devices, SiteFrame, type Device } from './Site.js';
 
@@ -71,7 +72,7 @@ export default function TimelineView({
   const name = (i: number) => (i === 0 ? 'Départ' : i > state.revision ? 'Brouillon' : `r${i}`);
 
   const site = relay && config.site ? config.site : null;
-  const [content, setContent] = useState<'site' | 'ds'>(site ? 'site' : 'ds');
+  const [content, setContent] = useState<Screen | 'site'>(site ? 'site' : 'ds');
   const [device, setDevice] = useState<Device>('desktop');
   const [page, setPage] = useState(site?.pages[0] ?? '/');
   const box = useRef<HTMLDivElement>(null);
@@ -97,16 +98,7 @@ export default function TimelineView({
     <section className="site-view timeline" aria-label="Évolution du design system">
       <div className="site-view__head">
         <h2>Évolution</h2>
-        {site && (
-          <div className="devices" role="group" aria-label="Contenu rejoué">
-            <button aria-pressed={content === 'site'} onClick={() => setContent('site')}>
-              Site
-            </button>
-            <button aria-pressed={content === 'ds'} onClick={() => setContent('ds')}>
-              DS
-            </button>
-          </div>
-        )}
+        <ScreenPicker value={content} onChange={setContent} site={!!site} label="Contenu rejoué" />
         <div className="devices" role="group" aria-label="Appareil">
           {(Object.keys(devices) as Device[]).map((d) => (
             <button key={d} aria-pressed={device === d} onClick={() => setDevice(d)}>
@@ -188,7 +180,7 @@ export default function TimelineView({
             title={`Site en direct à ${name(at)}`}
           />
         ) : (
-          <DsFrame key={device} set={set} width={width} height={height} scale={scale} title={`Écran DS à ${name(at)}`} />
+          <DsFrame key={device} set={set} screen={content === 'site' ? 'ds' : content} width={width} height={height} scale={scale} title={`Écran DS à ${name(at)}`} />
         )}
       </div>
     </section>

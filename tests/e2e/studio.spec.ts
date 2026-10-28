@@ -92,7 +92,7 @@ test('boucle : écart signalé, correction essayée, diff validé, preview à jo
   const mascot = page.locator('.mascot-dock');
   await expect(mascot.locator('.mascot-badge')).toHaveText('1');
   await expect(mascot.getByRole('status')).toHaveText('1 écart(s) : regarde « Corrections ».');
-  expect(await previewVar(page, '--space-sm')).toBe('15px');
+  await expect.poll(() => previewVar(page, '--space-sm')).toBe('15px');
   await page.getByRole('button', { name: 'Essayer 16 px' }).click();
   await expect(page.getByText('Aucun écart', { exact: true })).toBeVisible();
   await expect(mascot.getByRole('status')).toHaveText('Plus aucun écart !');
@@ -102,7 +102,7 @@ test('boucle : écart signalé, correction essayée, diff validé, preview à jo
   await expect(mascot.getByRole('status')).toHaveText('Enregistré, bien joué !');
   await page.reload();
   await expect(page.getByLabel('space/sm', { exact: true })).toHaveValue('16');
-  expect(await previewVar(page, '--space-sm')).toBe('16px');
+  await expect.poll(() => previewVar(page, '--space-sm')).toBe('16px');
 });
 
 test('ajout et retrait de tokens, retrait refusé tant qu’un alias y renvoie', async ({ page }) => {
@@ -124,7 +124,7 @@ test('ajout et retrait de tokens, retrait refusé tant qu’un alias y renvoie',
   await expect(dialog.getByText(/^Tokens : 1 ajouté\(s\), 1 modifié\(s\), 1 retiré\(s\)$/)).toBeVisible();
   await dialog.getByRole('button', { name: 'Valider et enregistrer' }).click();
   await expect(dialog).toBeHidden();
-  expect(await previewVar(page, '--bg-brand')).toBe('#FF5500');
+  await expect.poll(() => previewVar(page, '--bg-brand')).toBe('#FF5500');
   await expect(page.getByRole('button', { name: 'Retirer space/4xl' })).toHaveCount(0);
 });
 
@@ -241,7 +241,7 @@ test('générateur de gamme : couleur gardée à son palier, paliers manquants a
   await expect(dialog.getByText(/Tokens : 6 ajouté\(s\), 4 modifié\(s\)/)).toBeVisible();
   await dialog.getByRole('button', { name: 'Valider et enregistrer' }).click();
   await expect(dialog).toBeHidden();
-  expect(await previewVar(page, '--color-brand-600')).toBe('#2F6BFF');
+  await expect.poll(() => previewVar(page, '--color-brand-600')).toBe('#2F6BFF');
 });
 
 test('comparaison côte à côte : brouillon face à l’état enregistré, inversion, rien d’écrit', async ({ page }) => {
@@ -259,11 +259,17 @@ test('comparaison côte à côte : brouillon face à l’état enregistré, inve
       .locator('.ds')
       .first()
       .evaluate((el) => el.style.getPropertyValue('--space-md'));
-  expect(await spaceIn('Droite')).toBe('28px');
-  expect(await spaceIn('Gauche')).not.toBe('28px');
+  await expect.poll(() => spaceIn('Droite')).toBe('28px');
+  await expect.poll(() => spaceIn('Gauche')).not.toBe('28px');
+  // Écran d'exemple : les deux cadres passent au tableau de bord, chacun avec son jeu.
+  await view.getByLabel('Contenu comparé').selectOption('dashboard');
+  await expect(view.frameLocator('iframe[title^="Droite :"]').getByRole('heading', { name: 'Bonjour Camille' })).toBeVisible();
+  await expect.poll(() => spaceIn('Droite')).toBe('28px');
+  await view.getByLabel('Contenu comparé').selectOption('ds');
   await view.getByRole('button', { name: 'Inverser avant et après' }).click();
   await expect(view.getByLabel('Version avant')).toHaveValue('draft');
-  expect(await spaceIn('Gauche')).toBe('28px');
+  // Le cadre reçoit son nouveau jeu après l'inversion : on attend, sans lecture unique.
+  await expect.poll(() => spaceIn('Gauche')).toBe('28px');
   await view.getByRole('button', { name: 'Détail' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('code').filter({ hasText: 'space/md' })).toBeVisible();
@@ -271,6 +277,43 @@ test('comparaison côte à côte : brouillon face à l’état enregistré, inve
   await page.getByRole('button', { name: 'Design system', exact: true }).click();
   await page.getByRole('button', { name: 'Abandonner' }).click();
   expect(await revision(page)).toBe(before);
+});
+
+test('écrans d’exemple : la preview passe d’un écran à l’autre, brouillon appliqué', async ({ page }) => {
+  const picker = page.getByLabel('Écran de la preview');
+  await expect(picker.locator('option')).toHaveText(['Composants', 'Tableau de bord', 'Formulaire', 'Article']);
+  await page.getByLabel('space/md', { exact: true }).fill('20');
+  const frame = page.frameLocator('iframe[title="Preview du design system"]');
+  for (const [screen, heading] of [
+    ['dashboard', 'Bonjour Camille'],
+    ['form', 'Ton espace'],
+    ['article', 'Construire un design system qui dure'],
+  ]) {
+    await picker.selectOption(screen);
+    await expect(frame.getByRole('heading', { name: heading })).toBeVisible();
+    await expect.poll(() => previewVar(page, '--space-md')).toBe('20px');
+  }
+  await picker.selectOption('ds');
+  await expect(frame.getByRole('heading', { name: 'Les tokens en situation.' })).toBeVisible();
+  await page.getByRole('button', { name: 'Abandonner' }).click();
+});
+
+test('export code : CSS, Tailwind et JSON de l’état enregistré, téléchargement', async ({ page }) => {
+  await page.getByRole('button', { name: 'Exporter' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Exporter le code' });
+  const code = dialog.getByRole('tabpanel');
+  await expect(code).toContainText(':root {');
+  await expect(code).toContainText('--bg-brand: var(--color-');
+  await dialog.getByRole('tab', { name: 'Tailwind v4' }).click();
+  await expect(code).toContainText('@theme inline {');
+  await expect(code).toContainText('--color-bg-brand: var(--bg-brand);');
+  await dialog.getByRole('tab', { name: 'JSON' }).click();
+  await expect(code).toContainText('"modes"');
+  const download = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Télécharger' }).click();
+  expect((await download).suggestedFilename()).toBe('marmotte.tokens.json');
+  await dialog.getByRole('button', { name: 'Fermer' }).click();
+  await expect(dialog).toBeHidden();
 });
 
 test('évolution : le curseur rejoue le DS révision après révision, sans rien écrire', async ({ page }) => {

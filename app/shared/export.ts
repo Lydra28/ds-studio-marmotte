@@ -63,3 +63,37 @@ export function exportJson(set: TokenSet, target: Naming, header: string) {
   );
   return JSON.stringify({ $comment: header, modes: set.modes, tokens }, null, 2) + '\n';
 }
+
+// Tailwind v4 : le CSS des variables, puis un bloc `@theme inline` qui les
+// expose en utilitaires (bg-bg-brand, p-md, rounded-card, text-body…).
+// Nom d'utilitaire tiré du nom de l'atelier ; la valeur suit le nom du code.
+export function tailwindName(key: string, type: string): string | null {
+  const dashed = (s: string) => s.replaceAll('/', '-');
+  const last = key.split('/').at(-1)!;
+  if (type === 'color') return `--color-${dashed(key.startsWith('color/') ? key.slice(6) : key)}`;
+  if (type === 'fontFamily') return `--font-${last}`;
+  if (type === 'fontWeight') return `--font-weight-${last}`;
+  if (key.startsWith('font/size/')) return `--text-${dashed(key.slice(10))}`;
+  if (key.startsWith('font/line-height/')) return `--leading-${dashed(key.slice(17))}`;
+  if (key.startsWith('space/')) return `--spacing-${dashed(key.slice(6))}`;
+  if (key.startsWith('radius/')) return `--radius-${dashed(key.slice(7))}`;
+  return null;
+}
+
+export function exportTailwind(set: TokenSet, target: Naming, header: string) {
+  const theme = Object.entries(set.tokens)
+    .map(([key, t]) => {
+      const name = tailwindName(key, t.$type);
+      if (!name) return null;
+      const code = cssName(exportName(key, target.rename));
+      // Même nom dans le code (couleurs renommées en color/…) : la valeur
+      // elle-même, sinon `--x: var(--x)` boucle.
+      const first = t.$values[set.modes[t.$collection][0]];
+      return `  ${name}: ${name === code ? value(set, key, first, target.rename) : `var(${code})`};`;
+    })
+    .filter(Boolean);
+  return (
+    exportCss(set, target, `${header} · à importer après @import "tailwindcss";`) +
+    `\n@theme inline {\n${theme.join('\n')}\n}\n`
+  );
+}

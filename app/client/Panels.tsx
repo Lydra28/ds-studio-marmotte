@@ -1,5 +1,7 @@
-import { useEffect, useRef } from 'react';
-import type { Patch, Proposal, State, TokenValue } from '../shared/model.js';
+import { useEffect, useRef, useState } from 'react';
+import type { Patch, Proposal, State, TokenSet, TokenValue } from '../shared/model.js';
+import { exportCss, exportTailwind } from '../shared/export.js';
+import { downloadText } from './api.js';
 import { rules, type Finding } from '../shared/rules.js';
 import type { ComponentDoc } from '../shared/components.js';
 import type { VersionSummary } from './api.js';
@@ -343,6 +345,90 @@ export function FigmaDialog({
       <div className="dialog-actions">
         <button onClick={onClose} autoFocus>
           Fermer
+        </button>
+      </div>
+    </dialog>
+  );
+}
+
+// Export du code en un clic : l'état enregistré, avec les noms du code du
+// projet (`github.rename`) comme la PR. JSON : le jeu de l'atelier, réimportable.
+const formats = [
+  ['css', 'CSS', 'tokens.css', 'text/css'],
+  ['tailwind', 'Tailwind v4', 'tailwind.css', 'text/css'],
+  ['json', 'JSON', 'tokens.json', 'application/json'],
+] as const;
+export function ExportDialog({
+  set,
+  name,
+  revision,
+  config,
+  drafts,
+  onClose,
+}: {
+  set: TokenSet;
+  name: string;
+  revision: number;
+  config: Config | undefined;
+  drafts: number;
+  onClose: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [format, setFormat] = useState<(typeof formats)[number][0]>('css');
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    dialog.current?.showModal();
+  }, []);
+  const naming = { rename: config?.github?.rename ?? {}, mobileQuery: config?.github?.mobileQuery ?? '(max-width: 767.98px)' };
+  const header = `DS-Studio · ${name} · r${revision}`;
+  const code =
+    format === 'css'
+      ? exportCss(set, naming, header)
+      : format === 'tailwind'
+        ? exportTailwind(set, naming, header)
+        : JSON.stringify(set, null, 2) + '\n';
+  const [, label, file, type] = formats.find(([id]) => id === format)!;
+  const slug = name.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'ds';
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* Presse-papiers refusé : le téléchargement reste possible. */
+    }
+  };
+  return (
+    <dialog ref={dialog} className="diff export-dialog" aria-labelledby="export-title" onCancel={onClose}>
+      <h2 id="export-title">Exporter le code</h2>
+      <p className="hint">
+        État enregistré r{revision}
+        {drafts > 0 && ` · ${drafts} changement(s) en brouillon non inclus`}
+        {Object.keys(naming.rename).length > 0 && ' · noms des variables du code du projet'}
+      </p>
+      <div className="export-tabs" role="tablist" aria-label="Format">
+        {formats.map(([id, text]) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={format === id}
+            onClick={() => {
+              setFormat(id);
+              setCopied(false);
+            }}
+          >
+            {text}
+          </button>
+        ))}
+      </div>
+      <pre className="export-code" role="tabpanel" aria-label={`Code ${label}`} tabIndex={0}>
+        <code>{code}</code>
+      </pre>
+      <div className="dialog-actions">
+        <button onClick={onClose}>Fermer</button>
+        <button onClick={() => downloadText(`${slug}.${file}`, code, type)}>Télécharger</button>
+        <button className="primary" onClick={() => void copy()} autoFocus>
+          {copied ? 'Copié ✓' : 'Copier'}
         </button>
       </div>
     </dialog>

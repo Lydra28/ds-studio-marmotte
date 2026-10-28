@@ -18,7 +18,6 @@ import {
   accept,
   bootstrap,
   commit,
-  exportSet,
   getConfig,
   getState,
   setProject,
@@ -43,9 +42,10 @@ import { brandColor, MascotDock } from './Mascot.js';
 import Wall from './Wall.js';
 import { SiteFrame, SiteFullscreen, SiteView, type Device } from './Site.js';
 import { fontFamilies, loadFonts } from './fonts.js';
+import { previewSrc, ScreenPicker, type Screen } from './DesignSystem.js';
 import CompareView, { type Source } from './Compare.js';
 import TimelineView from './Timeline.js';
-import { ChangesDialog, Corrections, DiffDialog, FigmaDialog, History } from './Panels.js';
+import { ChangesDialog, Corrections, DiffDialog, ExportDialog, FigmaDialog, History } from './Panels.js';
 
 const devices = [
   { label: '320', width: 320 },
@@ -141,6 +141,7 @@ function Workspace({
   const [proposal, setProposal] = useState<Proposal>();
   const [versions, setVersions] = useState<VersionSummary[]>([]);
   const [figmaOpen, setFigmaOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   // Dernière publication GitHub (lien de la PR, ou erreur à réessayer).
   const [published, setPublished] = useState<{ revision: number; result: GithubResult }>();
   // Fiches envoyées par le plugin Figma : relues au retour sur l'atelier.
@@ -225,11 +226,12 @@ function Workspace({
     }
   };
   const [device, setDevice] = useState(1);
-  // Preview latérale : écran générique du DS, ou le vrai site du projet.
-  const [previewSite, setPreviewSite] = useState(false);
+  // Preview latérale : un écran d'exemple du DS, ou le vrai site du projet.
+  const [previewScreen, setPreviewScreen] = useState<Screen | 'site'>('ds');
   const [siteFull, setSiteFull] = useState<Device>();
   const [sitePage, setSitePage] = useState<string>();
   const siteReady = !!(relay && config?.site);
+  const previewSite = siteReady && previewScreen === 'site';
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -488,7 +490,7 @@ function Workspace({
               e.target.value = '';
             }}
           />
-          <button onClick={() => run(() => exportSet(name))}>Exporter</button>
+          <button onClick={() => setExportOpen(true)}>Exporter</button>
           <button
             className="primary"
             disabled={busy || draftCount > 0 || !!accepted}
@@ -632,17 +634,8 @@ function Workspace({
           <section className="preview" aria-label="Preview en direct">
             <div className="preview-head">
               <span>Preview {draftCount ? '· brouillon' : '· enregistrée'}</span>
-              {siteReady && (
-                <div className="devices" role="group" aria-label="Contenu de la preview">
-                  <button aria-pressed={!previewSite} onClick={() => setPreviewSite(false)}>
-                    DS
-                  </button>
-                  <button aria-pressed={previewSite} onClick={() => setPreviewSite(true)}>
-                    Site
-                  </button>
-                </div>
-              )}
-              {siteReady && previewSite && (
+              <ScreenPicker value={previewSite ? 'site' : previewScreen === 'site' ? 'ds' : previewScreen} onChange={setPreviewScreen} site={siteReady} />
+              {previewSite && (
                 <button onClick={() => setSiteFull(devices[device].width >= 1024 ? 'desktop' : 'mobile')}>Plein écran</button>
               )}
               <div className="devices" role="group" aria-label="Largeur d’écran">
@@ -654,7 +647,7 @@ function Workspace({
               </div>
             </div>
             <div className="frame-wrap">
-              {siteReady && previewSite ? (
+              {previewSite ? (
                 <SiteFrame
                   slug={slug}
                   relay={relay!}
@@ -669,7 +662,7 @@ function Workspace({
                 <iframe
                   ref={frame}
                   title="Preview du design system"
-                  src="/?preview=1"
+                  src={previewSrc(previewScreen === 'site' ? 'ds' : previewScreen)}
                   style={{ width: devices[device].width }}
                 />
               )}
@@ -716,6 +709,16 @@ function Workspace({
         />
       )}
       {figmaOpen && <FigmaDialog code={plugin} config={config} onClose={() => setFigmaOpen(false)} />}
+      {exportOpen && state && (
+        <ExportDialog
+          set={state.set}
+          name={name}
+          revision={state.revision}
+          config={config}
+          drafts={draftCount}
+          onClose={() => setExportOpen(false)}
+        />
+      )}
       {siteFull && siteReady && draftSet && (
         <SiteFullscreen
           slug={slug}
