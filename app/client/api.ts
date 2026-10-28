@@ -18,6 +18,17 @@ export interface ProjectSummary {
   revision: number;
   accepted: number | null;
   updatedAt: string;
+  versions: number;
+  cover: {
+    canvas: string | null;
+    surface: string | null;
+    brand: string | null;
+    accent: string | null;
+    text: string | null;
+    onBrand: string | null;
+    font: string | null;
+    palette: string[];
+  };
 }
 export interface VersionSummary {
   revision: number;

@@ -192,6 +192,14 @@ export function SectionBar({
   );
 }
 
+// Parcours d'un projet, rappelé sur l'accueil dans l'ordre de la barre du haut.
+const journey = [
+  ['S’inspirer', 'Mur des DA : images, liens, DA proposées par l’assistant'],
+  ['Construire', 'Design system : primitives, tokens, typo, composants'],
+  ['Voir', 'Site en direct et preview, brouillon appliqué'],
+  ['Versionner', 'Diff, version acceptée, Figma et pull request'],
+] as const;
+
 export function Home({ onOpen }: { onOpen: (slug?: string) => void }) {
   const { projects, error } = useProjects();
   const [creating, setCreating] = useState(location.hash === '#/nouveau');
@@ -200,35 +208,108 @@ export function Home({ onOpen }: { onOpen: (slug?: string) => void }) {
     window.addEventListener('hashchange', on);
     return () => window.removeEventListener('hashchange', on);
   }, []);
+  // Le plus récemment modifié d'abord : c'est celui qu'on rouvre.
+  const sorted = projects && [...projects].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return (
     <div className="home">
-      <header className="home-head">
-        <h1>DS-Studio</h1>
-        <p>Un atelier de design system par projet : essais en direct, règles, versions, transfert Figma.</p>
+      <header className="home-hero">
+        <div>
+          <p className="home-kicker">Atelier de design system</p>
+          <h1>DS-Studio</h1>
+          <p className="home-lead">Un atelier par projet : essais en direct, règles, versions, transfert Figma.</p>
+        </div>
+        <div className="home-stairs" aria-hidden="true">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <span key={i} style={{ height: 16 * i, background: `var(--c-heat-${i})` }} />
+          ))}
+        </div>
       </header>
+      <ol className="home-journey" aria-label="Parcours d’un projet">
+        {journey.map(([title, detail], i) => (
+          <li key={title}>
+            <span className="nav-num">0{i + 1}</span>
+            <strong>{title}</strong>
+            <small>{detail}</small>
+          </li>
+        ))}
+      </ol>
+      <div className="home-section-head">
+        <h2>Projets</h2>
+        {sorted && <span className="count">{sorted.length}</span>}
+      </div>
       {error && <p className="message error" role="alert">{error}</p>}
+      {!sorted && !error && <p className="home-loading">Chargement des projets…</p>}
       <ul className="project-grid" aria-label="Projets">
-        {projects?.map((p) => (
+        {sorted?.map((p) => (
           <li key={p.slug}>
             <button className="project-card" onClick={() => onOpen(p.slug)}>
-              <strong>{p.name}</strong>
-              <span className="mono">
-                r{p.revision}
-                {p.accepted !== null ? ` · v${p.accepted} acceptée` : ' · aucune version'}
+              <Cover cover={p.cover} />
+              <span className="project-card__body">
+                <strong>{p.name}</strong>
+                <span className="mono">
+                  r{p.revision}
+                  {p.accepted !== null ? ` · v${p.accepted} acceptée` : ' · aucune version'}
+                </span>
+                <small>{p.updatedAt ? `Modifié le ${new Date(p.updatedAt).toLocaleDateString('fr-FR')}` : 'Jamais modifié'}</small>
+                {p.versions > 0 && (
+                  <span className="card-stairs" aria-hidden="true">
+                    {Array.from({ length: Math.min(5, p.versions) }, (_, i) => (
+                      <i key={i} style={{ height: 4 + 4 * (i + 1), background: `var(--c-heat-${i + 1})` }} />
+                    ))}
+                  </span>
+                )}
               </span>
-              <small>{p.updatedAt ? `Modifié le ${new Date(p.updatedAt).toLocaleDateString('fr-FR')}` : 'Jamais modifié'}</small>
             </button>
           </li>
         ))}
         <li>
           <button className="project-card new" onClick={() => onOpen('')}>
-            <strong>+ Nouveau projet</strong>
-            <small>Jeu de départ neutre, aucune fiche</small>
+            <span className="cover cover--new" aria-hidden="true">
+              +
+            </span>
+            <span className="project-card__body">
+              <strong>Nouveau projet</strong>
+              <small>Jeu de départ neutre, l’assistant aide pour la DA</small>
+            </span>
           </button>
         </li>
       </ul>
       {creating && <NewProject onCreated={onOpen} onCancel={() => onOpen()} />}
     </div>
+  );
+}
+
+// Couverture : un échantillon du projet à ses propres couleurs et police.
+function Cover({ cover }: { cover: ProjectSummary['cover'] }) {
+  return (
+    <span
+      className="cover"
+      aria-hidden="true"
+      style={{
+        background: cover.canvas ?? undefined,
+        color: cover.text ?? undefined,
+        fontFamily: cover.font ? `${cover.font}, system-ui, sans-serif` : undefined,
+      }}
+    >
+      <span className="cover__sample">
+        <span className="cover__aa">Aa</span>
+        <span className="cover__card" style={{ background: cover.surface ?? undefined }}>
+          <span className="cover__line" style={{ background: cover.text ?? undefined }} />
+          <span className="cover__line short" style={{ background: cover.text ?? undefined }} />
+          <span className="cover__button" style={{ background: cover.brand ?? undefined, color: cover.onBrand ?? undefined }}>
+            Bouton
+          </span>
+        </span>
+        {cover.accent && <span className="cover__dot" style={{ background: cover.accent }} />}
+      </span>
+      {cover.palette.length > 0 && (
+        <span className="cover__palette">
+          {cover.palette.map((c, i) => (
+            <span key={i} style={{ background: c }} />
+          ))}
+        </span>
+      )}
+    </span>
   );
 }
 

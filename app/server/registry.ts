@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
-import { isV1Tokens, migrateV1Tokens, tokenSetSchema } from '../shared/model.js';
+import { isV1Tokens, migrateV1Tokens, resolve, tokenSetSchema, type TokenSet } from '../shared/model.js';
 import { configSchema, figmaFileKey, type Config } from '../shared/project.js';
 import { componentsSchema } from '../shared/components.js';
 import { Store, StudioError } from './store.js';
@@ -28,6 +28,45 @@ export interface ProjectSummary {
   revision: number;
   accepted: number | null;
   updatedAt: string;
+  versions: number;
+  cover: Cover;
+}
+// Couverture de la carte d'accueil : quelques tokens résolus du jeu enregistré.
+export interface Cover {
+  canvas: string | null;
+  surface: string | null;
+  brand: string | null;
+  accent: string | null;
+  text: string | null;
+  onBrand: string | null;
+  font: string | null;
+  palette: string[];
+}
+const pick = (set: TokenSet, key: string) => {
+  try {
+    return set.tokens[key] ? String(resolve(set, key)) : null;
+  } catch {
+    return null;
+  }
+};
+export function coverOf(set: TokenSet): Cover {
+  const colors = Object.entries(set.tokens)
+    .filter(([, t]) => t.$type === 'color' && t.$collection === 'primitives')
+    .map(([key]) => pick(set, key))
+    .filter((c): c is string => !!c && /^#[0-9a-f]{6}$/i.test(c));
+  // Nuancier : huit teintes réparties sur les primitives, sans doublon.
+  const unique = [...new Set(colors)];
+  const step = Math.max(1, unique.length / 8);
+  return {
+    canvas: pick(set, 'bg/canvas'),
+    surface: pick(set, 'bg/surface'),
+    brand: pick(set, 'bg/brand'),
+    accent: pick(set, 'bg/accent') ?? pick(set, 'text/brand'),
+    text: pick(set, 'text/primary'),
+    onBrand: pick(set, 'text/on-brand'),
+    font: pick(set, 'font/family/base'),
+    palette: Array.from({ length: Math.min(8, unique.length) }, (_, i) => unique[Math.floor(i * step)]),
+  };
 }
 export const slugSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/);
 export const newProjectSchema = z
@@ -145,6 +184,8 @@ export class Registry {
           revision: s.revision,
           accepted: versions.length ? Math.max(...versions.map((v) => v.revision)) : null,
           updatedAt: s.history.at(-1)?.date ?? '',
+          versions: versions.length,
+          cover: coverOf(s.set),
         });
       } catch {
         // Projet illisible : il reste sur disque, intact, mais n'est pas listé.

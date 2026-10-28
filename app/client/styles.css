@@ -1022,58 +1022,19 @@ dialog.diff::backdrop,
   scroll-margin-top: calc(var(--top-h, 100px) + 12px);
 }
 
-/* Accueil : liste des projets */
+/* Accueil : liste des projets (habillage dans pixel.css) */
 .home {
-  max-width: 960px;
+  max-width: 1120px;
   margin: 0 auto;
-  padding: 48px 20px 80px;
-}
-.home-head h1 {
-  margin: 0 0 6px;
-  font-size: 28px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-.home-head p {
-  margin: 0 0 28px;
-  color: var(--c-muted);
+  padding: 56px 24px 96px;
 }
 .project-grid {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
-}
-.project-card {
-  width: 100%;
-  min-height: 112px;
-  display: grid;
-  align-content: start;
-  gap: 6px;
-  text-align: left;
-  padding: 16px;
-  border-radius: 10px;
-  background: var(--c-panel);
-}
-.project-card strong {
-  font-size: 15px;
-  font-weight: 500;
-}
-.project-card span {
-  font-size: 12px;
-  color: var(--c-muted);
-}
-.project-card small {
-  color: var(--c-muted);
-}
-.project-card.new {
-  background: none;
-  border-style: dashed;
-}
-.project-card.new strong {
-  color: var(--c-draft);
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
 }
 .new-project {
   margin-top: 24px;

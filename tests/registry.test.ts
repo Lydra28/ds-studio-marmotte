@@ -4,7 +4,7 @@ import { cp, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Registry, openInstance, slugify } from '../app/server/registry.js';
+import { Registry, coverOf, openInstance, slugify } from '../app/server/registry.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const template = path.join(root, 'templates/blank/design-system.tokens.json');
@@ -16,6 +16,13 @@ test('projets : liste, création vierge au nom unique, lien Figma vérifié, ins
     await cp(path.join(root, 'projects/marmotte', f), path.join(dir, 'marmotte', f));
   const registry = Registry.folder(dir, template);
   assert.deepEqual((await registry.list()).map((p) => p.slug), ['marmotte']);
+  // Couverture de l'accueil : alias résolus en couleurs, nuancier borné à 8.
+  const [{ cover }] = await registry.list();
+  assert.match(cover.brand ?? '', /^#[0-9a-f]{6}$/i);
+  assert.match(cover.canvas ?? '', /^#[0-9a-f]{6}$/i);
+  assert.ok(cover.palette.length > 0 && cover.palette.length <= 8);
+  const empty = coverOf({ modes: { primitives: ['default'], tokens: ['light'], typography: ['desktop'] }, tokens: {} } as never);
+  assert.deepEqual([empty.brand, empty.palette], [null, []]);
 
   await assert.rejects(() => registry.create({ name: 'X', figmaUrl: 'https://evil.test/x' }), /Lien Figma/);
   const a = await registry.create({

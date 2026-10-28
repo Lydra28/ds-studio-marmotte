@@ -25,6 +25,9 @@ const previewVar = (page: Page, name: string) =>
 test.beforeEach(async ({ page }) => {
   await page.goto('/#/p/marmotte');
   await expect(page.locator('.bar .project')).toHaveText('Marmotte');
+  // Au lancement, toutes les sections de la planche sont repliées.
+  await expect(page.locator('.fold[aria-expanded="true"]')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Tout déplier' }).click();
 });
 
 test('accueil : liste des projets, création d’un projet vierge à côté de Marmotte', async ({ page }) => {

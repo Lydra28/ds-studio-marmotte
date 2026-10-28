@@ -161,17 +161,19 @@ function Workspace({
   // Vue Versions : onglet ouvert, et révision visée depuis la frise.
   const [versionsTab, setVersionsTab] = useState<'history' | 'timeline' | 'compare'>('history');
   const [timelineAt, setTimelineAt] = useState<number>();
-  // Sections repliées de la planche, gardées par projet dans ce navigateur.
+  // Sections repliées de la planche : toutes au lancement (voulu par Romain),
+  // puis gardées par projet le temps de la session (sessionStorage).
   const [folded, setFolded] = useState<Set<string>>(() => {
     try {
-      return new Set(JSON.parse(localStorage.getItem(k('ds-folds')) || '[]'));
+      const saved = sessionStorage.getItem(k('ds-folds'));
+      return new Set(saved ? JSON.parse(saved) : foldable);
     } catch {
-      return new Set();
+      return new Set(foldable);
     }
   });
   useEffect(() => {
     try {
-      localStorage.setItem(k('ds-folds'), JSON.stringify([...folded]));
+      sessionStorage.setItem(k('ds-folds'), JSON.stringify([...folded]));
     } catch {
       /* Préférence facultative. */
     }
