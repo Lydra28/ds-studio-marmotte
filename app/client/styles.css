@@ -1908,3 +1908,86 @@ dialog.diff .diff-summary {
 .assistant-head .assistant-tools {
   margin-left: auto;
 }
+
+/* Évolution : curseur sur l'historique, un seul cadre qui rejoue le DS. */
+.timeline__bar {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.timeline__play {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 14px;
+}
+.timeline__track {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 26px;
+}
+.timeline__track input {
+  width: 100%;
+  margin: 12px 0 0;
+  accent-color: var(--c-text);
+}
+.timeline__marks {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 34px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.timeline__marks li {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: var(--c-muted);
+  white-space: nowrap;
+}
+.timeline__marks li.is-version {
+  color: var(--c-text);
+  font-weight: 700;
+}
+.timeline__marks li.is-draft {
+  color: var(--c-draft);
+}
+.timeline__marks li.is-current span {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--c-text);
+  color: var(--c-bg);
+}
+.timeline__caption {
+  margin: 0;
+  font-size: 13px;
+  color: var(--c-muted);
+}
+.timeline__caption strong {
+  color: var(--c-text);
+}
+.timeline__badge {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--c-line);
+  color: var(--c-text);
+  font-size: 12px;
+}
+.timeline__keys {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+}
+.timeline__frame {
+  display: flex;
+  justify-content: center;
+}
+.timeline__frame .site-frame {
+  border: 1px solid var(--c-line);
+  border-radius: 10px;
+}

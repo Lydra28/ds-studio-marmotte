@@ -42,6 +42,7 @@ export function Sidebar({
   onWall,
   onSite,
   onCompare,
+  onTimeline,
   onBoard,
   view,
 }: {
@@ -53,8 +54,9 @@ export function Sidebar({
   // Absent : le projet n'a pas de site configuré (ou relais arrêté).
   onSite?: () => void;
   onCompare: () => void;
+  onTimeline: () => void;
   onBoard: () => void;
-  view: 'board' | 'wall' | 'site' | 'compare';
+  view: 'board' | 'wall' | 'site' | 'compare' | 'timeline';
 }) {
   const { projects } = useProjects();
   return (
@@ -98,6 +100,11 @@ export function Sidebar({
         <li>
           <button aria-current={view === 'compare' ? 'page' : undefined} onClick={onCompare}>
             Comparer
+          </button>
+        </li>
+        <li>
+          <button aria-current={view === 'timeline' ? 'page' : undefined} onClick={onTimeline}>
+            Évolution
           </button>
         </li>
         {sections.map(([id, label]) => (

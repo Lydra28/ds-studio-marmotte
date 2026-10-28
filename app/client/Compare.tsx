@@ -12,7 +12,7 @@ import { devices, SiteFrame, type Device } from './Site.js';
 export type Source = 'draft' | 'state' | number;
 
 // Écran générique du DS (même page que la preview latérale), pour un jeu donné.
-function DsFrame({
+export function DsFrame({
   set,
   width,
   height,

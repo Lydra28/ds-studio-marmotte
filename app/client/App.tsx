@@ -44,6 +44,7 @@ import Wall from './Wall.js';
 import { SiteFrame, SiteFullscreen, SiteView, type Device } from './Site.js';
 import { fontFamilies, loadFonts } from './fonts.js';
 import CompareView, { type Source } from './Compare.js';
+import TimelineView from './Timeline.js';
 import { ChangesDialog, Corrections, DiffDialog, FigmaDialog, HistoryPanel } from './Panels.js';
 
 const devices = [
@@ -157,7 +158,7 @@ function Workspace({
   // Comparaison affichée : avant d'accepter (état courant / dernière version)
   // ou entre deux versions depuis l'historique.
   const [comparison, setComparison] = useState<{ title: string; hint: string; patches: Patch[]; accept: boolean }>();
-  const [view, setView] = useState<'board' | 'wall' | 'site' | 'compare'>('board');
+  const [view, setView] = useState<'board' | 'wall' | 'site' | 'compare' | 'timeline'>('board');
   // Côtés imposés depuis l'historique ; sinon la vue choisit les siens.
   const [compareFrom, setCompareFrom] = useState<[Source, Source]>();
   const [assistantOpen, setAssistantOpen] = useState(() => {
@@ -408,6 +409,7 @@ function Workspace({
           setCompareFrom(undefined);
           setView('compare');
         }}
+        onTimeline={() => setView('timeline')}
         onBoard={() => setView('board')}
         view={view}
       />
@@ -518,6 +520,18 @@ function Workspace({
           draftSet={draftSet}
           draft={draftCount > 0}
           initial={compareFrom}
+          onBack={() => setView('board')}
+        />
+      )}
+      {view === 'timeline' && config && (
+        <TimelineView
+          slug={slug}
+          relay={relay}
+          config={config}
+          state={state}
+          versions={versions}
+          draftSet={draftSet}
+          draft={draftCount > 0}
           onBack={() => setView('board')}
         />
       )}

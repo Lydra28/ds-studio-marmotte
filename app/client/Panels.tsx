@@ -5,7 +5,7 @@ import type { ComponentDoc } from '../shared/components.js';
 import type { VersionSummary } from './api.js';
 import type { Config } from '../shared/project.js';
 
-const sourceLabel: Record<string, string> = {
+export const sourceLabel: Record<string, string> = {
   manual: 'manuel',
   import: 'import',
   undo: 'annulation',

@@ -312,6 +312,19 @@ export function applyPatches(
   return tokenSetSchema.parse(next);
 }
 
+// Jeu de tokens à chaque révision, du départ (indice 0) à l'état enregistré
+// (indice `state.revision`), reconstruit à rebours depuis l'état courant avec
+// le côté « avant » des patchs (même relecture que parseStoredState).
+export function setsByRevision(state: State): TokenSet[] {
+  const sets = [state.set];
+  let set = state.set;
+  for (const r of [...state.history].reverse()) {
+    set = applyPatches(set, r.patches, 'before');
+    sets.unshift(set);
+  }
+  return sets;
+}
+
 export const sources = [
   'manual',
   'import',

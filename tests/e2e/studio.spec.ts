@@ -264,3 +264,28 @@ test('comparaison côte à côte : brouillon face à l’état enregistré, inve
   await page.getByRole('button', { name: 'Abandonner' }).click();
   expect(await revision(page)).toBe(before);
 });
+
+test('évolution : le curseur rejoue le DS révision après révision, sans rien écrire', async ({ page }) => {
+  const before = await revision(page);
+  await page.getByRole('button', { name: 'Évolution' }).click();
+  const view = page.getByRole('region', { name: 'Évolution du design system' });
+  const slider = view.getByLabel('Révision affichée');
+  await expect(slider).toHaveValue(String(before));
+  const spaceSm = () =>
+    view
+      .frameLocator('iframe[title^="Écran DS à"]')
+      .locator('.ds')
+      .first()
+      .evaluate((el) => el.style.getPropertyValue('--space-sm'));
+  await slider.fill('1'); // r1 : correction de space/sm à 16 px (parcours « boucle »)
+  await expect(view.getByRole('status')).toContainText('space/sm');
+  await expect.poll(spaceSm).toBe('16px');
+  await slider.fill('0');
+  await expect(view.getByRole('status')).toContainText('Départ du projet');
+  await expect.poll(spaceSm).not.toBe('16px');
+  await view.getByRole('button', { name: 'Rejouer l’historique' }).click();
+  await expect(view.getByRole('button', { name: 'Mettre en pause' })).toBeVisible();
+  await expect(slider).toHaveValue('1', { timeout: 3000 });
+  await view.getByRole('button', { name: 'Mettre en pause' }).click();
+  expect(await revision(page)).toBe(before);
+});
