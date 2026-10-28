@@ -2,8 +2,17 @@
 // l'atelier (variables, composant Button) dans le fichier cible du projet, sur
 // sa page dédiée seulement, et lit les composants du fichier pour les renvoyer
 // à l'atelier. Aucun accès réseau ici : l'interface (ui.html) parle à
-// l'atelier. Rien n'est jamais supprimé ni renommé dans Figma.
+// l'atelier. Le transfert ne supprime ni ne renomme rien. Seule la remise à
+// zéro, confirmée par Romain, supprime ce que DS-Studio a écrit (marqué).
 figma.showUI(__html__, { width: 380, height: 620, themeColors: true });
+
+// Collections, page et composants créés par DS-Studio portent cette marque.
+// Ceux écrits avant la marque sont reconnus par leur nom, seulement si
+// l'atelier a un reçu de transfert pour ce fichier (`known`).
+const MARK = 'dsStudio';
+const NAMES = ['Primitives', 'Tokens', 'Typography'];
+const owned = (x) => x.getPluginData(MARK) === '1';
+const mark = (x) => x.setPluginData(MARK, '1');
 
 // Clé du fichier : fournie par Figma (plugin privé), sinon liée une fois par
 // Romain depuis l'interface et gardée dans le document.
@@ -27,24 +36,38 @@ figma.ui.onmessage = async (msg) => {
       if (figma.fileKey) throw new Error('Figma fournit déjà la clé de ce fichier : liaison inutile.');
       figma.root.setPluginData(LINK, msg.fileKey);
       figma.ui.postMessage({ type: 'file', file: fileInfo() });
-    } else if (msg.type === 'transfer') figma.ui.postMessage({ type: 'transferred', report: await transfer(msg.payload) });
+    } else if (msg.type === 'transfer') figma.ui.postMessage({ type: 'transferred', report: await transfer(msg.payload, msg.known) });
     else if (msg.type === 'read-components') figma.ui.postMessage({ type: 'components', raw: await readComponents() });
+    else if (msg.type === 'reset-plan') figma.ui.postMessage({ type: 'reset-plan', plan: await resetPlan(msg.target, msg.known) });
+    else if (msg.type === 'reset') figma.ui.postMessage({ type: 'reset-done', removed: await reset(msg.target, msg.known) });
   } catch (e) {
     figma.ui.postMessage({ type: 'error', message: e && e.message ? e.message : String(e) });
   }
 };
 
-async function transfer(p) {
+function guardFile(target, project) {
   const file = fileInfo();
-  if (!file.key) throw new Error('Fichier non identifié : lie-le au projet avant de transférer. Rien n’a été écrit.');
-  if (file.key !== p.target.fileKey)
-    throw new Error(`Mauvais fichier : la cible de ${p.project} est ${p.target.fileKey}, ce fichier est ${file.key}. Rien n’a été écrit.`);
-  if ((p.target.protectedPages || []).includes(p.target.page))
-    throw new Error('La page cible est protégée. Rien n’a été écrit.');
+  if (!file.key) throw new Error('Fichier non identifié : lie-le au projet. Rien n’a été modifié.');
+  if (file.key !== target.fileKey)
+    throw new Error(`Mauvais fichier : la cible de ${project} est ${target.fileKey}, ce fichier est ${file.key}. Rien n’a été modifié.`);
+  if ((target.protectedPages || []).includes(target.page)) throw new Error('La page cible est protégée. Rien n’a été modifié.');
+}
+
+async function transfer(p, known) {
+  guardFile(p.target, p.project);
   const report = { created: 0, updated: 0, extra: [], components: [], skipped: [] };
 
-  // 1. Variables : collections et modes par nom, création ou mise à jour, alias en second passage.
+  // 0. Collections et page du même nom que DS-Studio n'a pas créées : on n'y écrit pas.
   const collections = await figma.variables.getLocalVariableCollectionsAsync();
+  let page = figma.root.children.find((x) => x.name === p.target.page);
+  const foreign = [
+    ...p.collections.map((c) => collections.find((x) => x.name === c.name)).filter((x) => x && !owned(x) && !known).map((x) => `collection « ${x.name} »`),
+    ...(page && !owned(page) && !known ? [`page « ${page.name} »`] : []),
+  ];
+  if (foreign.length)
+    throw new Error(`Ce fichier a déjà ${foreign.join(', ')}, que DS-Studio n’a pas créée(s) : transfert refusé pour ne pas mélanger les deux DS. Rien n’a été écrit.`);
+
+  // 1. Variables : collections et modes par nom, création ou mise à jour, alias en second passage.
   const locals = await figma.variables.getLocalVariablesAsync();
   const byName = {};
   const plan = [];
@@ -54,6 +77,7 @@ async function transfer(p) {
       col = figma.variables.createVariableCollection(c.name);
       col.renameMode(col.modes[0].modeId, c.modes[0]);
     }
+    mark(col);
     const modeIds = {};
     for (const m of c.modes) {
       const found = col.modes.find((x) => x.name === m);
@@ -91,11 +115,11 @@ async function transfer(p) {
     }
 
   // 2. Composants « figma » de la version, sur la page dédiée seulement.
-  let page = figma.root.children.find((x) => x.name === p.target.page);
   if (!page) {
     page = figma.createPage();
     page.name = p.target.page;
   }
+  mark(page);
   await page.loadAsync();
   for (const doc of p.components || []) {
     if (doc.status !== 'figma') continue;
@@ -103,6 +127,67 @@ async function transfer(p) {
     else report.skipped.push(`${doc.name} : seul Button est construit par le plugin, fiche à documenter à la main`);
   }
   return report;
+}
+
+// Remise à zéro : uniquement ce que DS-Studio a écrit dans ce fichier (marque,
+// ou nom connu si l'atelier a un reçu de transfert). Les autres pages et
+// collections ne sont jamais lues pour suppression.
+async function resetItems(target, known) {
+  guardFile(target, 'ce projet');
+  const collections = (await figma.variables.getLocalVariableCollectionsAsync()).filter(
+    (c) => owned(c) || (known && NAMES.includes(c.name)),
+  );
+  const page = figma.root.children.find(owned) || (known ? figma.root.children.find((x) => x.name === target.page) : null) || null;
+  if (page && (target.protectedPages || []).includes(page.name)) throw new Error('La page DS-Studio est protégée. Rien n’a été supprimé.');
+  if (page) await page.loadAsync();
+  return { collections, page };
+}
+
+async function resetPlan(target, known) {
+  const { collections, page } = await resetItems(target, known);
+  const components = page
+    ? page.findAllWithCriteria({ types: ['COMPONENT_SET', 'COMPONENT'] }).filter((n) => !(n.type === 'COMPONENT' && n.parent.type === 'COMPONENT_SET'))
+    : [];
+  // Instances posées ailleurs : elles resteront, mais sans composant principal.
+  let elsewhere = 0;
+  for (const n of components)
+    for (const c of n.type === 'COMPONENT_SET' ? n.children : [n])
+      for (const i of await c.getInstancesAsync()) {
+        let up = i.parent;
+        while (up && up.type !== 'PAGE') up = up.parent;
+        if (up !== page) elsewhere++;
+      }
+  return {
+    collections: collections.map((c) => ({ name: c.name, variables: c.variableIds.length })),
+    page: page ? { name: page.name, layers: page.children.length } : null,
+    components: components.map((n) => n.name),
+    elsewhere,
+    onlyPage: !!page && figma.root.children.length === 1,
+  };
+}
+
+async function reset(target, known) {
+  const { collections, page } = await resetItems(target, known);
+  const removed = { collections: [], variables: 0, page: null, components: [] };
+  if (page) {
+    removed.components = page
+      .findAllWithCriteria({ types: ['COMPONENT_SET', 'COMPONENT'] })
+      .filter((n) => !(n.type === 'COMPONENT' && n.parent.type === 'COMPONENT_SET'))
+      .map((n) => n.name);
+    // Une page seule ne peut pas être supprimée : on la vide.
+    if (figma.root.children.length === 1) for (const n of [...page.children]) n.remove();
+    else {
+      if (figma.currentPage === page) await figma.setCurrentPageAsync(figma.root.children.find((x) => x !== page));
+      removed.page = page.name;
+      page.remove();
+    }
+  }
+  for (const c of collections) {
+    removed.collections.push(c.name);
+    removed.variables += c.variableIds.length;
+    c.remove();
+  }
+  return removed;
 }
 
 const token = (vars, name) =>
@@ -202,6 +287,7 @@ async function buildButton(page, doc, vars, family, report) {
     set.x = right + 200;
     set.y = 0;
   }
+  mark(set);
   // Grille : une colonne par état, une ligne par variante et taille.
   const states = list('State', ['default']).length;
   const w = Math.max(...nodes.map((n) => n.width)) + 24;

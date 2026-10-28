@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import http from 'node:http';
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -91,4 +91,39 @@ test('plugin Figma : appairage, version acceptée calculée, reçu de transfert,
   assert.deepEqual(inbox.file.components.TagFilter.props.State, ['none', 'selected']);
   assert.deepEqual(inbox.file.components.TagFilter.tokens, ['bg/brand']);
   assert.equal(store.snapshot().set.components?.TagFilter, undefined); // rien d'écrit sans diff
+
+  // Remise à zéro notée : le transfert précédent ne compte plus.
+  assert.equal((await (await call('projects')).json())[0].known, true);
+  const removed = { collections: ['Primitives', 'Tokens', 'Typography'], variables: 68, page: 'DS-Studio · Foundations', components: ['Button'] };
+  assert.equal((await call('reset?project=marmotte', { fileKey: 'abcdefghijklmnopqrstuv', removed })).status, 409);
+  assert.equal((await call('reset?project=marmotte', { fileKey: payload.target.fileKey, removed })).status, 200);
+  assert.equal((await (await call('payload?project=marmotte')).json()).transferred, null);
+  assert.equal((await (await call('projects')).json())[0].known, false);
+  assert.equal(JSON.parse(await readFile(path.join(projectDir, 'versions', 'figma-reset.json'), 'utf8')).length, 1);
+});
+
+test('plugin Figma : le fichier ouvert devient la cible d’un projet qui n’en a pas', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ds-target-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  for (const f of ['design-system.tokens.json', 'project.config.json']) await cp(path.join(root, 'projects/marmotte', f), path.join(dir, 'marmotte', f));
+  await cp(path.join(root, 'projects/marmotte/design-system.tokens.json'), path.join(dir, 'refuge', 'design-system.tokens.json'));
+  await writeFile(path.join(dir, 'refuge', 'project.config.json'), JSON.stringify({ name: 'Refuge', figma: null, github: null }));
+  const registry = Registry.folder(dir, path.join(root, 'templates/blank/design-system.tokens.json'));
+  const code = await loadPluginCode(dir);
+  const app = await createStudioServer({ root, registry, pluginCode: code });
+  await new Promise<void>((r) => app.server.listen(0, '127.0.0.1', r));
+  t.after(() => app.close());
+  const base = `http://127.0.0.1:${(app.server.address() as { port: number }).port}/api/plugin/`;
+  const target = (project: string, fileKey: string) =>
+    fetch(`${base}target?project=${project}`, { method: 'POST', headers: { 'X-DS-Plugin': code, 'Content-Type': 'application/json' }, body: JSON.stringify({ fileKey }) });
+
+  const taken = await target('refuge', 'N5YMZ1aN6gtSZ0QBjzjdWh'); // fichier de Marmotte
+  assert.equal(taken.status, 409);
+  assert.match((await taken.json()).error, /déjà la cible de Marmotte/);
+  assert.equal((await target('marmotte', 'abcdefghijklmnopqrstuv')).status, 409); // cible existante jamais remplacée
+  assert.equal((await target('refuge', 'abcdefghijklmnopqrstuv')).status, 200);
+  const saved = JSON.parse(await readFile(path.join(dir, 'refuge', 'project.config.json'), 'utf8'));
+  assert.deepEqual(saved.figma, { fileKey: 'abcdefghijklmnopqrstuv', page: 'DS-Studio · Foundations', protectedPages: [] });
+  assert.equal((await registry.get('refuge')).config.figma?.fileKey, 'abcdefghijklmnopqrstuv');
+  assert.equal((await target('refuge', 'zyxwvutsrqponmlkjihgfe')).status, 409);
 });

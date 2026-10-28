@@ -44,6 +44,12 @@
     border-color: transparent;
     font-weight: 600;
   }
+  button.danger {
+    background: var(--figma-color-bg-danger, #f24822);
+    color: var(--figma-color-text-ondanger, #fff);
+    border-color: transparent;
+    font-weight: 600;
+  }
   button:disabled {
     opacity: 0.45;
     cursor: default;
@@ -160,6 +166,11 @@
       : '<span class="muted">Ce projet n’a pas de cible Figma : transfert impossible.</span>';
     if (target && !file.key)
       html += `<div class="row"><input type="checkbox" id="confirm-link"><label for="confirm-link">Ce fichier est bien la cible de ${esc(p.name)}</label></div><button id="link">Lier ce fichier au projet</button>`;
+    const owner = state.projects.find((x) => x.figma && x.figma.fileKey === file.key);
+    if (!target && file.key && file.native)
+      html += owner
+        ? `<br><span class="muted">Ce fichier est déjà la cible de ${esc(owner.name)}.</span>`
+        : `<div class="row"><input type="checkbox" id="confirm-target"><label for="confirm-target">« ${esc(file.name)} » est bien le fichier de ${esc(p.name)}</label></div><button id="set-target">Faire de ce fichier la cible de ${esc(p.name)}</button>`;
     html += '</div>';
 
     if (p.version && target) {
@@ -185,7 +196,29 @@
     if (!sendable) html += `<br><span class="ko">Ce fichier n’est pas celui de ${esc(p.name)} : ouvre son fichier cible pour envoyer ses composants.</span>`;
     else if (!target) html += `<br><span class="ko">${esc(p.name)} n’a pas de fichier cible : vérifie que « ${esc(file.name || '')} » est bien le sien.</span>`;
     html += `<button id="components" ${sendable ? '' : 'disabled'}>Envoyer les composants de « ${esc(file.name || 'ce fichier')} » à ${esc(p.name)}</button></div>`;
+
+    if (match)
+      html += `<h2>Remettre à zéro</h2><div class="card"><span class="muted">Supprime de ce fichier ce que DS-Studio y a écrit (ses collections, leurs variables, la page « ${esc(p.figma.page)} »), rien d’autre. Tu vois la liste avant de confirmer.</span><div id="reset-zone"><button id="reset-plan">Préparer la remise à zéro…</button></div></div>`;
     $('details').innerHTML = html;
+
+    if ($('set-target'))
+      $('set-target').onclick = async () => {
+        if (!$('confirm-target').checked) return setError('Coche la confirmation avant de faire de ce fichier la cible.');
+        try {
+          await api(`target?project=${encodeURIComponent(p.slug)}`, { fileKey: file.key });
+          state.projects = await api('projects');
+          setStatus(`« ${file.name} » est maintenant la cible de ${p.name}.`);
+          await loadProject();
+        } catch (err) {
+          setError(err.message);
+        }
+      };
+    if ($('reset-plan'))
+      $('reset-plan').onclick = () => {
+        $('reset-plan').disabled = true;
+        setStatus('Inventaire de ce que DS-Studio a écrit…');
+        send({ type: 'reset-plan', target: p.figma, known: p.known });
+      };
 
     if ($('link'))
       $('link').onclick = () => {
@@ -196,12 +229,45 @@
       $('transfer').onclick = () => {
         $('transfer').disabled = true;
         setStatus('Transfert en cours…');
-        send({ type: 'transfer', payload: state.payload });
+        send({ type: 'transfer', payload: state.payload, known: p.known });
       };
     $('components').onclick = () => {
       $('components').disabled = true;
       setStatus('Lecture des composants du fichier…');
       send({ type: 'read-components' });
+    };
+  }
+
+  const current = () => state.projects.find((x) => x.slug === slug());
+
+  // Confirmation de la remise à zéro : liste exacte de ce qui sera supprimé.
+  function showResetPlan(plan) {
+    const zone = $('reset-zone');
+    if (!plan.collections.length && !plan.page) {
+      zone.innerHTML = '<p class="muted">Rien à supprimer : DS-Studio n’a rien écrit dans ce fichier.</p>';
+      return;
+    }
+    const vars = plan.collections.reduce((n, c) => n + c.variables, 0);
+    let html = '<p class="ko"><strong>Va être supprimé de ce fichier :</strong></p><ul>';
+    for (const c of plan.collections) html += `<li>Collection « ${esc(c.name)} » : ${c.variables} variable(s)</li>`;
+    if (plan.page)
+      html += `<li>${plan.onlyPage ? 'Contenu de la' : 'Page'} « ${esc(plan.page.name)} » : ${plan.page.layers} calque(s)${plan.components.length ? `, dont ${plan.components.map(esc).join(', ')}` : ''}</li>`;
+    html += '</ul>';
+    if (vars) html += '<p class="muted">Les calques d’autres pages qui utilisent ces variables perdent le lien avec elles.</p>';
+    if (plan.elsewhere) html += `<p class="ko">${plan.elsewhere} instance(s) posée(s) sur d’autres pages resteront, sans composant principal.</p>`;
+    html +=
+      '<p class="muted">Conseil : avant, enregistre une version (Fichier → Enregistrer dans l’historique des versions).</p>' +
+      '<div class="row"><input type="checkbox" id="confirm-reset"><label for="confirm-reset">Je confirme la suppression</label></div>' +
+      '<button class="danger" id="reset">Supprimer définitivement</button><button id="reset-cancel">Annuler</button>';
+    zone.innerHTML = html;
+    $('reset-cancel').onclick = () => loadProject();
+    $('reset').onclick = () => {
+      if (!$('confirm-reset').checked) return setError('Coche la confirmation avant de supprimer.');
+      $('reset').disabled = true;
+      setError('');
+      setStatus('Remise à zéro en cours…');
+      const p = current();
+      send({ type: 'reset', target: p.figma, known: p.known });
     };
   }
 
@@ -235,6 +301,21 @@
         const res = await api(`components?project=${encodeURIComponent(slug())}`, msg.raw);
         setStatus(`${res.count} fiche(s) envoyée(s) à l’atelier : ouvre-le, bouton « Fiches reçues de Figma », puis relis le diff.`);
         $('components').disabled = false;
+      } else if (msg.type === 'reset-plan') {
+        setStatus('');
+        showResetPlan(msg.plan);
+      } else if (msg.type === 'reset-done') {
+        const r = msg.removed;
+        const p = current();
+        await api(`reset?project=${encodeURIComponent(p.slug)}`, { fileKey: p.figma.fileKey, removed: r });
+        state.projects = await api('projects');
+        setStatus(
+          `Remise à zéro faite : ${r.collections.length} collection(s), ${r.variables} variable(s)` +
+            (r.page ? `, page « ${r.page} »` : '') +
+            (r.components.length ? `, ${r.components.join(', ')}` : '') +
+            ' supprimés. Historique des versions Figma pour revenir en arrière.',
+        );
+        await loadProject();
       } else if (msg.type === 'error') {
         setStatus('');
         await loadProject();
