@@ -110,6 +110,11 @@ const payload = {
 test('plugin : transfert refusé sur une collection du même nom que DS-Studio n’a pas créée', async () => {
   const f = await load();
   f.collection('Primitives'); // DS du fichier, écrit à la main
+  const names = payload.collections.map((c) => c.name);
+  // Annoncé avant le clic : l'interface désactive « Transférer ».
+  const check = await f.send({ type: 'check', collections: names, page: PAGE, known: false });
+  assert.match(check.foreign, /sa propre collection « Primitives »/);
+  assert.equal((await f.send({ type: 'check', collections: names, page: PAGE, known: true })).foreign, null);
   const res = await f.send({ type: 'transfer', payload, known: false });
   assert.equal(res.type, 'error');
   assert.match(res.message, /collection « Primitives »/);

@@ -10,6 +10,7 @@ import { listVersions } from './versions.js';
 import { buildFigmaPayload } from './figma-payload.js';
 import { componentsFromFigma, rawComponentsSchema } from './figma-components.js';
 import { componentsFileSchema } from '../shared/components.js';
+import type { Config } from '../shared/project.js';
 
 // Routes du plugin Figma DS-Studio (`/api/plugin/*`). Le plugin tourne dans
 // Figma (origine `null`) : pas de cookie ni de jeton de session, mais un code
@@ -148,10 +149,14 @@ export async function handlePlugin(
     throw new StudioError('Code d’appairage invalide : recopie celui affiché dans l’atelier (bouton Figma).', 401);
 
   const instance = () => ctx.registry.get(url.searchParams.get('project') ?? undefined);
-  const latest = async (dir: string) => {
+  // Version acceptée avant que le projet ait une cible : elle prend la cible
+  // désignée depuis (réaccepter le même contenu rendrait la même version).
+  // Une cible qui change après acceptation reste refusée plus bas.
+  const latest = async (dir: string, config: Config) => {
     const [last] = await listVersions(dir);
     if (!last) throw new StudioError('Aucune version acceptée : accepte une version dans l’atelier.', 409);
-    return { last, raw: JSON.parse(await readPrivate(path.join(dir, 'versions', last.file))) };
+    const raw = JSON.parse(await readPrivate(path.join(dir, 'versions', last.file)));
+    return { last, raw: raw.target == null && config.figma ? { ...raw, target: config.figma } : raw };
   };
 
   if (req.method === 'GET' && url.pathname === '/api/plugin/projects') {
@@ -169,7 +174,7 @@ export async function handlePlugin(
   }
   if (req.method === 'GET' && url.pathname === '/api/plugin/payload') {
     const { dir, config } = await instance();
-    const { last, raw } = await latest(dir);
+    const { last, raw } = await latest(dir, config);
     const payload = buildFigmaPayload(raw);
     if (payload.target?.fileKey !== config.figma?.fileKey)
       throw new StudioError('La cible Figma de la version ne correspond plus à celle du projet : transfert refusé.', 409);
@@ -184,9 +189,9 @@ export async function handlePlugin(
     return ctx.send(200, { ...payload, transferred });
   }
   if (req.method === 'POST' && url.pathname === '/api/plugin/transfer') {
-    const { dir } = await instance();
+    const { dir, config } = await instance();
     const b = transferSchema.parse(await readBody(req, 128_000));
-    const { last, raw } = await latest(dir);
+    const { last, raw } = await latest(dir, config);
     const payload = buildFigmaPayload(raw);
     if (b.revision !== last.revision || b.hash !== payload.hash || b.fileKey !== payload.target?.fileKey)
       throw new StudioError('Le transfert ne correspond pas à la dernière version acceptée : reçu refusé.', 409);

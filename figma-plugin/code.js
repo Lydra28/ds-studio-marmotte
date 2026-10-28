@@ -38,6 +38,7 @@ figma.ui.onmessage = async (msg) => {
       figma.ui.postMessage({ type: 'file', file: fileInfo() });
     } else if (msg.type === 'transfer') figma.ui.postMessage({ type: 'transferred', report: await transfer(msg.payload, msg.known) });
     else if (msg.type === 'read-components') figma.ui.postMessage({ type: 'components', raw: await readComponents() });
+    else if (msg.type === 'check') figma.ui.postMessage({ type: 'check', foreign: await foreign(msg.collections, msg.page, msg.known) });
     else if (msg.type === 'reset-plan') figma.ui.postMessage({ type: 'reset-plan', plan: await resetPlan(msg.target, msg.known) });
     else if (msg.type === 'reset') figma.ui.postMessage({ type: 'reset-done', removed: await reset(msg.target, msg.known) });
   } catch (e) {
@@ -53,19 +54,29 @@ function guardFile(target, project) {
   if ((target.protectedPages || []).includes(target.page)) throw new Error('La page cible est protégée. Rien n’a été modifié.');
 }
 
+// Phrase d'explication si le fichier a déjà des collections ou une page de ces
+// noms que DS-Studio n'a pas créées (sans reçu de transfert), sinon null.
+async function foreign(names, pageName, known) {
+  if (known) return null;
+  const cols = (await figma.variables.getLocalVariableCollectionsAsync())
+    .filter((x) => names.includes(x.name) && !owned(x))
+    .map((x) => `« ${x.name} »`);
+  const page = figma.root.children.find((x) => x.name === pageName && !owned(x));
+  const parts = [];
+  if (cols.length) parts.push(`${cols.length > 1 ? 'ses propres collections' : 'sa propre collection'} ${cols.join(' et ')}`);
+  if (page) parts.push(`sa propre page « ${page.name} »`);
+  return parts.length ? `ce fichier a déjà ${parts.join(' et ')}. DS-Studio n’écrit pas dedans pour ne pas mélanger les deux DS.` : null;
+}
+
 async function transfer(p, known) {
   guardFile(p.target, p.project);
   const report = { created: 0, updated: 0, extra: [], components: [], skipped: [] };
 
   // 0. Collections et page du même nom que DS-Studio n'a pas créées : on n'y écrit pas.
+  const refused = await foreign(p.collections.map((c) => c.name), p.target.page, known);
+  if (refused) throw new Error(`Transfert refusé : ${refused} Rien n’a été écrit.`);
   const collections = await figma.variables.getLocalVariableCollectionsAsync();
   let page = figma.root.children.find((x) => x.name === p.target.page);
-  const foreign = [
-    ...p.collections.map((c) => collections.find((x) => x.name === c.name)).filter((x) => x && !owned(x) && !known).map((x) => `collection « ${x.name} »`),
-    ...(page && !owned(page) && !known ? [`page « ${page.name} »`] : []),
-  ];
-  if (foreign.length)
-    throw new Error(`Ce fichier a déjà ${foreign.join(', ')}, que DS-Studio n’a pas créée(s) : transfert refusé pour ne pas mélanger les deux DS. Rien n’a été écrit.`);
 
   // 1. Variables : collections et modes par nom, création ou mise à jour, alias en second passage.
   const locals = await figma.variables.getLocalVariablesAsync();

@@ -117,6 +117,12 @@ test('plugin Figma : le fichier ouvert devient la cible d’un projet qui n’en
   const target = (project: string, fileKey: string) =>
     fetch(`${base}target?project=${project}`, { method: 'POST', headers: { 'X-DS-Plugin': code, 'Content-Type': 'application/json' }, body: JSON.stringify({ fileKey }) });
 
+  // Version acceptée avant toute cible : elle prendra celle désignée ensuite.
+  const refuge = await registry.get('refuge');
+  await acceptVersion(refuge.dir, refuge.config, refuge.store.snapshot(), 0);
+  const payloadOf = () => fetch(`${base}payload?project=refuge`, { headers: { 'X-DS-Plugin': code } });
+  assert.equal((await payloadOf()).status, 409);
+
   const taken = await target('refuge', 'N5YMZ1aN6gtSZ0QBjzjdWh'); // fichier de Marmotte
   assert.equal(taken.status, 409);
   assert.match((await taken.json()).error, /déjà la cible de Marmotte/);
@@ -125,5 +131,6 @@ test('plugin Figma : le fichier ouvert devient la cible d’un projet qui n’en
   const saved = JSON.parse(await readFile(path.join(dir, 'refuge', 'project.config.json'), 'utf8'));
   assert.deepEqual(saved.figma, { fileKey: 'abcdefghijklmnopqrstuv', page: 'DS-Studio · Foundations', protectedPages: [] });
   assert.equal((await registry.get('refuge')).config.figma?.fileKey, 'abcdefghijklmnopqrstuv');
+  assert.equal((await (await payloadOf()).json()).target.fileKey, 'abcdefghijklmnopqrstuv');
   assert.equal((await target('refuge', 'zyxwvutsrqponmlkjihgfe')).status, 409);
 });
