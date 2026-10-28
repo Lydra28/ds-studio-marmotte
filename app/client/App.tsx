@@ -40,6 +40,7 @@ import Board from './Board.js';
 import { Home, Sidebar, useRoute } from './Shell.js';
 import AssistantPanel from './Assistant.js';
 import Wall from './Wall.js';
+import { SiteFrame, SiteFullscreen, SiteView, type Device } from './Site.js';
 import { fontFamilies, loadFonts } from './fonts.js';
 import { ChangesDialog, Corrections, DiffDialog, FigmaDialog, HistoryPanel } from './Panels.js';
 
@@ -104,7 +105,7 @@ export default function App() {
   const slug = route ?? (boot.multi ? undefined : boot.fallback);
   if (!slug) return <Home onOpen={go} />;
   setProject(slug);
-  return <Workspace key={slug} slug={slug} multi={boot.multi} plugin={boot.plugin} github={boot.github} onOpen={go} />;
+  return <Workspace key={slug} slug={slug} multi={boot.multi} plugin={boot.plugin} github={boot.github} relay={boot.relay} onOpen={go} />;
 }
 
 function Workspace({
@@ -112,12 +113,14 @@ function Workspace({
   multi,
   plugin,
   github,
+  relay,
   onOpen,
 }: {
   slug: string;
   multi: boolean;
   plugin: string | null;
   github: boolean;
+  relay: number | null;
   onOpen: (slug?: string) => void;
 }) {
   const { state, setState, error: stateError } = useCommittedState(slug);
@@ -152,7 +155,7 @@ function Workspace({
   // Comparaison affichée : avant d'accepter (état courant / dernière version)
   // ou entre deux versions depuis l'historique.
   const [comparison, setComparison] = useState<{ title: string; hint: string; patches: Patch[]; accept: boolean }>();
-  const [view, setView] = useState<'board' | 'wall'>('board');
+  const [view, setView] = useState<'board' | 'wall' | 'site'>('board');
   const [assistantOpen, setAssistantOpen] = useState(() => {
     try {
       return localStorage.getItem('ds-assistant') === '1';
@@ -169,6 +172,11 @@ function Workspace({
     }
   };
   const [device, setDevice] = useState(1);
+  // Preview latérale : écran générique du DS, ou le vrai site du projet.
+  const [previewSite, setPreviewSite] = useState(false);
+  const [siteFull, setSiteFull] = useState<Device>();
+  const [sitePage, setSitePage] = useState<string>();
+  const siteReady = !!(relay && config?.site);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -385,6 +393,7 @@ function Workspace({
         onOpen={onOpen}
         onHistory={() => setHistoryOpen(true)}
         onWall={() => setView('wall')}
+        onSite={relay && config?.site ? () => setView('site') : undefined}
         onBoard={() => setView('board')}
         view={view}
       />
@@ -485,7 +494,10 @@ function Workspace({
           }}
         />
       )}
-      <main className="layout" hidden={view === 'wall'}>
+      {view === 'site' && relay && config?.site && draftSet && (
+        <SiteView slug={slug} relay={relay} config={config} set={draftSet} draft={draftCount > 0} onBack={() => setView('board')} />
+      )}
+      <main className="layout" hidden={view !== 'board'}>
         <Board
           set={draftSet}
           drafts={drafts}
@@ -501,6 +513,19 @@ function Workspace({
           <section className="preview" aria-label="Preview en direct">
             <div className="preview-head">
               <span>Preview {draftCount ? '· brouillon' : '· enregistrée'}</span>
+              {siteReady && (
+                <div className="devices" role="group" aria-label="Contenu de la preview">
+                  <button aria-pressed={!previewSite} onClick={() => setPreviewSite(false)}>
+                    DS
+                  </button>
+                  <button aria-pressed={previewSite} onClick={() => setPreviewSite(true)}>
+                    Site
+                  </button>
+                </div>
+              )}
+              {siteReady && previewSite && (
+                <button onClick={() => setSiteFull(devices[device].width >= 1024 ? 'desktop' : 'mobile')}>Plein écran</button>
+              )}
               <div className="devices" role="group" aria-label="Largeur d’écran">
                 {devices.map((d, i) => (
                   <button key={d.width} aria-pressed={device === i} onClick={() => setDevice(i)}>
@@ -510,12 +535,25 @@ function Workspace({
               </div>
             </div>
             <div className="frame-wrap">
-              <iframe
-                ref={frame}
-                title="Preview du design system"
-                src="/?preview=1"
-                style={{ width: devices[device].width }}
-              />
+              {siteReady && previewSite ? (
+                <SiteFrame
+                  slug={slug}
+                  relay={relay!}
+                  config={config!}
+                  set={draftSet}
+                  page={sitePage ?? config!.site!.pages[0]}
+                  width={devices[device].width}
+                  height={720}
+                  title="Site en direct dans la preview"
+                />
+              ) : (
+                <iframe
+                  ref={frame}
+                  title="Preview du design system"
+                  src="/?preview=1"
+                  style={{ width: devices[device].width }}
+                />
+              )}
             </div>
           </section>
           <Corrections
@@ -563,6 +601,19 @@ function Workspace({
         />
       )}
       {figmaOpen && <FigmaDialog code={plugin} config={config} onClose={() => setFigmaOpen(false)} />}
+      {siteFull && siteReady && draftSet && (
+        <SiteFullscreen
+          slug={slug}
+          relay={relay!}
+          config={config!}
+          set={draftSet}
+          page={sitePage ?? config!.site!.pages[0]}
+          device={siteFull}
+          onPage={setSitePage}
+          onDevice={setSiteFull}
+          onClose={() => setSiteFull(undefined)}
+        />
+      )}
       {comparison && (
         <ChangesDialog
           title={comparison.title}

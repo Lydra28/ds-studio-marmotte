@@ -12,6 +12,7 @@ import {
 import { checkComponentName, type Finding } from '../shared/rules.js';
 import { componentName, propNames, type ComponentDoc } from '../shared/components.js';
 import Nomenclature from './Nomenclature.js';
+import { RampGenerator } from './RampGenerator.js';
 
 type Edit = (key: string, mode: string, value: TokenValue) => void;
 type Add = (key: string, token: Token) => void;
@@ -372,6 +373,8 @@ export default function Board({
 }: BoardProps) {
   // Fiche en cours d'édition : son nom, '' pour une nouvelle, undefined sinon.
   const [editing, setEditing] = useState<string>();
+  // Gamme en cours de génération : son nom, '' pour une nouvelle, undefined sinon.
+  const [generating, setGenerating] = useState<string>();
   const entries = Object.entries(set.tokens);
   const byKey = (key: string) => findings.filter((f) => f.key === key);
   const isDraft = (key: string) =>
@@ -403,7 +406,15 @@ export default function Board({
         <p className="hint">Valeurs brutes. Les tokens sémantiques y renvoient : change une primitive, tout suit.</p>
         {[...ramps].map(([ramp, list]) => (
           <div className="ramp" key={ramp}>
-            <h3>{ramp}</h3>
+            <h3>
+              {ramp}
+              <button className="ramp__generate" onClick={() => setGenerating(ramp)} aria-label={`Générer la gamme ${ramp}`}>
+                Générer…
+              </button>
+            </h3>
+            {generating === ramp && (
+              <RampGenerator set={set} ramp={ramp} onEdit={onEdit} onAdd={onAdd} onClose={() => setGenerating(undefined)} />
+            )}
             <div className="swatches">
               {list.map(([key, token]) => (
                 <div className={`swatch ${isDraft(key) ? 'is-draft' : ''}`} key={key}>
@@ -418,6 +429,13 @@ export default function Board({
           </div>
         ))}
         <AddToken set={set} collection="primitives" types={['color']} prefix="color/" onAdd={onAdd} />
+        {generating === '' ? (
+          <RampGenerator set={set} onEdit={onEdit} onAdd={onAdd} onClose={() => setGenerating(undefined)} />
+        ) : (
+          <button className="add" onClick={() => setGenerating('')}>
+            + Nouvelle gamme
+          </button>
+        )}
       </section>
 
       <section aria-labelledby="h-tokens">

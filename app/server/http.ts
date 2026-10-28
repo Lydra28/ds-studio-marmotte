@@ -25,6 +25,8 @@ export async function createStudioServer(
     pluginCode?: string;
     // Accès GitHub (jeton, fetch simulé en test) ; par défaut GITHUB_TOKEN de .env.
     github?: GithubOptions;
+    // Port du relais « Site en direct » (site-relay.ts) ; absent : pas de site.
+    relayPort?: number;
     control?: { record: RecordInfo; stop: () => void };
   } & (
     | { registry: Registry }
@@ -90,7 +92,7 @@ export async function createStudioServer(
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader(
       'Content-Security-Policy',
-      `default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'${options.dev ? ' ws://127.0.0.1:*' : ''}; frame-ancestors 'self'; base-uri 'none'; form-action 'self'`,
+      `default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'${options.dev ? ' ws://127.0.0.1:*' : ''}; frame-src 'self'${options.relayPort ? ` http://*.localhost:${options.relayPort}` : ''}; frame-ancestors 'self'; base-uri 'none'; form-action 'self'`,
     );
     try {
       // Plugin Figma : origine `null`, protégé par son code d'appairage (plugin.ts).
@@ -140,6 +142,7 @@ export async function createStudioServer(
               fallback: registry.fallback,
               plugin: options.pluginCode ?? null,
               github: !!github.token,
+              relay: options.relayPort ?? null,
             });
           if (url.pathname === '/api/projects') return send(200, await registry.list());
           const { store, dir: projectDir, config, brief: project, assistant, wall } = await instance();

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { Registry, openInstance } from './registry.js';
 import { createStudioServer } from './http.js';
 import { loadPluginCode } from './plugin.js';
+import { createSiteRelay } from './site-relay.js';
 import { acquireLease } from '../../scripts/runtime.mjs';
 
 const root = path.resolve(
@@ -51,15 +52,32 @@ try {
   const stop = async () => {
     if (stopping) return;
     stopping = true;
+    for (const relay of relays) relay.close();
     await app.close();
     await registry.flush();
     await lease!.release();
     process.exit(0);
   };
+  // Relais « Site en direct » : port de l'atelier + 10, en boucle locale
+  // seulement (IPv4 et IPv6 : `<projet>.localhost` peut résoudre vers l'un ou l'autre).
+  const relayPort = Number(process.env.DS_STUDIO_RELAY_PORT ?? port + 10);
+  const relays = [createSiteRelay(registry, { atelier: `http://127.0.0.1:${port}` }), createSiteRelay(registry, { atelier: `http://127.0.0.1:${port}` })];
+  const relayUp = (
+    await Promise.all(
+      relays.map(
+        (relay, i) =>
+          new Promise<boolean>((resolve) => {
+            relay.once('error', () => resolve(false));
+            relay.listen(relayPort, i ? '::1' : '127.0.0.1', () => resolve(true));
+          }),
+      ),
+    )
+  )[0];
   const app = await createStudioServer({
     root,
     registry,
     dev: process.argv.includes('--dev'),
+    relayPort: relayUp ? relayPort : undefined,
     pluginCode: await loadPluginCode(directory),
     control: {
       record: lease.record,

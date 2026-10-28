@@ -40,6 +40,7 @@ export function Sidebar({
   onOpen,
   onHistory,
   onWall,
+  onSite,
   onBoard,
   view,
 }: {
@@ -48,8 +49,10 @@ export function Sidebar({
   onOpen: (slug?: string) => void;
   onHistory: () => void;
   onWall: () => void;
+  // Absent : le projet n'a pas de site configuré (ou relais arrêté).
+  onSite?: () => void;
   onBoard: () => void;
-  view: 'board' | 'wall';
+  view: 'board' | 'wall' | 'site';
 }) {
   const { projects } = useProjects();
   return (
@@ -83,6 +86,13 @@ export function Sidebar({
             Mur des DA
           </button>
         </li>
+        {onSite && (
+          <li>
+            <button aria-current={view === 'site' ? 'page' : undefined} onClick={onSite}>
+              Site en direct
+            </button>
+          </li>
+        )}
         {sections.map(([id, label]) => (
           <li key={id}>
             <button

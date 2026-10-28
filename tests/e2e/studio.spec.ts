@@ -208,3 +208,23 @@ test('nomenclature et mobile 375 px sans défilement horizontal', async ({ page 
   );
   expect(overflow).toBeLessThanOrEqual(0);
 });
+
+test('générateur de gamme : couleur gardée à son palier, paliers manquants ajoutés, validés par diff', async ({ page }) => {
+  const before = await revision(page);
+  await page.getByRole('button', { name: 'Générer la gamme color/brand' }).click();
+  const gen = page.getByRole('group', { name: 'Générer la gamme color/brand' });
+  await gen.getByLabel('Couleur de base en hexadécimal').fill('#2F6BFF');
+  await gen.getByLabel('Palier de la couleur de base').selectOption('600');
+  await gen.getByText('Compléter de 50 à 900').click();
+  await expect(gen.locator('li')).toHaveCount(10);
+  await expect(gen.locator('li.is-anchor')).toContainText('#2F6BFF');
+  await gen.getByRole('button', { name: 'Mettre en brouillon' }).click();
+  await expect(gen).toBeHidden();
+  expect(await revision(page)).toBe(before); // brouillon seulement
+  await page.getByRole('button', { name: 'Voir le diff et valider' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText(/Tokens : 6 ajouté\(s\), 4 modifié\(s\)/)).toBeVisible();
+  await dialog.getByRole('button', { name: 'Valider et enregistrer' }).click();
+  await expect(dialog).toBeHidden();
+  expect(await previewVar(page, '--color-brand-600')).toBe('#2F6BFF');
+});

@@ -302,6 +302,7 @@ test('version acceptée : empreinte, cible et révision figées, jamais écrasé
     name: 'Test',
     figma: { fileKey: 'N5YMZ1aN6gtSZ0QBjzjdWh', page: 'DS-Studio · Foundations', protectedPages: [] },
     github: null,
+    site: null,
   };
   await assert.rejects(() => acceptVersion(projectDir, config, store.snapshot(), 3), /changé/);
   const v = await acceptVersion(projectDir, config, store.snapshot(), 0);
@@ -395,7 +396,7 @@ test('fiches de composants : migration annulable, édition et import par diff, f
   await again.init();
   assert.equal(again.snapshot().revision, 3);
   // Version : les fiches sont dans le jeu figé, donc dans l'empreinte.
-  const v = await acceptVersion(dir, { name: 'Test', figma: null, github: null }, again.snapshot(), 3);
+  const v = await acceptVersion(dir, { name: 'Test', figma: null, github: null, site: null }, again.snapshot(), 3);
   const saved = JSON.parse(await readFile(path.join(dir, 'versions', 'v3.json'), 'utf8'));
   assert.equal(v.hash, versionHash(saved.set));
   assert.deepEqual(saved.components.map((c: { name: string }) => c.name).sort(), ['Button', 'Card', 'Input']);

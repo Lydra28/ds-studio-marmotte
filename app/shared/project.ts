@@ -82,6 +82,27 @@ export const configSchema = z
       .strict()
       .nullable()
       .default(null),
+    // Site public du projet, montré en direct dans l'atelier avec les tokens
+    // en cours (relais local, lecture seule). Noms des variables : `github.rename`.
+    site: z
+      .object({
+        url: z
+          .string()
+          .url()
+          .max(200)
+          .refine((value) => {
+            const url = new URL(value);
+            return url.protocol === 'https:' && !url.username && !url.password && url.pathname === '/' && !url.search;
+          }, 'Adresse https:// du site, sans chemin ni identifiants.'),
+        pages: z
+          .array(z.string().regex(/^\/[\w\-/]*$/).max(100))
+          .min(1)
+          .max(20)
+          .default(['/']),
+      })
+      .strict()
+      .nullable()
+      .default(null),
   })
   .strict();
 export type Config = z.infer<typeof configSchema>;

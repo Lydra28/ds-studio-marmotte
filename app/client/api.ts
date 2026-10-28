@@ -9,6 +9,8 @@ export interface Bootstrap {
   plugin: string | null;
   // Jeton GitHub présent côté serveur (jamais sa valeur).
   github: boolean;
+  // Port du relais « Site en direct », null s'il n'a pas démarré.
+  relay: number | null;
 }
 export interface ProjectSummary {
   slug: string;
