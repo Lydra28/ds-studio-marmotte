@@ -64,6 +64,20 @@ export const configSchema = z
         // Préfixes renommés à l'export, pour coller aux noms du code (« bg/ » → « color/bg/ »).
         rename: z.record(z.string().max(60), z.string().max(60)).default({}),
         mobileQuery: z.string().max(100).default('(max-width: 767.98px)'),
+        // Fichier du site qui charge les styles : à la première PR, l'atelier
+        // y ajoute l'import du CSS généré, juste après la ligne repère `after`.
+        entry: z
+          .object({
+            file: z
+              .string()
+              .regex(/^[\w.-]+(\/[\w.-]+)*$/)
+              .refine((f) => !f.split('/').includes('..'), 'fichier relatif attendu')
+              .max(200),
+            after: z.string().trim().min(1).max(200),
+          })
+          .strict()
+          .nullable()
+          .default(null),
       })
       .strict()
       .nullable()

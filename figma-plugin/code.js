@@ -134,7 +134,7 @@ async function transfer(p, known) {
   await page.loadAsync();
   for (const doc of p.components || []) {
     if (doc.status !== 'figma') continue;
-    if (doc.name === 'Button') await buildButton(page, doc, byName, p.font, report);
+    if (doc.name === 'Button') await buildButton(page, doc, byName, p.fonts || [p.font], report);
     else report.skipped.push(`${doc.name} : seul Button est construit par le plugin, fiche à documenter à la main`);
   }
   return report;
@@ -211,14 +211,16 @@ function bind(node, field, variable, fallback) {
   if (variable) node.setBoundVariable(field, variable);
   else node[field] = fallback;
 }
-// Police du projet si Figma la connaît, sinon Inter (le libellé le dit dans le rapport).
-async function pickFont(family, report) {
+// Première police de la pile du projet que Figma connaît, sinon Inter (le
+// rapport le dit).
+async function pickFont(families, report) {
   const fonts = await figma.listAvailableFontsAsync();
-  for (const fam of [family, 'Inter'].filter(Boolean))
+  const wanted = families.filter(Boolean);
+  for (const fam of [...wanted, 'Inter'])
     for (const style of ['Semi Bold', 'SemiBold', 'Medium', 'Bold', 'Regular']) {
       const f = fonts.find((x) => x.fontName.family === fam && x.fontName.style === style);
       if (f) {
-        if (fam !== family) report.skipped.push(`Police « ${family} » absente de Figma : Button en Inter`);
+        if (!wanted.includes(fam)) report.skipped.push(`Police « ${wanted.join(', ')} » absente de Figma : Button en Inter`);
         await figma.loadFontAsync(f.fontName);
         return f.fontName;
       }

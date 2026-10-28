@@ -79,8 +79,10 @@ export function buildFigmaPayload(raw: unknown) {
         ),
       })),
   }));
-  // Police du composant : valeur résolue (premier mode), chargée par le plugin si Figma la connaît.
-  const font = set.tokens['font/family/base'] ? String(resolve(set, 'font/family/base')) : null;
+  // Police du composant : pile résolue (premier mode) ; le plugin prend la
+  // première que Figma connaît (« Figtree Variable » sur le site, « Figtree » dans Figma).
+  const stack = set.tokens['font/family/base'] ? String(resolve(set, 'font/family/base')) : '';
+  const fonts = stack.split(',').map((f) => f.replace(/["']/g, '').trim()).filter(Boolean);
   return {
     target: version.target,
     project: version.project,
@@ -88,7 +90,8 @@ export function buildFigmaPayload(raw: unknown) {
     acceptedAt: version.acceptedAt,
     hash,
     findings: version.findings.length,
-    font: font?.split(',')[0].replace(/["']/g, '').trim() || null,
+    font: fonts[0] ?? null,
+    fonts,
     collections,
     components: version.components,
   };
