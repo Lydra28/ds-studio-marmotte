@@ -410,6 +410,7 @@ function Workspace({
           setView('compare');
         }}
         onTimeline={() => setView('timeline')}
+        versions={versions.map((v) => v.revision)}
         onBoard={() => setView('board')}
         view={view}
       />

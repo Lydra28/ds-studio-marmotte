@@ -45,6 +45,7 @@ export function Sidebar({
   onTimeline,
   onBoard,
   view,
+  versions = [],
 }: {
   current: string;
   multi: boolean;
@@ -57,6 +58,8 @@ export function Sidebar({
   onTimeline: () => void;
   onBoard: () => void;
   view: 'board' | 'wall' | 'site' | 'compare' | 'timeline';
+  // Révisions des versions acceptées : une marche de « chaleur » chacune.
+  versions?: number[];
 }) {
   const { projects } = useProjects();
   return (
@@ -107,7 +110,7 @@ export function Sidebar({
             Évolution
           </button>
         </li>
-        {sections.map(([id, label]) => (
+        {sections.map(([id, label], i) => (
           <li key={id}>
             <button
               onClick={() => {
@@ -115,6 +118,7 @@ export function Sidebar({
                 setTimeout(() => void document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
               }}
             >
+              {i < 5 && <span className="nav-num">0{i + 1}</span>}
               {label}
             </button>
           </li>
@@ -123,7 +127,23 @@ export function Sidebar({
           <button onClick={onHistory}>Historique</button>
         </li>
       </ul>
+      {versions.length > 0 && <Stairs versions={versions} />}
     </nav>
+  );
+}
+
+// Sprites de version (DA « Atelier 8-bit ») : une marche par version acceptée,
+// couleurs de la gamme « chaleur », les six dernières seulement.
+function Stairs({ versions }: { versions: number[] }) {
+  const shown = [...versions].sort((a, b) => a - b).slice(-6);
+  const label = `${versions.length} version(s) acceptée(s)`;
+  return (
+    <div className="stairs" role="img" aria-label={label} title={label}>
+      {shown.map((v, i) => (
+        <i key={v} style={{ height: 12 * (i + 1), background: `var(--c-heat-${Math.min(5, i + 1)})` }} />
+      ))}
+      <small>v{shown[shown.length - 1]}</small>
+    </div>
   );
 }
 

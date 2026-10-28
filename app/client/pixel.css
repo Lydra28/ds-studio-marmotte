@@ -1,0 +1,325 @@
+/* ---------- DA « Atelier 8-bit » (2026-10-28) ----------
+   Couche chargée après styles.css. 1 pixel d'art = 4 px d'écran (la règle des
+   multiples de 4 de l'atelier) : coins en escalier, aucun arrondi, un seul
+   accent (Signal), gamme « chaleur » pour les états. Pixelify Sans (titres),
+   Silkscreen (étiquettes, boutons), Geist (texte), Geist Mono (valeurs).
+   La preview et le site en direct gardent les couleurs du projet. */
+:root {
+  --c-bg: #0b0b0c;
+  --c-panel: #151517;
+  --c-raised: #1f1f22;
+  --c-line: #2a2a2e;
+  --c-text: #f2f1ec;
+  --c-soft: #c9c7bf;
+  --c-muted: #9a9890;
+  --c-accent: #e8ff3a;
+  --c-on-accent: #0b0b0c;
+  --c-warn: #ff7a00;
+  --c-warn-bg: #24160a;
+  --c-draft: #e8ff3a;
+  --c-draft-bg: #1b1d0e;
+  --c-ok: #8ee05a;
+  --c-error: #ff4d1a;
+  --c-heat-1: #ffd60a;
+  --c-heat-2: #ffaa00;
+  --c-heat-3: #ff7a00;
+  --c-heat-4: #ff4d1a;
+  --c-heat-5: #e5251b;
+  --c-dots: #1d1d21;
+  --f-text: 'Geist', 'Segoe UI', system-ui, sans-serif;
+  --f-label: 'Silkscreen', 'Geist Mono', ui-monospace, monospace;
+  --f-title: 'Pixelify Sans', 'Silkscreen', 'Geist', sans-serif;
+  --c-mono: 'Geist Mono', ui-monospace, 'Cascadia Code', Consolas, monospace;
+  --px: polygon(0 4px, 4px 4px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px));
+  font-family: var(--f-text);
+}
+body.preview-body {
+  font-family: system-ui, sans-serif;
+}
+:where(body:not(.preview-body)) :focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+}
+
+/* Boutons : étiquettes Silkscreen en capitales, aucun arrondi (jamais dans la preview). */
+:where(body:not(.preview-body)) button,
+:where(body:not(.preview-body)) select,
+:where(body:not(.preview-body)) input,
+:where(body:not(.preview-body)) textarea {
+  border-radius: 0;
+}
+:where(body:not(.preview-body)) button {
+  font-family: var(--f-label);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: transparent;
+  transition: transform 0.12s steps(3);
+}
+:where(body:not(.preview-body)) button:hover:not(:disabled) {
+  border-color: var(--c-text);
+}
+:where(body:not(.preview-body)) button:active:not(:disabled) {
+  transform: translateY(2px);
+}
+button.primary,
+.draft-bar button.primary {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: var(--c-on-accent);
+  clip-path: var(--px);
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.22);
+  padding: 9px 16px 11px;
+}
+button.primary:hover:not(:disabled) {
+  border-color: var(--c-accent);
+  transform: translateY(2px);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.22);
+}
+.devices {
+  gap: 0;
+  border: 1px solid var(--c-line);
+}
+.devices button {
+  border: 0;
+  border-radius: 0;
+}
+.devices button[aria-pressed='true'] {
+  background: var(--c-text);
+  color: var(--c-bg);
+}
+:where(body:not(.preview-body)) input,
+:where(body:not(.preview-body)) select,
+:where(body:not(.preview-body)) textarea {
+  background: var(--c-bg);
+  border-color: var(--c-line);
+}
+code,
+.mono,
+.rev {
+  font-family: var(--c-mono);
+}
+
+/* Coquille : barre latérale en cellules, numéros de section, sprites de version. */
+.sidebar {
+  background: var(--c-panel);
+  padding: 18px 12px;
+}
+.sidebar .logo {
+  font-family: var(--f-title);
+  font-weight: 700;
+  font-size: 22px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.side-label {
+  font-family: var(--f-label);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.nav-list button {
+  font-family: var(--f-text);
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--c-soft);
+  border-left: 4px solid transparent;
+  border-radius: 0;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.nav-list button[aria-current='page'] {
+  border-left-color: var(--c-accent);
+  background: var(--c-raised);
+  color: var(--c-text);
+  font-weight: 600;
+}
+.nav-list .nav-num {
+  font-family: var(--c-mono);
+  font-size: 11px;
+  color: var(--c-muted);
+}
+.nav-list .nav-new {
+  color: var(--c-accent);
+  font-family: var(--f-label);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.stairs {
+  margin-top: auto;
+  padding: 16px 8px 4px;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+.stairs i {
+  width: 16px;
+}
+.stairs small {
+  margin-left: 6px;
+  font-family: var(--c-mono);
+  font-size: 11px;
+  color: var(--c-muted);
+}
+.bar {
+  background: rgba(11, 11, 12, 0.92);
+}
+.brand .project {
+  font-family: var(--f-title);
+  font-weight: 700;
+  font-size: 22px;
+}
+.rev {
+  border: 1px solid var(--c-line);
+  border-radius: 0;
+  padding: 1px 6px;
+}
+.count {
+  font-family: var(--f-label);
+  font-size: 11px;
+  text-transform: uppercase;
+  border-radius: 0;
+  clip-path: var(--px);
+  padding: 5px 10px;
+}
+.count.warn {
+  background: var(--c-warn);
+  color: var(--c-on-accent);
+}
+.count.ok {
+  background: var(--c-raised);
+  color: var(--c-ok);
+}
+.layout,
+.site-view {
+  background-image: radial-gradient(var(--c-dots) 1px, transparent 1.2px);
+  background-size: 8px 8px;
+}
+
+/* Planche : cartes à filet, titres pixel, nuanciers en escalier. */
+.board section,
+.preview,
+.corrections,
+.assistant,
+.project-card,
+dialog.diff,
+.drawer {
+  border-radius: 0;
+}
+.board h2,
+.corrections h2 {
+  font-family: var(--f-title);
+  font-weight: 700;
+  font-size: 26px;
+  letter-spacing: 0;
+}
+.board h3,
+.ramp h3 {
+  font-family: var(--f-label);
+  font-weight: 400;
+  font-size: 12px;
+}
+.swatch .chip,
+.swatch .editor input[type='color'],
+.swatch .editor input[type='color']::-webkit-color-swatch,
+.chip {
+  border-radius: 0;
+}
+.swatch .chip,
+.swatch .editor input[type='color'] {
+  clip-path: var(--px);
+}
+.swatch.is-draft {
+  outline: 2px dashed var(--c-accent);
+  outline-offset: 2px;
+  background: transparent;
+}
+.preview-head > span:first-child {
+  font-family: var(--f-label);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+.corrections li {
+  border-left: 4px solid var(--c-warn);
+  border-radius: 0;
+}
+.draft-bar {
+  border-radius: 0;
+  clip-path: var(--px);
+  border-color: var(--c-accent);
+}
+.message {
+  border-radius: 0;
+}
+
+/* Accueil */
+.home-head h1 {
+  font-family: var(--f-title);
+  font-weight: 700;
+  font-size: 56px;
+  letter-spacing: 0;
+}
+.project-card {
+  font-family: var(--f-text);
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.project-card small,
+.project-card span {
+  font-family: var(--c-mono);
+  font-size: 12px;
+}
+.project-card strong {
+  font-family: var(--f-title);
+  font-weight: 700;
+  font-size: 22px;
+}
+.project-card:hover {
+  border-color: var(--c-accent);
+}
+
+/* Assistant, vues pleine largeur, historique */
+.assistant-head strong,
+.site-view__head h2,
+.drawer h2,
+dialog.diff h2 {
+  font-family: var(--f-title);
+  font-weight: 700;
+  font-size: 22px;
+}
+.timeline__marks li.is-current span {
+  border-radius: 0;
+  background: var(--c-accent);
+  color: var(--c-on-accent);
+}
+.timeline__badge,
+.site-view__frames .site-frame,
+.timeline__frame .site-frame,
+.frame-wrap {
+  border-radius: 0;
+}
+
+/* Mascotte : la 3D reste lisse (choix de Romain) ; badge et bulle suivent la DA. */
+.mascot__fallback {
+  border-radius: 0;
+  clip-path: var(--px);
+}
+.mascot-badge {
+  border-radius: 0;
+  background: var(--c-heat-5);
+  font-family: var(--f-label);
+  font-weight: 400;
+}
+.mascot-bubble {
+  border-radius: 0;
+  clip-path: var(--px);
+  border-color: var(--c-accent);
+}
+@media (prefers-reduced-motion: reduce) {
+  button {
+    transition: none;
+  }
+}
