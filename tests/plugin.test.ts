@@ -134,3 +134,35 @@ test('plugin Figma : le fichier ouvert devient la cible d’un projet qui n’en
   assert.equal((await (await payloadOf()).json()).target.fileKey, 'abcdefghijklmnopqrstuv');
   assert.equal((await target('refuge', 'zyxwvutsrqponmlkjihgfe')).status, 409);
 });
+
+test('plugin Figma : question à l’assistant, appairage exigé, texte seulement', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ds-plugin-ask-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  for (const f of ['design-system.tokens.json', 'project.config.json']) await cp(path.join(root, 'projects/marmotte', f), path.join(dir, 'marmotte', f));
+  const seen: string[] = [];
+  // Réponse simulée d'OpenRouter : jamais d'appel réseau dans les tests.
+  const fetch_ = (async (_url: string, init: RequestInit) => {
+    seen.push(String(init.body));
+    return new Response(JSON.stringify({ choices: [{ message: { content: 'Gap à 16 px.' } }] }));
+  }) as typeof fetch;
+  const registry = Registry.folder(dir, path.join(root, 'templates/blank/design-system.tokens.json'), 'marmotte', { apiKey: 'k', fetch: fetch_ });
+  const code = await loadPluginCode(dir);
+  const app = await createStudioServer({ root, registry, pluginCode: code });
+  await new Promise<void>((r) => app.server.listen(0, '127.0.0.1', r));
+  t.after(() => app.close());
+  const base = `http://127.0.0.1:${(app.server.address() as { port: number }).port}/api/plugin/`;
+  const ask = (body: unknown, key = code) =>
+    fetch(`${base}ask?project=marmotte`, { method: 'POST', headers: { 'X-DS-Plugin': key, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+  assert.equal((await (await fetch(base + 'projects', { headers: { 'X-DS-Plugin': code } })).json())[0].assistant, true);
+  assert.equal((await ask({ message: 'Bonjour' }, 'aaaa-bbbb-cccc')).status, 401);
+  assert.equal((await ask({ message: '' })).status, 400);
+  const selection = { file: 'Maquettes', nodes: [{ name: 'Carte', type: 'FRAME', depth: 0, gap: { v: 14, var: null } }] };
+  const res = await ask({ message: 'Ma carte est-elle bonne ?', selection });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.reply, 'Gap à 16 px.');
+  assert.deepEqual(body.findings, ['Carte : gap de 14 px, hors grille de 4 (16 px).']);
+  assert.match(seen[0], /Marmotte/);
+  assert.equal(seen.length, 1); // requête refusée : aucun appel au modèle
+});

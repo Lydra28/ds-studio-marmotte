@@ -10,6 +10,7 @@ import { listVersions } from './versions.js';
 import { buildFigmaPayload } from './figma-payload.js';
 import { componentsFromFigma, rawComponentsSchema } from './figma-components.js';
 import { componentsFileSchema } from '../shared/components.js';
+import { askSchema } from './assistant.js';
 import type { Config } from '../shared/project.js';
 
 // Routes du plugin Figma DS-Studio (`/api/plugin/*`). Le plugin tourne dans
@@ -17,8 +18,8 @@ import type { Config } from '../shared/project.js';
 // d'appairage affiché dans l'atelier et collé une fois dans le plugin.
 // Le plugin lit une version acceptée et renvoie des fiches ; il n'écrit
 // jamais le jeu : les fiches reçues attendent un import par diff. Il peut
-// désigner le fichier ouvert comme cible d'un projet qui n'en a pas, et
-// noter la remise à zéro de ce fichier.
+// désigner le fichier ouvert comme cible d'un projet qui n'en a pas, noter la
+// remise à zéro de ce fichier, et poser une question à l'assistant (texte).
 
 // Code d'appairage gardé dans le dossier de données (privé), stable d'un démarrage à l'autre.
 export async function loadPluginCode(directory: string) {
@@ -165,9 +166,16 @@ export async function handlePlugin(
       200,
       await Promise.all(
         list.map(async (p) => {
-          const { dir, config } = await ctx.registry.get(p.slug);
+          const { dir, config, assistant } = await ctx.registry.get(p.slug);
           const [last] = await listVersions(dir);
-          return { slug: p.slug, name: p.name, figma: config.figma, version: last ?? null, known: await knownFile(dir, config.figma?.fileKey) };
+          return {
+            slug: p.slug,
+            name: p.name,
+            figma: config.figma,
+            version: last ?? null,
+            known: await knownFile(dir, config.figma?.fileKey),
+            assistant: assistant.status.enabled,
+          };
         }),
       ),
     );
@@ -236,6 +244,13 @@ export async function handlePlugin(
     const inbox: Inbox = { receivedAt: new Date().toISOString(), report, file };
     await atomicWrite(inboxFile(store.directory), JSON.stringify(inbox, null, 2) + '\n');
     return ctx.send(200, { count: Object.keys(file.components).length, report });
+  }
+  // Question à l'assistant depuis Figma : texte seulement, rien d'écrit. La
+  // sélection n'arrive que si Romain a coché son envoi dans le plugin.
+  if (req.method === 'POST' && url.pathname === '/api/plugin/ask') {
+    const { config, store, brief, assistant } = await instance();
+    const b = askSchema.parse(await readBody(req, 200_000));
+    return ctx.send(200, await assistant.ask(b, { project: (await brief.read()).project, name: config.name, set: store.snapshot().set }));
   }
   throw new StudioError('Route inconnue.', 404);
 }

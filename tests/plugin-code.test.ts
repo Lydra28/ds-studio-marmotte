@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
+import { askSchema } from '../app/server/assistant.js';
 
 // Code du plugin (figma-plugin/code.js) exécuté contre un faux Figma réduit à
 // ce qu'utilisent le transfert et la remise à zéro (sans composant).
@@ -77,7 +78,9 @@ function fakeFigma() {
         return v;
       },
       createVariableAlias: (v: any) => ({ type: 'VARIABLE_ALIAS', id: v.id }),
+      getVariableByIdAsync: async (id: string) => variables.find((v) => v.id === id) ?? null,
     },
+    mixed: Symbol('mixed'),
   };
   figma.currentPage = page('Mes écrans');
   return { figma, collections, pages, posted, collection, page };
@@ -160,4 +163,56 @@ test('plugin : collections écrites avant la marque reconnues seulement avec un 
   assert.equal((await f.send({ type: 'transfer', payload, known: true })).type, 'transferred');
   assert.equal(f.collections.filter((c) => c.name === 'Primitives').length, 1);
   assert.equal(f.collections[0].getPluginData('dsStudio'), '1');
+});
+
+test('plugin : sélection résumée en lecture seule, au format attendu par l’assistant', async () => {
+  const f = await load();
+  f.figma.currentPage.selection = [];
+  assert.match((await f.send({ type: 'read-selection' })).message, /Sélectionne au moins un calque/);
+  const col = f.collection('Tokens');
+  const space = f.figma.variables.createVariable('space/md', col, 'FLOAT');
+  const text = {
+    name: 'Titre',
+    type: 'TEXT',
+    width: 120,
+    height: 18.004,
+    characters: 'Bonjour',
+    fontSize: 11,
+    fontName: { family: 'Inter', style: 'Bold' },
+    fills: [{ type: 'SOLID', visible: true, color: { r: 1, g: 0, b: 0 } }],
+    boundVariables: {},
+  };
+  const card = {
+    name: 'Carte',
+    type: 'FRAME',
+    width: 320,
+    height: 200,
+    layoutMode: 'VERTICAL',
+    itemSpacing: 14,
+    paddingTop: 16,
+    paddingRight: 16,
+    paddingBottom: 16,
+    paddingLeft: 16,
+    cornerRadius: f.figma.mixed, // coins différents : ignoré
+    boundVariables: { paddingTop: { type: 'VARIABLE_ALIAS', id: space.id } },
+    fills: [{ type: 'SOLID', visible: false, color: { r: 0, g: 0, b: 0 } }],
+    children: [text],
+  };
+  f.figma.currentPage.selection = [card];
+  const { selection } = await f.send({ type: 'read-selection' });
+  const parsed = askSchema.parse({ message: 'x', selection }).selection!;
+  assert.equal(parsed.file, 'Fichier test');
+  assert.deepEqual(parsed.nodes[0].gap, { v: 14, var: null });
+  assert.deepEqual(parsed.nodes[0].padding?.[0], { v: 16, var: 'space/md' });
+  assert.equal(parsed.nodes[0].radius, undefined);
+  assert.equal(parsed.nodes[0].fills, undefined); // remplissage masqué
+  assert.deepEqual(parsed.nodes[1], {
+    name: 'Titre',
+    type: 'TEXT',
+    depth: 1,
+    size: [120, 18],
+    fills: [{ hex: '#ff0000', var: null }],
+    text: { content: 'Bonjour', size: { v: 11, var: null }, family: 'Inter', style: 'Bold' },
+  });
+  assert.equal(card.itemSpacing, 14); // rien de modifié
 });

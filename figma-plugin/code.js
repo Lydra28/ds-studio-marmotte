@@ -1,8 +1,8 @@
 // Plugin DS-Studio, côté Figma. Écrit la dernière version acceptée de
 // l'atelier (variables, composant Button) dans le fichier cible du projet, sur
 // sa page dédiée seulement, et lit les composants du fichier pour les renvoyer
-// à l'atelier. Aucun accès réseau ici : l'interface (ui.html) parle à
-// l'atelier. Le transfert ne supprime ni ne renomme rien. Seule la remise à
+// à l'atelier. Il résume aussi la sélection pour l'assistant, en lecture
+// seule. Aucun accès réseau ici : l'interface (ui.html) parle à l'atelier. Le transfert ne supprime ni ne renomme rien. Seule la remise à
 // zéro, confirmée par Romain, supprime ce que DS-Studio a écrit (marqué).
 figma.showUI(__html__, { width: 380, height: 620, themeColors: true });
 
@@ -38,6 +38,7 @@ figma.ui.onmessage = async (msg) => {
       figma.ui.postMessage({ type: 'file', file: fileInfo() });
     } else if (msg.type === 'transfer') figma.ui.postMessage({ type: 'transferred', report: await transfer(msg.payload, msg.known) });
     else if (msg.type === 'read-components') figma.ui.postMessage({ type: 'components', raw: await readComponents() });
+    else if (msg.type === 'read-selection') figma.ui.postMessage({ type: 'selection', selection: await readSelection() });
     else if (msg.type === 'check') figma.ui.postMessage({ type: 'check', foreign: await foreign(msg.collections, msg.page, msg.known) });
     else if (msg.type === 'reset-plan') figma.ui.postMessage({ type: 'reset-plan', plan: await resetPlan(msg.target, msg.known) });
     else if (msg.type === 'reset') figma.ui.postMessage({ type: 'reset-done', removed: await reset(msg.target, msg.known) });
@@ -366,4 +367,75 @@ async function readComponents() {
     }
   }
   return { source: `Figma ${figma.root.name}`.slice(0, 200), components: out };
+}
+
+// Lecture seule : résumé de la sélection pour l'assistant (tailles,
+// espacements, rayon, couleurs, texte, variables liées), 60 calques au plus,
+// 3 niveaux sous la sélection. Demandé seulement si Romain a coché l'envoi.
+async function readSelection() {
+  const selection = figma.currentPage.selection;
+  if (!selection.length) throw new Error('Sélectionne au moins un calque, ou décoche l’envoi de la sélection.');
+  const names = new Map();
+  const variableName = async (alias) => {
+    const id = alias && alias.id;
+    if (!id) return null;
+    if (!names.has(id)) {
+      const v = await figma.variables.getVariableByIdAsync(id);
+      names.set(id, v ? v.name.slice(0, 120) : null);
+    }
+    return names.get(id);
+  };
+  const round = (x) => Math.round(x * 100) / 100;
+  // `figma.mixed` (valeur différente selon les côtés ou les caractères) : ignoré.
+  const value = async (node, field, boundField) => {
+    const v = node[field];
+    if (typeof v !== 'number' || !isFinite(v)) return undefined;
+    const bound = (node.boundVariables || {})[boundField || field];
+    return { v: round(v), var: await variableName([].concat(bound)[0]) };
+  };
+  const hex = (c) => '#' + [c.r, c.g, c.b].map((x) => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
+  async function describe(node, depth) {
+    const d = { name: String(node.name).slice(0, 120), type: String(node.type).slice(0, 40), depth };
+    if (typeof node.width === 'number') d.size = [round(node.width), round(node.height)];
+    if (node.layoutMode && node.layoutMode !== 'NONE') {
+      const gap = await value(node, 'itemSpacing');
+      if (gap) d.gap = gap;
+      const padding = [];
+      for (const f of ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft']) padding.push(await value(node, f));
+      if (padding.every(Boolean)) d.padding = padding;
+    }
+    const radius = await value(node, 'cornerRadius', 'topLeftRadius');
+    if (radius && radius.v) d.radius = radius;
+    if (Array.isArray(node.fills)) {
+      const fills = [];
+      for (const p of node.fills)
+        if (p.type === 'SOLID' && p.visible !== false && fills.length < 8)
+          fills.push({ hex: hex(p.color), var: await variableName(p.boundVariables && p.boundVariables.color) });
+      if (fills.length) d.fills = fills;
+    }
+    if (node.type === 'TEXT') {
+      const text = { content: String(node.characters || '').slice(0, 80) };
+      const size = await value(node, 'fontSize');
+      if (size) text.size = size;
+      if (node.fontName && node.fontName !== figma.mixed) {
+        text.family = String(node.fontName.family).slice(0, 80);
+        text.style = String(node.fontName.style).slice(0, 80);
+      }
+      d.text = text;
+    }
+    if (node.type === 'INSTANCE') {
+      const main = await node.getMainComponentAsync();
+      if (main)
+        d.component = ((main.parent && main.parent.type === 'COMPONENT_SET' ? main.parent.name + ' · ' : '') + main.name).slice(0, 240);
+    }
+    return d;
+  }
+  const nodes = [];
+  async function walk(node, depth) {
+    if (nodes.length >= 60) return;
+    nodes.push(await describe(node, depth));
+    if (depth < 3 && 'children' in node) for (const child of node.children) await walk(child, depth + 1);
+  }
+  for (const node of selection) await walk(node, 0);
+  return { file: String(figma.root.name).slice(0, 200), nodes };
 }

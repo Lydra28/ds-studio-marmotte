@@ -24,6 +24,7 @@
   }
   input,
   select,
+  textarea,
   button {
     font: inherit;
     box-sizing: border-box;
@@ -96,10 +97,24 @@
   .row input[type='checkbox'] {
     width: auto;
   }
+  textarea {
+    resize: vertical;
+  }
+  .msg {
+    white-space: pre-wrap;
+    margin: 6px 0 0;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: var(--figma-color-bg-secondary, #f5f5f5);
+  }
+  .msg.user {
+    background: transparent;
+    border: 1px solid var(--figma-color-border, #ddd);
+  }
 </style>
 
 <h1>DS-Studio</h1>
-<p class="muted">Écrit la dernière version acceptée de l’atelier dans ce fichier, et renvoie ses composants à l’atelier.</p>
+<p class="muted">Écrit la dernière version acceptée de l’atelier dans ce fichier, renvoie ses composants à l’atelier, et répond à tes questions sur le DS.</p>
 
 <form id="connect">
   <label for="addr">Adresse de l’atelier</label>
@@ -115,12 +130,25 @@
   <label for="project">Projet</label>
   <select id="project"></select>
   <div id="details"></div>
+  <h2>Assistant</h2>
+  <div class="card">
+    <span class="muted">Pose une question sur le DS du projet ou sur ta sélection. Il explique et conseille, il ne modifie rien.</span>
+    <p class="ko" id="ask-off" hidden>Assistant désactivé : clé OpenRouter absente du .env de l’atelier.</p>
+    <div id="ask-log"></div>
+    <label for="ask-input">Question</label>
+    <textarea id="ask-input" rows="3" placeholder="Ce bouton respecte-t-il le DS ?"></textarea>
+    <div class="row"><input type="checkbox" id="ask-share" /><label for="ask-share">Envoyer la sélection (noms, valeurs, variables) avec la question</label></div>
+    <span class="muted">Jamais pour un fichier Enov ou client. Décoché, seul le DS du projet part chez OpenRouter.</span>
+    <button class="primary" id="ask-send">Demander</button>
+    <button id="ask-clear">Effacer la conversation</button>
+    <p class="feedback" id="fb-ask" role="status"></p>
+  </div>
 </div>
 
 <script>
   const $ = (id) => document.getElementById(id);
   const send = (msg) => parent.postMessage({ pluginMessage: msg }, '*');
-  const state = { file: null, projects: [], payload: null, zone: null, msg: null };
+  const state = { file: null, projects: [], payload: null, zone: null, msg: null, chat: [], selection: null };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   // Message affiché dans la carte de l'action en cours (state.zone), gardé
   // quand la carte est redessinée ; sinon sous le formulaire de connexion.
@@ -180,7 +208,57 @@
     send({ type: 'save-settings', settings: { addr: $('addr').value, code: $('code').value.trim(), project: slug() } });
     state.zone = null;
     state.msg = null;
+    state.chat = []; // la conversation porte sur le DS d'un projet
+    renderChat();
     loadProject();
+  };
+
+  // Assistant : conversation gardée dans le plugin le temps de la session.
+  // La sélection (lecture seule, code.js) n'est lue et envoyée que si la
+  // case est cochée ; elle se décoche à chaque ouverture du plugin.
+  function renderChat() {
+    $('ask-log').innerHTML = state.chat
+      .map(
+        (m) =>
+          `<div class="msg ${m.role}">${esc(m.content)}${
+            m.findings && m.findings.length
+              ? `<br><span class="muted">Écarts relevés dans la sélection :</span><ul>${m.findings.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>`
+              : ''
+          }</div>`,
+      )
+      .join('');
+  }
+  const readSelection = () =>
+    new Promise((resolve, reject) => {
+      state.selection = { resolve, reject };
+      send({ type: 'read-selection' });
+    });
+  $('ask-send').onclick = async () => {
+    const message = $('ask-input').value.trim();
+    if (!message) return;
+    state.zone = 'ask';
+    $('ask-send').disabled = true;
+    try {
+      setStatus($('ask-share').checked ? 'Lecture de la sélection…' : 'L’assistant réfléchit…');
+      const selection = $('ask-share').checked ? await readSelection() : null;
+      if (selection) setStatus(`L’assistant réfléchit (${selection.nodes.length} calque(s) envoyé(s))…`);
+      const history = state.chat.slice(-8).map((m) => ({ role: m.role, content: m.content }));
+      const res = await api(`ask?project=${encodeURIComponent(slug())}`, { message, history, selection });
+      state.chat.push({ role: 'user', content: message }, { role: 'assistant', content: res.reply, findings: res.findings });
+      $('ask-input').value = '';
+      renderChat();
+      setStatus('');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      $('ask-send').disabled = !(current() && current().assistant);
+    }
+  };
+  $('ask-clear').onclick = () => {
+    state.chat = [];
+    state.zone = 'ask';
+    renderChat();
+    setStatus('');
   };
 
   async function loadProject() {
@@ -231,6 +309,8 @@
     if (match)
       html += `<h2>Remettre à zéro</h2><div class="card"><span class="muted">Supprime de ce fichier ce que DS-Studio y a écrit (ses collections, leurs variables, la page « ${esc(p.figma.page)} »), rien d’autre. Tu vois la liste avant de confirmer.</span><div id="reset-zone"><button id="reset-plan">Préparer la remise à zéro…</button></div>${feedback('reset')}</div>`;
     $('details').innerHTML = html;
+    $('ask-send').disabled = !p.assistant;
+    $('ask-off').hidden = !!p.assistant;
     paint();
 
     // Collections du même nom écrites par quelqu'un d'autre : refus annoncé avant le clic.
@@ -340,6 +420,13 @@
             (r.skipped.length ? `\nÀ voir : ${r.skipped.join(' ; ')}` : ''),
         );
         await loadProject();
+      } else if (msg.type === 'selection') {
+        if (state.selection) state.selection.resolve(msg.selection);
+        state.selection = null;
+      } else if (msg.type === 'error' && state.selection) {
+        // Erreur de lecture de la sélection : rendue à la question en cours.
+        state.selection.reject(new Error(msg.message));
+        state.selection = null;
       } else if (msg.type === 'components') {
         const res = await api(`components?project=${encodeURIComponent(slug())}`, msg.raw);
         setDone(`${res.count} fiche(s) envoyée(s) à l’atelier : ouvre-le, bouton « Fiches reçues de Figma », puis relis le diff.`);
