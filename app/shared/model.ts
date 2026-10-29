@@ -193,7 +193,8 @@ export type Change = z.infer<typeof changeSchema>;
 export const proposeSchema = z
   .object({
     revision: z.number().int().nonnegative(),
-    changes: z.array(changeSchema).min(1).max(50),
+    // Une DA sur un DS complet (Devonia : 153 tokens × modes) dépasse 50.
+    changes: z.array(changeSchema).min(1).max(1000),
   })
   .strict();
 

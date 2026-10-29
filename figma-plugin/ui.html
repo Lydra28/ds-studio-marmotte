@@ -111,6 +111,22 @@
     background: transparent;
     border: 1px solid var(--figma-color-border, #ddd);
   }
+  .msg.assistant {
+    white-space: normal;
+  }
+  .msg p,
+  .msg ul {
+    margin: 0 0 6px;
+  }
+  .msg ul {
+    padding-left: 16px;
+  }
+  .msg code {
+    font-size: 11px;
+    padding: 0 3px;
+    border-radius: 3px;
+    background: var(--figma-color-bg, #fff);
+  }
 </style>
 
 <h1>DS-Studio</h1>
@@ -216,11 +232,26 @@
   // Assistant : conversation gardée dans le plugin le temps de la session.
   // La sélection (lecture seule, code.js) n'est lue et envoyée que si la
   // case est cochée ; elle se décoche à chaque ouverture du plugin.
+  // Markdown minimal des réponses (gras, code, listes) sur du texte déjà
+  // échappé : jamais de HTML venu du modèle.
+  const inline = (s) => s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>');
+  function rich(text) {
+    const item = /^\s*(?:[-*•]|\d+[.)])\s+/;
+    return esc(text)
+      .split(/\n{2,}/)
+      .map((block) => {
+        const lines = block.split('\n');
+        return lines.every((l) => item.test(l))
+          ? `<ul>${lines.map((l) => `<li>${inline(l.replace(item, ''))}</li>`).join('')}</ul>`
+          : `<p>${lines.map((l) => inline(l.replace(/^#+\s+/, ''))).join('<br>')}</p>`;
+      })
+      .join('');
+  }
   function renderChat() {
     $('ask-log').innerHTML = state.chat
       .map(
         (m) =>
-          `<div class="msg ${m.role}">${esc(m.content)}${
+          `<div class="msg ${m.role}">${m.role === 'assistant' ? rich(m.content) : esc(m.content)}${
             m.findings && m.findings.length
               ? `<br><span class="muted">Écarts relevés dans la sélection :</span><ul>${m.findings.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>`
               : ''

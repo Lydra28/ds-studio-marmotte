@@ -88,7 +88,7 @@ test('mur des DA : image déposée, réduite, retirée ; génération bloquée s
 test('boucle : écart signalé, correction essayée, diff validé, preview à jour', async ({ page }) => {
   const sm = page.getByLabel('space/sm', { exact: true });
   await sm.fill('15');
-  await expect(page.getByText('1 écart(s)', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '1 écart(s) · Corrections' })).toBeVisible();
   const mascot = page.locator('.mascot-dock');
   await expect(mascot.locator('.mascot-badge')).toHaveText('1');
   await expect(mascot.getByRole('status')).toHaveText('1 écart(s) : regarde « Corrections ».');
@@ -103,6 +103,18 @@ test('boucle : écart signalé, correction essayée, diff validé, preview à jo
   await page.reload();
   await expect(page.getByLabel('space/sm', { exact: true })).toHaveValue('16');
   await expect.poll(() => previewVar(page, '--space-sm')).toBe('16px');
+});
+
+test('écarts : le compteur du haut mène aux corrections, « Tout corriger » met tout en brouillon', async ({ page }) => {
+  await page.getByLabel('space/sm', { exact: true }).fill('15');
+  await page.getByLabel('space/md', { exact: true }).fill('23');
+  await page.getByRole('button', { name: '2 écart(s) · Corrections' }).click();
+  await expect(page.locator('#corrections')).toBeInViewport();
+  await page.getByRole('button', { name: 'Tout corriger (2)' }).click();
+  await expect(page.getByText('Aucun écart', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('space/sm', { exact: true })).toHaveValue('16');
+  await expect(page.getByLabel('space/md', { exact: true })).toHaveValue('24');
+  await expect(page.getByText(/2 correction\(s\) mises en brouillon/)).toBeVisible();
 });
 
 test('ajout et retrait de tokens, retrait refusé tant qu’un alias y renvoie', async ({ page }) => {

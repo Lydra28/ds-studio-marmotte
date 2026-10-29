@@ -127,6 +127,16 @@ code {
   font-size: 14px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
+.message-close {
+  margin-left: 10px;
+  padding: 0 6px;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
 .message.ok {
   background: #ecfdf3;
   color: var(--c-ok);
@@ -466,6 +476,17 @@ code {
   border: 0;
   background: #fff;
   margin: 0 auto;
+}
+.corrections-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  align-items: center;
+}
+button.count {
+  border: 0;
+  cursor: pointer;
 }
 .corrections ul {
   list-style: none;
@@ -1291,9 +1312,14 @@ dialog.diff::backdrop,
   padding: 3px 9px;
   font-size: 12px;
 }
+.assistant-log > * {
+  flex-shrink: 0;
+}
 .assistant-log {
   flex: 1;
+  min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -1871,22 +1897,81 @@ dialog.diff .diff-summary {
   font-size: 12px;
 }
 
-/* Mascotte « Pastille » : flottante en bas à droite, ouvre l'assistant. */
+/* Mascotte « Pastille » : sprite pixel du logo, flottante en bas à droite,
+   ouvre l'assistant. Mouvements en escalier (steps) pour rester pixel. */
 .mascot {
   position: relative;
   display: block;
   width: 100%;
   height: 100%;
 }
-.mascot__scene {
-  position: absolute;
-  inset: 0;
+.mascot svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
-.mascot__fallback {
-  position: absolute;
-  inset: 22%;
-  border-radius: 28%;
-  box-shadow: inset 0 -8px 0 rgba(0, 0, 0, 0.18);
+.mascot__shadow {
+  fill: rgba(0, 0, 0, 0.35);
+}
+.mascot__body {
+  animation: mascot-bob 4s steps(2, jump-none) infinite;
+}
+.mascot__eyes rect {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.mascot--idle .mascot__eyes rect {
+  animation: mascot-blink 6s steps(1, end) infinite;
+}
+.mascot--joy .mascot__body {
+  animation: mascot-jump 0.8s steps(4, jump-none) 2;
+}
+.mascot__drop {
+  animation: mascot-drop 2.4s steps(3, jump-none) infinite;
+}
+.mascot__thought rect {
+  opacity: 0;
+  animation: mascot-thought 3s steps(1, end) infinite;
+}
+.mascot__thought rect:nth-child(2) {
+  animation-delay: 0.5s;
+}
+.mascot__thought rect:nth-child(3) {
+  animation-delay: 1s;
+}
+@keyframes mascot-bob {
+  50% {
+    transform: translateY(-1px);
+  }
+}
+@keyframes mascot-blink {
+  0%,
+  94% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.25);
+  }
+}
+@keyframes mascot-jump {
+  50% {
+    transform: translateY(-3px);
+  }
+}
+@keyframes mascot-drop {
+  to {
+    transform: translateY(2px);
+  }
+}
+@keyframes mascot-thought {
+  0% {
+    opacity: 0;
+  }
+  20%,
+  80% {
+    opacity: 1;
+  }
 }
 .mascot-dock {
   position: fixed;
@@ -1987,7 +2072,10 @@ dialog.diff .diff-summary {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .mascot-bubble {
+  .mascot-bubble,
+  .mascot__body,
+  .mascot__eyes rect,
+  .mascot__drop {
     animation: none;
   }
   .mascot-confetti {

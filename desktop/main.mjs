@@ -235,8 +235,11 @@ else {
     window.focus();
   });
   app.whenReady().then(async () => {
-    // Aucune permission (caméra, micro, notifications…) : l'atelier n'en demande pas.
-    session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
+    // Aucune permission (caméra, micro, notifications…) sauf l'écriture dans le
+    // presse-papiers (bouton « Copier » de l'export) ; jamais sa lecture.
+    session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) =>
+      callback(permission === 'clipboard-sanitized-write'),
+    );
     Menu.setApplicationMenu(menu());
     const projects =
       process.env.DS_STUDIO_PROJECTS || (await readSettings()).projects || (await chooseProjects('Quitter'));

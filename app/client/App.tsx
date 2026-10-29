@@ -158,7 +158,20 @@ function Workspace({
   // Comparaison affichée : avant d'accepter (état courant / dernière version)
   // ou entre deux versions depuis l'historique.
   const [comparison, setComparison] = useState<{ title: string; hint: string; patches: Patch[]; accept: boolean }>();
-  const [view, setView] = useState<View>('board');
+  const [view, setView] = useState<View>(() => {
+    try {
+      return sessionStorage.getItem(k('ds-start')) === 'wall' ? 'wall' : 'board';
+    } catch {
+      return 'board';
+    }
+  });
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem(k('ds-start'));
+    } catch {
+      /* Facultatif. */
+    }
+  }, []);
   // Vue Versions : onglet ouvert, et révision visée depuis la frise.
   const [versionsTab, setVersionsTab] = useState<'history' | 'timeline' | 'compare'>('history');
   const [timelineAt, setTimelineAt] = useState<number>();
@@ -235,6 +248,12 @@ function Workspace({
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  // Les messages de réussite couvrent le haut de la preview : ils s'effacent seuls.
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(''), 6000);
+    return () => clearTimeout(timer);
+  }, [notice]);
   const frame = useRef<HTMLIFrameElement>(null);
   const file = useRef<HTMLInputElement>(null);
 
@@ -461,9 +480,20 @@ function Workspace({
         versions={versions.map((v) => v.revision)}
         onVersion={(revision) => openVersions('timeline', revision)}
       >
-          <span className={`count ${findings.length ? 'warn' : 'ok'}`}>
-            {findings.length ? `${findings.length} écart(s)` : 'Aucun écart'}
-          </span>
+          {findings.length ? (
+            <button
+              className="count warn"
+              title="Voir les corrections proposées"
+              onClick={() => {
+                setView('board');
+                setTimeout(() => void document.getElementById('corrections')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+              }}
+            >
+              {findings.length} écart(s) · Corrections
+            </button>
+          ) : (
+            <span className="count ok">Aucun écart</span>
+          )}
           {inbox && (
             <button
               className="inbox"
@@ -538,6 +568,18 @@ function Workspace({
       {(error || notice || stateError || draftError) && (
         <p className={`message ${error || stateError || draftError ? 'error' : 'ok'}`} role={error ? 'alert' : 'status'}>
           {error || stateError || (draftError && `Brouillon invalide : ${draftError}`) || notice}
+          {(error || notice) && (
+            <button
+              className="message-close"
+              aria-label="Fermer le message"
+              onClick={() => {
+                setError('');
+                setNotice('');
+              }}
+            >
+              ×
+            </button>
+          )}
         </p>
       )}
       {view === 'wall' && (
@@ -671,6 +713,10 @@ function Workspace({
           <Corrections
             findings={findings}
             onFix={(f) => f.fix && edit(f.fix.key, f.fix.mode, f.fix.value)}
+            onFixAll={(list) => {
+              for (const f of list) if (f.fix) edit(f.fix.key, f.fix.mode, f.fix.value);
+              setNotice(`${list.length} correction(s) mises en brouillon : relis le diff avant de valider.`);
+            }}
           />
         </aside>
       </main>

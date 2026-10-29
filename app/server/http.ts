@@ -183,7 +183,9 @@ export async function createStudioServer(
         let size = 0;
         for await (const chunk of req) {
           size += chunk.length;
-          if (size > (url.pathname === '/api/wall/image' ? 5_200_000 : 128_000))
+          const max =
+            url.pathname === '/api/wall/image' ? 5_200_000 : url.pathname === '/api/proposals' ? 512_000 : 128_000;
+          if (size > max)
             throw new StudioError('Requête trop volumineuse.', 413);
           chunks.push(chunk);
         }

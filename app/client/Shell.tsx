@@ -326,7 +326,14 @@ function NewProject({ onCreated, onCancel }: { onCreated: (slug: string) => void
     setBusy(true);
     setError('');
     try {
-      onCreated((await createProject({ name, doctrine, ideas, figmaUrl })).slug);
+      const { slug } = await createProject({ name, doctrine, ideas, figmaUrl });
+      // Projet neuf : il s'ouvre sur le Mur des DA, première étape du parcours.
+      try {
+        sessionStorage.setItem(`ds-start:${slug}`, 'wall');
+      } catch {
+        /* Facultatif : sinon la planche s'ouvre. */
+      }
+      onCreated(slug);
     } catch (err) {
       setError((err as Error).message);
     } finally {

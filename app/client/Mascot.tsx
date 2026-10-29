@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { resolve, type TokenSet } from '../shared/model.js';
-import type { Mood, Pastille } from './pastille.js';
 
 // Couleur de marque du projet, brouillon compris : `bg/brand`, sinon le
 // premier token de couleur « brand », « primary » ou « accent ».
@@ -18,48 +17,99 @@ export function brandColor(set: TokenSet) {
   return '#7C5CFF';
 }
 
-// La pastille 3D. Pendant le chargement de Three.js, ou sans WebGL, un rond
-// de la même couleur la remplace.
+// Pastille en pixel art, même sprite que le logo de l'app (desktop/icon.png,
+// grille 16 × 16) : nuancier à visage, teinté par la couleur de marque du
+// projet. Les traits passent en clair sur une marque sombre.
+export type Mood = 'idle' | 'thinking' | 'worried';
+type Rect = [x: number, y: number, w: number, h: number];
+
+// # contour, Y teinte du projet, W étiquette, b trait de l'étiquette.
+const BODY = [
+  '..############..',
+  '.#YYYYYYYYYYYY#.',
+  '#YYYYYYYYYYYYYY#',
+  '#YYYYYYYYYYYYYY#',
+  '#YYYYYYYYYYYYYY#',
+  '#YYYYYYYYYYYYYY#',
+  '#YYYYYYYYYYYYYY#',
+  '#YYYYYYYYYYYYYY#',
+  '#YYYYYYYYYYYYYY#',
+  '#YYYYYYYYYYYYYY#',
+  '#YYYYYYYYYYYYYY#',
+  '#YWWWWWWWWWWWWY#',
+  '#YWbbbbbWWWWWWY#',
+  '#YWWWWWWWWWWWWY#',
+  '.#YYYYYYYYYYYY#.',
+  '..############..',
+];
+// Plages de même caractère fusionnées : une vingtaine de rectangles.
+const runs = (char: string): Rect[] =>
+  BODY.flatMap((row, y) => [...row.matchAll(new RegExp(`${char}+`, 'g'))].map((m): Rect => [m.index!, y, m[0].length, 1]));
+const OUTLINE = runs('#');
+const FILL = runs('Y');
+const LABEL = runs('W');
+const BAR = runs('b');
+
+type Face = 'idle' | 'thinking' | 'worried' | 'joy';
+const FACES: Record<Face, { eyes: Rect[]; mouth: Rect[] }> = {
+  idle: {
+    eyes: [[4, 4, 2, 2], [10, 4, 2, 2]],
+    mouth: [[5, 7, 1, 1], [10, 7, 1, 1], [6, 8, 4, 1]],
+  },
+  // Regard en haut à droite, bouche pincée, bulles de réflexion.
+  thinking: {
+    eyes: [[5, 3, 2, 2], [11, 3, 2, 2]],
+    mouth: [[7, 8, 3, 1]],
+  },
+  // Sourcils relevés au centre, bouche à l'envers.
+  worried: {
+    eyes: [[4, 5, 2, 1], [10, 5, 2, 1], [4, 3, 1, 1], [5, 2, 1, 1], [11, 3, 1, 1], [10, 2, 1, 1]],
+    mouth: [[6, 7, 4, 1], [5, 8, 1, 1], [10, 8, 1, 1]],
+  },
+  // Yeux en ^, grande bouche ouverte.
+  joy: {
+    eyes: [[3, 5, 1, 1], [4, 4, 2, 1], [6, 5, 1, 1], [9, 5, 1, 1], [10, 4, 2, 1], [12, 5, 1, 1]],
+    mouth: [[5, 7, 6, 1], [6, 8, 4, 1]],
+  },
+};
+
+const luminance = (hex: string) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const rects = (list: Rect[], fill: string, className?: string) =>
+  list.map(([x, y, w, h]) => <rect key={`${x}-${y}-${w}`} className={className} x={x} y={y} width={w} height={h} fill={fill} />);
+
 export function Mascot({ color, mood = 'idle', cheer = 0 }: { color: string; mood?: Mood; cheer?: number }) {
-  const scene = useRef<HTMLDivElement>(null);
-  const pastille = useRef<Pastille | null>(null);
-  const wanted = useRef({ color, mood });
-  wanted.current = { color, mood };
-  const [ready, setReady] = useState(false);
+  // Fête : visage de joie et saut, puis retour à l'humeur.
+  const [joy, setJoy] = useState(false);
   useEffect(() => {
-    let cancelled = false;
-    import('./pastille.js').then(
-      ({ createPastille }) => {
-        if (cancelled || !scene.current) return;
-        try {
-          pastille.current = createPastille(scene.current, wanted.current.color);
-          pastille.current.setMood(wanted.current.mood);
-          setReady(true);
-        } catch {
-          // Pas de WebGL : le rond reste.
-        }
-      },
-      () => {},
-    );
-    return () => {
-      cancelled = true;
-      pastille.current?.dispose();
-      pastille.current = null;
-    };
-  }, []);
-  useEffect(() => {
-    pastille.current?.setColor(color);
-  }, [color, ready]);
-  useEffect(() => {
-    pastille.current?.setMood(mood);
-  }, [mood, ready]);
-  useEffect(() => {
-    if (cheer) pastille.current?.celebrate();
+    if (!cheer) return;
+    setJoy(true);
+    const timer = setTimeout(() => setJoy(false), 1600);
+    return () => clearTimeout(timer);
   }, [cheer]);
+  const face: Face = joy ? 'joy' : mood;
+  const ink = luminance(color) > 0.3 ? '#0b0b0c' : '#f2f1ec';
   return (
-    <span className="mascot" aria-hidden="true">
-      {!ready && <span className="mascot__fallback" style={{ background: color }} />}
-      <span className="mascot__scene" ref={scene} />
+    <span className={`mascot mascot--${face}`} aria-hidden="true">
+      <svg viewBox="-2 -4 20 22" shapeRendering="crispEdges">
+        <rect className="mascot__shadow" x={2} y={17} width={12} height={1} />
+        <g className="mascot__body">
+          {rects(OUTLINE, '#0b0b0c')}
+          {rects(FILL, color)}
+          {rects(LABEL, '#f2f1ec')}
+          {rects(BAR, '#0b0b0c')}
+          <g className="mascot__eyes">{rects(FACES[face].eyes, ink)}</g>
+          {rects(FACES[face].mouth, ink)}
+          {face === 'worried' && rects([[13, 2, 1, 2]], '#7cc4ff', 'mascot__drop')}
+        </g>
+        {face === 'thinking' && (
+          <g className="mascot__thought">
+            {rects([[15, 0, 1, 1], [16, -2, 2, 2], [17, -4, 3, 2]], '#f2f1ec')}
+          </g>
+        )}
+      </svg>
     </span>
   );
 }
@@ -71,7 +121,7 @@ function Confetti() {
   return (
     <span className="mascot-confetti" aria-hidden="true">
       {CONFETTI.map((emoji, i) => (
-        <span key={i} style={{ '--angle': `${-120 + (150 / (CONFETTI.length - 1)) * i}deg` } as React.CSSProperties}>
+        <span key={i} style={{ '--angle': `${-120 + (150 / (CONFETTI.length - 1)) * i}deg` } as CSSProperties}>
           {emoji}
         </span>
       ))}

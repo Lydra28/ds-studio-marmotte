@@ -208,13 +208,30 @@ export function DiffDialog({
 export function Corrections({
   findings,
   onFix,
+  onFixAll,
 }: {
   findings: Finding[];
   onFix: (f: Finding) => void;
+  onFixAll: (list: Finding[]) => void;
 }) {
+  const fixable = findings.filter((f) => f.fix);
   return (
-    <section className="corrections" aria-labelledby="h-corr">
-      <h2 id="h-corr">Corrections</h2>
+    <section className="corrections" id="corrections" aria-labelledby="h-corr">
+      <div className="corrections-head">
+        <h2 id="h-corr">Corrections</h2>
+        {fixable.length > 0 && (
+          <button className="primary" onClick={() => onFixAll(fixable)}>
+            Tout corriger ({fixable.length})
+          </button>
+        )}
+      </div>
+      {findings.length > 0 && (
+        <p className="hint">
+          {fixable.length
+            ? 'Chaque correction rejoint le brouillon : rien n’est enregistré avant le diff.'
+            : 'Aucune correction automatique : ces écarts se règlent à la main (piste indiquée), ou avec l’assistant.'}
+        </p>
+      )}
       {findings.length === 0 ? (
         <p className="hint">
           Aucun écart sur {rules.length} règles : {rules.map((r) => r.label.toLowerCase()).join(', ')}.
@@ -392,11 +409,17 @@ export function ExportDialog({
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
     } catch {
-      /* Presse-papiers refusé : le téléchargement reste possible. */
+      // Presse-papiers refusé (app desktop, contexte non sûr) : ancienne méthode.
+      const area = Object.assign(document.createElement('textarea'), { value: code, readOnly: true });
+      dialog.current?.append(area);
+      area.select();
+      const ok = document.execCommand('copy');
+      area.remove();
+      if (!ok) return;
     }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   };
   return (
     <dialog ref={dialog} className="diff export-dialog" aria-labelledby="export-title" onCancel={onClose}>

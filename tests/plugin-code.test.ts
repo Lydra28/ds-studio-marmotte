@@ -216,3 +216,14 @@ test('plugin : sélection résumée en lecture seule, au format attendu par l’
   });
   assert.equal(card.itemSpacing, 14); // rien de modifié
 });
+
+test('interface du plugin : script valide, réponses de l’assistant rendues sans HTML du modèle', async () => {
+  const html = await readFile(path.join(root, 'figma-plugin/ui.html'), 'utf8');
+  const script = /<script>([\s\S]*?)<\/script>/.exec(html)![1];
+  assert.doesNotThrow(() => new vm.Script(script));
+  const pick = (name: string) => new RegExp(`const ${name} = (.*);`).exec(script)![1];
+  const body = /function rich\(text\) \{([\s\S]*?)\r?\n {2}\}\r?\n/.exec(script)![1];
+  const rich = new Function('esc', 'inline', 'text', body);
+  const out = rich(vm.runInNewContext(pick('esc')), vm.runInNewContext(pick('inline')), '**Nom** `Button` <img>\n\n- a\n- b');
+  assert.equal(out, '<p><strong>Nom</strong> <code>Button</code> &lt;img&gt;</p><ul><li>a</li><li>b</li></ul>');
+});

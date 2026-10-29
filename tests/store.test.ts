@@ -401,3 +401,11 @@ test('fiches de composants : migration annulable, édition et import par diff, f
   assert.equal(v.hash, versionHash(saved.set));
   assert.deepEqual(saved.components.map((c: { name: string }) => c.name).sort(), ['Button', 'Card', 'Input']);
 });
+
+test('diff de plus de 50 changements accepté (DA sur un DS complet), borne gardée', async () => {
+  const { proposeSchema } = await import('../app/shared/model.js');
+  const change = (i: number) => ({ key: `space/s${i}`, mode: 'base', value: 4 * i });
+  const many = { revision: 0, changes: Array.from({ length: 300 }, (_, i) => change(i)) };
+  assert.equal(proposeSchema.parse(many).changes.length, 300);
+  assert.throws(() => proposeSchema.parse({ revision: 0, changes: Array.from({ length: 1001 }, (_, i) => change(i)) }));
+});

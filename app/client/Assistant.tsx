@@ -76,13 +76,17 @@ export default function AssistantPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [drafted, setDrafted] = useState<Set<string>>(new Set());
-  const end = useRef<HTMLDivElement>(null);
+  const log = useRef<HTMLDivElement>(null);
   useEffect(() => {
     getAssistant().then(setState).catch((e) => setError(e.message));
   }, []);
-  // scrollIntoView peut renvoyer une promesse : ne jamais la rendre à React comme nettoyage.
+  // Défilement du seul journal (scrollIntoView faisait aussi sauter la page) :
+  // le début de la dernière bulle en haut, pour lire une longue réponse d'abord.
   useEffect(() => {
-    void end.current?.scrollIntoView({ block: 'end' });
+    const el = log.current;
+    const last = el?.querySelector<HTMLElement>('.bubble:last-of-type');
+    if (!el || !last) return;
+    el.scrollTop += last.getBoundingClientRect().top - el.getBoundingClientRect().top - 12;
   }, [state?.messages.length, busy]);
 
   const send = async (message: string) => {
@@ -113,7 +117,6 @@ export default function AssistantPanel({
         <Mascot color={color} mood={busy ? 'thinking' : 'idle'} />
         <div>
           <strong>Assistant</strong>
-          {state && <small className="mono">{state.model}</small>}
         </div>
         <div className="assistant-tools">
           <button
@@ -128,11 +131,11 @@ export default function AssistantPanel({
           </button>
         </div>
       </header>
-      <div className="assistant-log" aria-live="polite">
+      <div className="assistant-log" ref={log} aria-live="polite">
         {state && !state.enabled && (
           <p className="assistant-off">
-            Assistant désactivé : ajoute <code>OPENROUTER_API_KEY</code> dans <code>studio/.env</code>, puis relance
-            l’atelier. Tout le reste fonctionne sans lui.
+            Assistant désactivé : ajoute <code>OPENROUTER_API_KEY</code> dans le <code>.env</code> de l’atelier
+            (app installée : <code>%APPDATA%\DS-Studio\.env</code>), puis relance-le. Tout le reste fonctionne sans lui.
           </p>
         )}
         {state?.enabled && !state.messages.length && (
@@ -168,15 +171,9 @@ export default function AssistantPanel({
                 </button>
               </div>
             )}
-            {m.usage && (
-              <small className="usage mono">
-                {m.usage.prompt} + {m.usage.completion} tokens
-              </small>
-            )}
           </div>
         ))}
         {busy && <div className="bubble assistant pending">L’assistant réfléchit…</div>}
-        <div ref={end} />
       </div>
       {error && (
         <p className="add-error assistant-error" role="alert">
