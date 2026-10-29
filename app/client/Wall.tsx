@@ -260,8 +260,7 @@ export default function Wall({
       {result && (
         <>
           <p className="hint mono">
-            Génération enregistrée du {new Date(result.date).toLocaleString('fr-FR')} · {result.model}
-            {result.usage ? ` · ${result.usage.prompt} + ${result.usage.completion} tokens` : ''}
+            Génération enregistrée du {new Date(result.date).toLocaleString('fr-FR')}
           </p>
           <div className="planches">
             {result.directions.map((d, i) => (
