@@ -359,10 +359,16 @@ test(
             .getByLabel('bg/brand light', { exact: true })
             .fill('#224477');
           await action('restart');
-          await page
-            .getByRole('button', { name: 'Voir le diff et valider' })
-            .click();
-          await page.getByRole('dialog').waitFor();
+          // Juste après le redémarrage, le premier appel peut tomber avant que
+          // l'onglet ait renouvelé sa session (macOS en CI) : on réessaie.
+          const dialog = page.getByRole('dialog');
+          for (let i = 0; i < 10 && !(await dialog.isVisible()); i++) {
+            await page
+              .getByRole('button', { name: 'Voir le diff et valider' })
+              .click();
+            await dialog.waitFor({ timeout: 3000 }).catch(() => {});
+          }
+          await dialog.waitFor();
           assert.match(await page.getByRole('dialog').textContent(), /#224477/);
           assert.equal((await serverState()).revision, 1);
           await page.keyboard.press('Escape');
@@ -630,6 +636,13 @@ test(
         }
       } finally {
         for (const child of children) if (child.exitCode === null) child.kill();
+        // Échec précoce (contrôleur jamais joint) : les processus détachés
+        // restaient et bloquaient la CI 46 min. Arrêt par leurs verrous.
+        for (const name of ['server', 'launcher']) {
+          const record = await readRecord(data, name).catch(() => null);
+          const pid = typeof record === 'number' ? record : record?.pid;
+          if (pid && alive(pid)) process.kill(pid, 'SIGTERM');
+        }
         await fs.rm(temporary, { recursive: true, force: true });
       }
     }

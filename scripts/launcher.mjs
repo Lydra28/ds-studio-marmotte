@@ -115,7 +115,8 @@ async function serve() {
     lease = await acquireLease(directory, 'launcher', { root, directory });
   } catch (error) {
     // Un double-clic concurrent peut lire le fichier avant sa publication complète.
-    for (let i = 0; i < 40; i++) {
+    // Jusqu'à 10 s (sous les 12 s de launch) : 4 s ne suffisaient pas sur un runner lent.
+    for (let i = 0; i < 100; i++) {
       const old = await existingLauncher();
       if (old) {
         process.send?.(old);
