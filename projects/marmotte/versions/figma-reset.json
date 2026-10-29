@@ -15,5 +15,39 @@
         "Button"
       ]
     }
+  },
+  {
+    "date": "2026-10-29T08:42:43.248Z",
+    "by": "plugin",
+    "fileKey": "N5YMZ1aN6gtSZ0QBjzjdWh",
+    "removed": {
+      "collections": [
+        "Primitives",
+        "Tokens",
+        "Typography"
+      ],
+      "variables": 68,
+      "page": "DS-Studio · Foundations",
+      "components": [
+        "Button"
+      ]
+    }
+  },
+  {
+    "date": "2026-10-29T08:43:47.002Z",
+    "by": "plugin",
+    "fileKey": "N5YMZ1aN6gtSZ0QBjzjdWh",
+    "removed": {
+      "collections": [
+        "Primitives",
+        "Tokens",
+        "Typography"
+      ],
+      "variables": 68,
+      "page": "DS-Studio · Foundations",
+      "components": [
+        "Button"
+      ]
+    }
   }
 ]
