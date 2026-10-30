@@ -377,15 +377,28 @@ export async function createStudioServer(
     }
   });
   server.requestTimeout = 15000;
+  let closing: Promise<void> | undefined;
   server.headersTimeout = 10000;
   return {
     server,
-    close: async () => {
-      await new Promise<void>((resolve, reject) =>
-        server.close((e) => (e ? reject(e) : resolve())),
-      );
-      await vite?.close();
-    },
+    close: () =>
+      (closing ??= (async () => {
+        const closed = new Promise<void>((resolve, reject) =>
+          server.close((e) => (e ? reject(e) : resolve())),
+        );
+        // Un onglet peut retenir un socket (requête inachevée, préconnexion) :
+        // server.close() attendrait requestTimeout et l'arrêt dépasserait les
+        // 10 s accordées par le lanceur (Ubuntu en CI, 2026-10-30). Au-delà de
+        // 2 s, les connexions restantes sont coupées ; l'onglet renouvelle sa
+        // session sur le serveur suivant.
+        const cutoff = setTimeout(() => server.closeAllConnections(), 2000);
+        try {
+          await closed;
+        } finally {
+          clearTimeout(cutoff);
+        }
+        await vite?.close();
+      })()),
   };
 }
 function urlSafeMessage(error: unknown) {

@@ -237,7 +237,9 @@ async function serve() {
         if (busy || observedGeneration !== generation) return status();
         observedServer = record = null;
         phase = 'erreur';
-        error = e.message;
+        // L'erreur de l'action (« arrêt propre dépasse 10 secondes ») dit la
+        // cause ; la sonde qui suit ne la remplace pas par son symptôme.
+        error ||= e.message;
       }
     }
     return {

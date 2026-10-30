@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import http from 'node:http';
+import net from 'node:net';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -54,7 +55,7 @@ async function fixture(
       },
       body: JSON.stringify(body),
     });
-  return { origin, post, store };
+  return { origin, post, store, app };
 }
 test('API manuelle complète sans IA ni Figma, export égal au disque', async (t) => {
   const { origin, post, store } = await fixture(t);
@@ -203,4 +204,24 @@ test('brief : API fermée, révision conflictuelle et aucun fichier privé servi
   );
   assert.equal((await fetch(origin + '/.ds-studio/project.json')).status, 404);
   assert.equal(store.snapshot().revision, 0);
+});
+test('fermeture : une connexion de navigateur qui traîne ne retient pas l’arrêt', async (t) => {
+  const { origin, app } = await fixture(t);
+  const { port } = app.server.address() as { port: number };
+  // Un onglet peut garder un socket avec une requête inachevée (corps jamais
+  // envoyé, préconnexion) : sans borne, server.close() attend requestTimeout
+  // (15 s) et l'arrêt dépasse les 10 s accordées par le lanceur (Ubuntu en CI,
+  // 2026-10-30, « arrêt propre dépasse 10 secondes » puis ECONNREFUSED).
+  const lingering = net.connect(port, '127.0.0.1');
+  await new Promise<void>((resolve) => lingering.once('connect', resolve));
+  lingering.write(
+    'POST /api/proposals HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{"rev',
+  );
+  assert.equal((await fetch(origin + '/api/bootstrap')).status, 200);
+  const started = Date.now();
+  await app.close();
+  const elapsed = Date.now() - started;
+  assert.ok(elapsed < 5000, `fermeture en ${elapsed} ms`);
+  lingering.destroy();
+  await app.close(); // idempotente : le crochet after de la fixture la rappelle
 });
