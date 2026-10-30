@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Assistant, askSchema, selectionFindings } from '../app/server/assistant.js';
+import { Assistant, askSchema, parseProposal, selectionFindings } from '../app/server/assistant.js';
 import { tokenSetSchema } from '../app/shared/model.js';
 import { projectSchema } from '../app/shared/project.js';
 
@@ -83,6 +83,46 @@ test('assistant : désactivé sans clé, contexte du projet envoyé, proposition
   });
   await assert.rejects(() => refused.chat('?', context), /refusé la requête \(402\) : No credits/);
   assert.equal((await refused.history()).length, 0);
+});
+
+test('assistant : tour vide du modèle relancé une fois', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ds-assistant-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const replies = [
+    { content: null },
+    { content: '', tool_calls: [{ function: { name: 'propose_changes', arguments: JSON.stringify({ reason: 'x', changes: [{ key: 'space/sm', mode: 'default', value: 16 }] }) } }] },
+  ];
+  let calls = 0;
+  const retried = new Assistant(dir, {
+    apiKey: 'k',
+    fetch: (async () => new Response(JSON.stringify({ choices: [{ message: replies[calls++] }] }))) as typeof fetch,
+  });
+  const [, reply] = await retried.chat('Corrige', context);
+  assert.equal(calls, 2);
+  assert.equal(reply.proposal?.changes.length, 1);
+  const silent = new Assistant(dir, { apiKey: 'k', fetch: fake({ content: null }) });
+  const [, none] = await silent.chat('Corrige', context);
+  assert.match(none.content, /Pas de réponse du modèle, deux fois/);
+  // Réponse coupée par la limite de longueur : message clair, pas de balises brutes.
+  const cut = new Assistant(dir, {
+    apiKey: 'k',
+    fetch: (async () =>
+      new Response(JSON.stringify({ choices: [{ finish_reason: 'length', message: { content: 'Je regarde <｜DSML｜ invoke' } }] }))) as typeof fetch,
+  });
+  const [, truncated] = await cut.chat('Corrige', context);
+  assert.match(truncated.content, /Réponse coupée/);
+});
+
+test('assistant : nombre écrit en texte corrigé comme au Mur des DA, format illisible expliqué', () => {
+  // Cas vu en recette sur Devonia : {"value":"16"} pour une taille → proposition écartée.
+  const ok = parseProposal(JSON.stringify({ reason: 'x', changes: [{ key: 'space/sm', mode: 'default', value: '16' }] }), set);
+  assert.ok(!('error' in ok));
+  assert.deepEqual(ok.changes, [{ key: 'space/sm', mode: 'default', value: 16 }]);
+  const px = parseProposal(JSON.stringify({ reason: 'x', changes: [{ key: 'space/sm', mode: 'default', value: '16px' }] }), set);
+  assert.ok(!('error' in px));
+  assert.deepEqual(px.changes, [{ key: 'space/sm', mode: 'default', value: 16 }]);
+  const bad = parseProposal(JSON.stringify({ reason: 'x', changes: [{ key: 'space/sm', valeur: 16 }] }), set);
+  assert.match('error' in bad ? String(bad.error) : '', /^format invalide \(/);
 });
 
 test('assistant du plugin Figma : texte seulement, sélection envoyée si cochée, écarts relevés, rien d’écrit', async (t) => {

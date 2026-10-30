@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { z } from 'zod';
 import { applyChanges, changeSchema, type Change, type TokenSet } from '../shared/model.js';
+import { normalize } from '../shared/normalize.js';
 import { checkComponentName, runRules } from '../shared/rules.js';
 import type { Project } from '../shared/project.js';
 import { atomicWrite, readPrivate } from './files.js';
@@ -222,7 +223,8 @@ export class Assistant {
         ...request.history.slice(-8),
         { role: 'user', content: request.message },
       ],
-      max_tokens: 1500,
+      // Réflexion du modèle comprise dans la limite : assez de marge pour répondre.
+      max_tokens: 8000,
     };
     const data = await callOpenRouter(this.options, body);
     const reply = (data.choices?.[0]?.message?.content ?? '').trim();
@@ -244,9 +246,17 @@ export class Assistant {
         ...messages.slice(-20).map((m) => ({ role: m.role, content: m.content || m.proposal?.reason || '' })),
       ],
       tools: [proposeTool],
-      max_tokens: 4000,
+      // Réflexion comprise : 4000 coupait la réponse dès 5 écarts (Devonia, recette).
+      max_tokens: 16000,
     };
-    const data = await callOpenRouter(this.options, body);
+    // Le modèle rend parfois un tour vide (ni texte ni proposition, vu en
+    // recette sur Devonia) : un second essai, puis un message clair.
+    let data = await callOpenRouter(this.options, body);
+    const empty = (d: Completion) => {
+      const m = d.choices?.[0]?.message;
+      return !m?.content?.trim() && !m?.tool_calls?.some((c) => c.function?.name === 'propose_changes');
+    };
+    if (empty(data)) data = await callOpenRouter(this.options, body);
     const choice = data.choices?.[0]?.message;
     if (!choice) throw new StudioError('Réponse vide de l’assistant. Réessaie.', 502);
     const reply: AssistantMessage = {
@@ -262,7 +272,9 @@ export class Assistant {
         reply.content = `${reply.content}\n\n(Proposition écartée : ${proposal.error})`.trim();
       else reply.proposal = proposal;
     }
-    if (!reply.content && !reply.proposal) reply.content = '(Pas de réponse.)';
+    if (data.choices?.[0]?.finish_reason === 'length' && !reply.proposal)
+      reply.content = '(Réponse coupée : le modèle a dépassé sa longueur maximale. Demande une correction à la fois.)';
+    if (!reply.content && !reply.proposal) reply.content = '(Pas de réponse du modèle, deux fois de suite : reformule ou renvoie la question.)';
     return reply;
   }
 }
@@ -274,15 +286,20 @@ export function parseProposal(raw: string, set: TokenSet) {
     const parsed = z
       .object({ reason: z.string().max(1000), changes: z.array(changeSchema).min(1).max(30) })
       .parse(JSON.parse(raw));
-    applyChanges(set, parsed.changes);
-    return parsed;
+    // Mêmes corrections de forme que le Mur des DA (ex. "16" → 16 pour une taille).
+    const changes = parsed.changes.flatMap((c) => normalize(c, set));
+    applyChanges(set, changes);
+    return { reason: parsed.reason, changes };
   } catch (e) {
-    return { error: e instanceof z.ZodError ? 'format invalide' : (e as Error).message.slice(0, 200) };
+    if (!(e instanceof z.ZodError)) return { error: (e as Error).message.slice(0, 200) };
+    const issue = e.issues[0];
+    return { error: `format invalide${issue ? ` (${issue.path.join('.') || 'racine'} : ${issue.message})` : ''}`.slice(0, 200) };
   }
 }
 
 interface Completion {
   choices?: {
+    finish_reason?: string | null;
     message?: {
       content?: string | null;
       tool_calls?: { function: { name: string; arguments: string } }[];
