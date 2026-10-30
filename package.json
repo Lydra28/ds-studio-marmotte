@@ -1,6 +1,6 @@
 {
   "name": "ds-studio",
-  "version": "2.0.0",
+  "version": "2.1.0-rc.1",
   "private": true,
   "type": "module",
   "description": "Starter pédagogique local pour explorer et faire évoluer un Design System.",
@@ -78,7 +78,10 @@
       "icon": "desktop/icon.png"
     },
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "category": "public.app-category.developer-tools",
       "icon": "desktop/icon-512.png",
       "hardenedRuntime": true,
@@ -92,7 +95,9 @@
       "artifactName": "DS-Studio-${version}-${arch}.dmg"
     },
     "linux": {
-      "target": ["AppImage"],
+      "target": [
+        "AppImage"
+      ],
       "category": "Development",
       "icon": "desktop/icon-512.png",
       "artifactName": "DS-Studio-${version}-${arch}.AppImage"
