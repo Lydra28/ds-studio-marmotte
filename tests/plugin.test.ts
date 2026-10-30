@@ -196,6 +196,12 @@ test('plugin Figma : contrat versionné, manifeste Community', async (t) => {
   const ui = await readFile(path.join(root, 'figma-plugin/ui.html'), 'utf8');
   assert.ok(ui.includes(`const CONTRACT = ${PLUGIN_CONTRACT};`), 'CONTRACT de ui.html différent de PLUGIN_CONTRACT');
   assert.ok(ui.includes(`'X-DS-Plugin-Contract': CONTRACT`), 'ui.html doit envoyer le contrat');
+  // Atelier d'avant le contrat (rc.4) : sa pré-requête CORS refuse l'en-tête et le navigateur ne lance rien
+  // (« Failed to fetch »), aucun 426 possible ; le plugin sonde l'adresse en no-cors pour dire « mets à jour
+  // DS-Studio » plutôt qu'« injoignable ». Vu le 2026-10-30 au premier essai réel dans Figma.
+  assert.ok(ui.includes(`{ mode: 'no-cors' }`), 'ui.html doit sonder l’adresse en no-cors quand la requête ne part pas');
+  assert.ok(ui.includes('antérieure au contrat v${CONTRACT}'), 'ui.html doit expliquer l’atelier trop ancien pour le contrat');
+  assert.ok(ui.includes('err instanceof TypeError ? await explainFetchFailure()'), 'seule une requête non partie déclenche la sonde');
   // Manifeste prêt pour la Community : origines locales déclarées avec leur raison, pas d'API privée ni de domaine de développement.
   const manifest = JSON.parse(await readFile(path.join(root, 'figma-plugin/manifest.json'), 'utf8'));
   assert.equal(manifest.enablePrivatePluginApi, undefined);

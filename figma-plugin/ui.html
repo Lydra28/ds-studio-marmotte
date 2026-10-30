@@ -206,8 +206,9 @@
   // Contrat avec l'atelier (PLUGIN_CONTRACT dans app/server/plugin.ts) : un
   // écart donne un message qui dit quoi mettre à jour, plugin ou atelier.
   const CONTRACT = 2;
+  const addrOf = () => $('addr').value.replace(/\/+$/, '');
   async function api(route, body) {
-    const res = await fetch($('addr').value.replace(/\/+$/, '') + '/api/plugin/' + route, {
+    const res = await fetch(addrOf() + '/api/plugin/' + route, {
       method: body === undefined ? 'GET' : 'POST',
       headers: {
         'X-DS-Plugin': $('code').value.trim(),
@@ -219,6 +220,19 @@
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
     return data;
+  }
+  // « Failed to fetch » : rien n'est parti. Soit personne n'écoute à l'adresse,
+  // soit l'atelier répond mais refuse la requête avant de la lire : un atelier
+  // d'avant le contrat (rc.4 et antérieures) ne connaît pas l'en-tête
+  // X-DS-Plugin-Contract, sa pré-requête CORS échoue et aucun 426 n'est
+  // possible. Une requête opaque (no-cors) tranche : elle aboutit dès que
+  // quelque chose écoute, quoi qu'il réponde.
+  async function explainFetchFailure() {
+    const addr = addrOf();
+    const listening = await fetch(addr + '/api/plugin/projects', { mode: 'no-cors' }).then(() => true, () => false);
+    return listening
+      ? `L’atelier répond à ${addr} mais refuse ce plugin avant de le lire : cette version de DS-Studio est antérieure au contrat v${CONTRACT} du plugin. Mets à jour DS-Studio (Réglages → Rechercher une mise à jour), ou lance une version récente, puis réessaie.`
+      : `Atelier injoignable à ${addr} : lance DS-Studio (4310 : app installée ; 4311 : DS-Studio Dev) et vérifie l’adresse.`;
   }
   const slug = () => $('project').value;
 
@@ -238,7 +252,9 @@
       setStatus(`Connecté · ${state.projects.length} projet(s)`);
       await loadProject();
     } catch (err) {
-      setError(`Atelier injoignable ou code refusé : ${err.message}`);
+      // TypeError : la requête n'est pas partie (atelier éteint ou trop ancien) ;
+      // sinon l'atelier a répondu : son message (code refusé, 426…) suffit.
+      setError(err instanceof TypeError ? await explainFetchFailure() : `Refusé par l’atelier : ${err.message}`);
     }
   };
   $('project').onchange = () => {
