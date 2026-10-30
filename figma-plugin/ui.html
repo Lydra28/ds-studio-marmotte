@@ -9,9 +9,20 @@
     color: var(--figma-color-text, #222);
     background: var(--figma-color-bg, #fff);
   }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 8px;
+  }
+  /* Mascotte « Pastille », même sprite que le logo de l'app et l'icône
+     Community (scripts/plugin-assets.mjs). 32 px : 2 px par case. */
+  .brand .mascot {
+    flex: none;
+  }
   h1 {
     font-size: 13px;
-    margin: 0 0 8px;
+    margin: 0;
   }
   h2 {
     font-size: 12px;
@@ -129,7 +140,10 @@
   }
 </style>
 
-<h1>DS-Studio</h1>
+<header class="brand">
+  <svg class="mascot" viewBox="0 0 16 16" width="32" height="32" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="0" width="12" height="1" fill="#0b0b0c" /><rect x="1" y="1" width="1" height="1" fill="#0b0b0c" /><rect x="2" y="1" width="12" height="1" fill="#e8ff3a" /><rect x="14" y="1" width="1" height="1" fill="#0b0b0c" /><rect x="0" y="2" width="1" height="1" fill="#0b0b0c" /><rect x="1" y="2" width="14" height="1" fill="#e8ff3a" /><rect x="15" y="2" width="1" height="1" fill="#0b0b0c" /><rect x="0" y="3" width="1" height="1" fill="#0b0b0c" /><rect x="1" y="3" width="14" height="1" fill="#e8ff3a" /><rect x="15" y="3" width="1" height="1" fill="#0b0b0c" /><rect x="0" y="4" width="1" height="1" fill="#0b0b0c" /><rect x="1" y="4" width="3" height="1" fill="#e8ff3a" /><rect x="4" y="4" width="2" height="1" fill="#0b0b0c" /><rect x="6" y="4" width="4" height="1" fill="#e8ff3a" /><rect x="10" y="4" width="2" height="1" fill="#0b0b0c" /><rect x="12" y="4" width="3" height="1" fill="#e8ff3a" /><rect x="15" y="4" width="1" height="1" fill="#0b0b0c" /><rect x="0" y="5" width="1" height="1" fill="#0b0b0c" /><rect x="1" y="5" width="3" height="1" fill="#e8ff3a" /><rect x="4" y="5" width="2" height="1" fill="#0b0b0c" /><rect x="6" y="5" width="4" height="1" fill="#e8ff3a" /><rect x="10" y="5" width="2" height="1" fill="#0b0b0c" /><rect x="12" y="5" width="3" height="1" fill="#e8ff3a" /><rect x="15" y="5" width="1" height="1" fill="#0b0b0c" /><rect x="0" y="6" width="1" height="1" fill="#0b0b0c" /><rect x="1" y="6" width="14" height="1" fill="#e8ff3a" /><rect x="15" y="6" width="1" height="1" fill="#0b0b0c" /><rect x="0" y="7" width="1" height="1" fill="#0b0b0c" /><rect x="1" y="7" width="4" height="1" fill="#e8ff3a" /><rect x="5" y="7" width="1" height="1" fill="#0b0b0c" /><rect x="6" y="7" width="4" height="1" fill="#e8ff3a" /><rect x="10" y="7" width="1" height="1" fill="#0b0b0c" /><rect x="11" y="7" width="4" height="1" fill="#e8ff3a" /><rect x="15" y="7" width="1" height="1" fill="#0b0b0c" /><rect x="0" y="8" width="1" height="1" fill="#0b0b0c" /><rect x="1" y="8" width="5" height="1" fill="#e8ff3a" /><rect x="6" y="8" width="4" height="1" fill="#0b0b0c" /><rect x="10" y="8" width="5" height="1" fill="#e8ff3a" /><rect x="15" y="8" width="1" height="1" fill="#0b0b0c" /><rect x="0" y="9" width="1" height="1" fill="#0b0b0c" /><rect x="1" y="9" width="14" height="1" fill="#e8ff3a" /><rect x="15" y="9" width="1" height="1" fill="#0b0b0c" /><rect x="0" y="10" width="1" height="1" fill="#0b0b0c" /><rect x="1" y="10" width="14" height="1" fill="#e8ff3a" /><rect x="15" y="10" width="1" height="1" fill="#0b0b0c" /><rect x="0" y="11" width="1" height="1" fill="#0b0b0c" /><rect x="1" y="11" width="1" height="1" fill="#e8ff3a" /><rect x="2" y="11" width="12" height="1" fill="#f2f1ec" /><rect x="14" y="11" width="1" height="1" fill="#e8ff3a" /><rect x="15" y="11" width="1" height="1" fill="#0b0b0c" /><rect x="0" y="12" width="1" height="1" fill="#0b0b0c" /><rect x="1" y="12" width="1" height="1" fill="#e8ff3a" /><rect x="2" y="12" width="1" height="1" fill="#f2f1ec" /><rect x="3" y="12" width="5" height="1" fill="#0b0b0c" /><rect x="8" y="12" width="6" height="1" fill="#f2f1ec" /><rect x="14" y="12" width="1" height="1" fill="#e8ff3a" /><rect x="15" y="12" width="1" height="1" fill="#0b0b0c" /><rect x="0" y="13" width="1" height="1" fill="#0b0b0c" /><rect x="1" y="13" width="1" height="1" fill="#e8ff3a" /><rect x="2" y="13" width="12" height="1" fill="#f2f1ec" /><rect x="14" y="13" width="1" height="1" fill="#e8ff3a" /><rect x="15" y="13" width="1" height="1" fill="#0b0b0c" /><rect x="1" y="14" width="1" height="1" fill="#0b0b0c" /><rect x="2" y="14" width="12" height="1" fill="#e8ff3a" /><rect x="14" y="14" width="1" height="1" fill="#0b0b0c" /><rect x="2" y="15" width="12" height="1" fill="#0b0b0c" /></svg>
+  <h1>DS-Studio</h1>
+</header>
 <p class="muted">Écrit la dernière version acceptée de l’atelier dans ce fichier, renvoie ses composants à l’atelier, et répond à tes questions sur le DS.</p>
 
 <form id="connect">
@@ -189,10 +203,17 @@
   const setDone = (m) => say('ok', m);
   const feedback = (zone) => `<p class="feedback" id="fb-${zone}" role="status"></p>`;
 
+  // Contrat avec l'atelier (PLUGIN_CONTRACT dans app/server/plugin.ts) : un
+  // écart donne un message qui dit quoi mettre à jour, plugin ou atelier.
+  const CONTRACT = 2;
   async function api(route, body) {
     const res = await fetch($('addr').value.replace(/\/+$/, '') + '/api/plugin/' + route, {
       method: body === undefined ? 'GET' : 'POST',
-      headers: { 'X-DS-Plugin': $('code').value.trim(), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+      headers: {
+        'X-DS-Plugin': $('code').value.trim(),
+        'X-DS-Plugin-Contract': CONTRACT,
+        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({}));
@@ -303,10 +324,15 @@
     html += target
       ? `Cible du projet : <code>${esc(target)}</code> · <span class="${match ? 'ok' : 'ko'}">${match ? 'c’est ce fichier' : 'autre fichier'}</span>`
       : '<span class="muted">Ce projet n’a pas de cible Figma : transfert impossible.</span>';
+    // Plugin Community : Figma ne donne pas la clé du fichier. Le designer
+    // colle le lien du fichier ouvert ; si le projet a déjà une cible, il peut
+    // aussi confirmer que c'est celle-ci.
+    if (!file.key)
+      html += `<div class="row"><label for="file-url">Lien de ce fichier (Partager → Copier le lien)</label></div><input id="file-url" placeholder="https://www.figma.com/design/…" autocomplete="off"><button id="identify">Identifier ce fichier</button>`;
     if (target && !file.key)
       html += `<div class="row"><input type="checkbox" id="confirm-link"><label for="confirm-link">Ce fichier est bien la cible de ${esc(p.name)}</label></div><button id="link">Lier ce fichier au projet</button>`;
     const owner = state.projects.find((x) => x.figma && x.figma.fileKey === file.key);
-    if (!target && file.key && file.native)
+    if (!target && file.key)
       html += owner
         ? `<br><span class="muted">Ce fichier est déjà la cible de ${esc(owner.name)}.</span>`
         : `<div class="row"><input type="checkbox" id="confirm-target"><label for="confirm-target">« ${esc(file.name)} » est bien le fichier de ${esc(p.name)}</label></div><button id="set-target">Faire de ce fichier la cible de ${esc(p.name)}</button>`;
@@ -371,6 +397,12 @@
         send({ type: 'reset-plan', target: p.figma, known: p.known });
       });
 
+    if ($('identify'))
+      $('identify').onclick = act('target', () => {
+        const url = $('file-url').value.trim();
+        if (!url) return setError('Colle le lien de ce fichier (Partager → Copier le lien) avant de l’identifier.');
+        send({ type: 'link-file', fileKey: url });
+      });
     if ($('link'))
       $('link').onclick = act('target', () => {
         if (!$('confirm-link').checked) return setError('Coche la confirmation avant de lier ce fichier.');

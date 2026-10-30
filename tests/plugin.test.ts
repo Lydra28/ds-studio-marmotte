@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { Registry } from '../app/server/registry.js';
 import { createStudioServer } from '../app/server/http.js';
 import { acceptVersion } from '../app/server/versions.js';
-import { loadPluginCode } from '../app/server/plugin.js';
+import { loadPluginCode, PLUGIN_CONTRACT } from '../app/server/plugin.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -31,7 +31,7 @@ test('plugin Figma : appairage, version acceptée calculée, reçu de transfert,
       headers: {
         Origin: 'null',
         'Sec-Fetch-Site': 'cross-site',
-        'X-DS-Plugin': key,
+        'X-DS-Plugin-Contract': String(PLUGIN_CONTRACT), 'X-DS-Plugin': key,
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -48,7 +48,7 @@ test('plugin Figma : appairage, version acceptée calculée, reçu de transfert,
   const viaLocalhost = (route: string) =>
     new Promise<number>((resolve, reject) =>
       http
-        .get(base.replace('/api/plugin/', route), { headers: { Host: `localhost:${new URL(base).port}`, 'X-DS-Plugin': code } }, (r) => {
+        .get(base.replace('/api/plugin/', route), { headers: { Host: `localhost:${new URL(base).port}`, 'X-DS-Plugin-Contract': String(PLUGIN_CONTRACT), 'X-DS-Plugin': code } }, (r) => {
           r.resume();
           resolve(r.statusCode ?? 0);
         })
@@ -115,12 +115,12 @@ test('plugin Figma : le fichier ouvert devient la cible d’un projet qui n’en
   t.after(() => app.close());
   const base = `http://127.0.0.1:${(app.server.address() as { port: number }).port}/api/plugin/`;
   const target = (project: string, fileKey: string) =>
-    fetch(`${base}target?project=${project}`, { method: 'POST', headers: { 'X-DS-Plugin': code, 'Content-Type': 'application/json' }, body: JSON.stringify({ fileKey }) });
+    fetch(`${base}target?project=${project}`, { method: 'POST', headers: { 'X-DS-Plugin-Contract': String(PLUGIN_CONTRACT), 'X-DS-Plugin': code, 'Content-Type': 'application/json' }, body: JSON.stringify({ fileKey }) });
 
   // Version acceptée avant toute cible : elle prendra celle désignée ensuite.
   const refuge = await registry.get('refuge');
   await acceptVersion(refuge.dir, refuge.config, refuge.store.snapshot(), 0);
-  const payloadOf = () => fetch(`${base}payload?project=refuge`, { headers: { 'X-DS-Plugin': code } });
+  const payloadOf = () => fetch(`${base}payload?project=refuge`, { headers: { 'X-DS-Plugin-Contract': String(PLUGIN_CONTRACT), 'X-DS-Plugin': code } });
   assert.equal((await payloadOf()).status, 409);
 
   const taken = await target('refuge', 'N5YMZ1aN6gtSZ0QBjzjdWh'); // fichier de Marmotte
@@ -152,9 +152,9 @@ test('plugin Figma : question à l’assistant, appairage exigé, texte seulemen
   t.after(() => app.close());
   const base = `http://127.0.0.1:${(app.server.address() as { port: number }).port}/api/plugin/`;
   const ask = (body: unknown, key = code) =>
-    fetch(`${base}ask?project=marmotte`, { method: 'POST', headers: { 'X-DS-Plugin': key, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    fetch(`${base}ask?project=marmotte`, { method: 'POST', headers: { 'X-DS-Plugin-Contract': String(PLUGIN_CONTRACT), 'X-DS-Plugin': key, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
-  assert.equal((await (await fetch(base + 'projects', { headers: { 'X-DS-Plugin': code } })).json())[0].assistant, true);
+  assert.equal((await (await fetch(base + 'projects', { headers: { 'X-DS-Plugin-Contract': String(PLUGIN_CONTRACT), 'X-DS-Plugin': code } })).json())[0].assistant, true);
   assert.equal((await ask({ message: 'Bonjour' }, 'aaaa-bbbb-cccc')).status, 401);
   assert.equal((await ask({ message: '' })).status, 400);
   const selection = { file: 'Maquettes', nodes: [{ name: 'Carte', type: 'FRAME', depth: 0, gap: { v: 14, var: null } }] };
@@ -165,4 +165,43 @@ test('plugin Figma : question à l’assistant, appairage exigé, texte seulemen
   assert.deepEqual(body.findings, ['Carte : gap de 14 px, hors grille de 4 (16 px).']);
   assert.match(seen[0], /Marmotte/);
   assert.equal(seen.length, 1); // requête refusée : aucun appel au modèle
+});
+
+test('plugin Figma : contrat versionné, manifeste Community', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ds-plugin-contract-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  for (const f of ['design-system.tokens.json', 'project.config.json', 'components.json'])
+    await cp(path.join(root, 'projects/marmotte', f), path.join(dir, 'marmotte', f));
+  const registry = Registry.folder(dir, path.join(root, 'templates/blank/design-system.tokens.json'));
+  const code = await loadPluginCode(dir);
+  const app = await createStudioServer({ root, registry, pluginCode: code });
+  await new Promise<void>((r) => app.server.listen(0, '127.0.0.1', r));
+  t.after(() => app.close());
+  const base = `http://127.0.0.1:${(app.server.address() as { port: number }).port}/api/plugin/`;
+  const projects = (contract?: string) =>
+    fetch(base + 'projects', { headers: { Origin: 'null', 'X-DS-Plugin': code, ...(contract === undefined ? {} : { 'X-DS-Plugin-Contract': contract }) } });
+  // Plugin d'avant le contrat (aucun en-tête) : refusé, et il sait quoi faire.
+  const old = await projects();
+  assert.equal(old.status, 426);
+  assert.match((await old.json()).error, /Plugin DS-Studio trop ancien .*Community/);
+  // Plugin plus récent que l'atelier : c'est l'atelier qu'il faut mettre à jour.
+  const newer = await projects(String(PLUGIN_CONTRACT + 1));
+  assert.equal(newer.status, 426);
+  assert.match((await newer.json()).error, /Atelier DS-Studio trop ancien .*Réglages/);
+  assert.equal((await projects(String(PLUGIN_CONTRACT))).status, 200);
+  // Un mauvais code reste un 401 : le contrat n'est dit qu'aux plugins appairés.
+  const stranger = await fetch(base + 'projects', { headers: { Origin: 'null', 'X-DS-Plugin': 'aaaa-bbbb-cccc' } });
+  assert.equal(stranger.status, 401);
+  // Le plugin porte le même numéro que le serveur (constante CONTRACT de ui.html).
+  const ui = await readFile(path.join(root, 'figma-plugin/ui.html'), 'utf8');
+  assert.ok(ui.includes(`const CONTRACT = ${PLUGIN_CONTRACT};`), 'CONTRACT de ui.html différent de PLUGIN_CONTRACT');
+  assert.ok(ui.includes(`'X-DS-Plugin-Contract': CONTRACT`), 'ui.html doit envoyer le contrat');
+  // Manifeste prêt pour la Community : origines locales déclarées avec leur raison, pas d'API privée ni de domaine de développement.
+  const manifest = JSON.parse(await readFile(path.join(root, 'figma-plugin/manifest.json'), 'utf8'));
+  assert.equal(manifest.enablePrivatePluginApi, undefined);
+  assert.equal(manifest.networkAccess.devAllowedDomains, undefined);
+  assert.deepEqual(manifest.networkAccess.allowedDomains, ['http://localhost:4310', 'http://localhost:4311', 'http://localhost:4312']);
+  assert.ok(manifest.networkAccess.reasoning.length > 40);
+  assert.equal(manifest.documentAccess, 'dynamic-page');
+  assert.equal(manifest.api, '1.0.0');
 });

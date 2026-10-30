@@ -14,14 +14,23 @@ const NAMES = ['Primitives', 'Tokens', 'Typography'];
 const owned = (x) => x.getPluginData(MARK) === '1';
 const mark = (x) => x.setPluginData(MARK, '1');
 
-// Clé du fichier : fournie par Figma (plugin privé), sinon liée une fois par
-// Romain depuis l'interface et gardée dans le document.
+// Clé du fichier : `figma.fileKey` n'existe que pour les plugins privés, pas
+// pour un plugin de la Community. Le designer colle le lien du fichier ouvert
+// (Partager → Copier le lien) une fois ; la clé est gardée dans le document.
 const LINK = 'dsStudioFileKey';
 const fileInfo = () => ({
   key: figma.fileKey || figma.root.getPluginData(LINK) || null,
   native: !!figma.fileKey,
   name: figma.root.name,
 });
+// Même règle que l'atelier (`figmaFileKey`, app/shared/project.ts) : lien de
+// fichier Figma, ou clé seule.
+function fileKeyOf(text) {
+  const s = String(text || '').trim();
+  const m = /^https:\/\/www\.figma\.com\/(?:design|file)\/([0-9a-zA-Z]{22,128})(?:[/?#]|$)/.exec(s);
+  if (m) return m[1];
+  return /^[0-9a-zA-Z]{22,128}$/.test(s) ? s : null;
+}
 
 figma.ui.onmessage = async (msg) => {
   try {
@@ -34,7 +43,10 @@ figma.ui.onmessage = async (msg) => {
     else if (msg.type === 'save-settings') await figma.clientStorage.setAsync('settings', msg.settings);
     else if (msg.type === 'link-file') {
       if (figma.fileKey) throw new Error('Figma fournit déjà la clé de ce fichier : liaison inutile.');
-      figma.root.setPluginData(LINK, msg.fileKey);
+      const key = fileKeyOf(msg.fileKey);
+      if (!key)
+        throw new Error('Lien Figma attendu : https://www.figma.com/design/<fichier>/… (Partager → Copier le lien). Rien n’a été modifié.');
+      figma.root.setPluginData(LINK, key);
       figma.ui.postMessage({ type: 'file', file: fileInfo() });
     } else if (msg.type === 'transfer') figma.ui.postMessage({ type: 'transferred', report: await transfer(msg.payload, msg.known) });
     else if (msg.type === 'read-components') figma.ui.postMessage({ type: 'components', raw: await readComponents() });

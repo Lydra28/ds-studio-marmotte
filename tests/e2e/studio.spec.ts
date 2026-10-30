@@ -1,3 +1,4 @@
+import { PLUGIN_CONTRACT } from '../../app/server/plugin.js';
 import { test, expect, type Page } from '@playwright/test';
 
 // Parcours de l'atelier sur une copie jetable de l'instance Marmotte
@@ -239,7 +240,7 @@ test('plugin Figma : code affiché, version calculée, fiches reçues relues par
   expect(code).toMatch(/^[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}$/);
   await page.getByRole('dialog').getByRole('button', { name: 'Fermer' }).click();
   // Requêtes telles que le plugin les envoie depuis Figma (origine `null`).
-  const headers = { Origin: 'null', 'X-DS-Plugin': code };
+  const headers = { Origin: 'null', 'X-DS-Plugin-Contract': String(PLUGIN_CONTRACT), 'X-DS-Plugin': code };
   const payload = await (await page.request.get('/api/plugin/payload?project=marmotte', { headers })).json();
   expect(payload.collections.map((c: { name: string }) => c.name)).toEqual(['Primitives', 'Tokens', 'Typography']);
   const sent = await page.request.post('/api/plugin/components?project=marmotte', {

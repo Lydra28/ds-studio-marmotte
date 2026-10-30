@@ -350,10 +350,11 @@ export function FigmaDialog({
       </p>
       <ol>
         <li>
-          Figma Desktop → Plugins → Développement → Importer un plugin depuis un manifeste… →{' '}
-          <code>studio/figma-plugin/manifest.json</code> (une seule fois).
+          Figma → Plugins → rechercher « DS-Studio » dans la Community (une seule fois). En développement : Figma
+          Desktop → Plugins → Développement → Importer un plugin depuis un manifeste… →{' '}
+          <code>studio/figma-plugin/manifest.json</code>.
         </li>
-        <li>Ouvre le fichier cible, lance DS-Studio, colle le code.</li>
+        <li>Ouvre le fichier cible, lance DS-Studio, colle le code. Fichier non identifié : colle son lien (Partager → Copier le lien).</li>
         <li>
           « Transférer » écrit la dernière version acceptée ; « Envoyer les composants » les renvoie ici, à relire par
           diff.

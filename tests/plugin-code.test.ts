@@ -227,3 +227,23 @@ test('interface du plugin : script valide, réponses de l’assistant rendues sa
   const out = rich(vm.runInNewContext(pick('esc')), vm.runInNewContext(pick('inline')), '**Nom** `Button` <img>\n\n- a\n- b');
   assert.equal(out, '<p><strong>Nom</strong> <code>Button</code> &lt;img&gt;</p><ul><li>a</li><li>b</li></ul>');
 });
+
+test('plugin : fichier identifié par son lien collé, sans figma.fileKey (plugin Community)', async () => {
+  const f = await load();
+  f.figma.fileKey = undefined; // plugin de la Community : pas d'API privée
+  f.figma.clientStorage = { getAsync: async () => ({}), setAsync: async () => {} };
+  const init = await f.send({ type: 'init' });
+  assert.equal(init.file.key, null);
+  const bad = await f.send({ type: 'link-file', fileKey: 'https://example.com/design/' + KEY + '/x' });
+  assert.equal(bad.type, 'error');
+  assert.match(bad.message, /Lien Figma attendu/);
+  assert.equal(f.figma.root.getPluginData('dsStudioFileKey'), '');
+  const linked = await f.send({ type: 'link-file', fileKey: 'https://www.figma.com/design/' + KEY + '/Mon-DS?node-id=1-2&t=abc' });
+  assert.equal(linked.type, 'file');
+  assert.deepEqual(linked.file, { key: KEY, native: false, name: 'Fichier test' });
+  // Le transfert accepte alors ce fichier comme cible, comme avec une clé native.
+  assert.equal((await f.send({ type: 'transfer', payload, known: false })).type, 'transferred');
+  // Clé seule acceptée aussi ; une clé native existante rend la liaison inutile.
+  f.figma.fileKey = KEY;
+  assert.match((await f.send({ type: 'link-file', fileKey: KEY })).message, /liaison inutile/);
+});

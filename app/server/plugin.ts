@@ -21,6 +21,14 @@ import type { Config } from '../shared/project.js';
 // désigner le fichier ouvert comme cible d'un projet qui n'en a pas, noter la
 // remise à zéro de ce fichier, et poser une question à l'assistant (texte).
 
+// Contrat entre l'atelier et le plugin : le plugin envoie son numéro
+// (`X-DS-Plugin-Contract`, constante `CONTRACT` de `figma-plugin/ui.html`) ;
+// un écart donne un 426 qui dit quoi mettre à jour. Incrémenter ici et dans
+// le plugin à chaque changement incompatible des routes ou des charges.
+// v1 : plugin sans en-tête (versions de développement d'avant le 2026-10-30).
+// v2 : lien de fichier collé dans le plugin, manifeste Community.
+export const PLUGIN_CONTRACT = 2;
+
 // Code d'appairage gardé dans le dossier de données (privé), stable d'un démarrage à l'autre.
 export async function loadPluginCode(directory: string) {
   const file = path.join(directory, 'plugin.json');
@@ -133,7 +141,7 @@ export async function handlePlugin(
   ctx: { registry: Registry; code: string | null; send: (status: number, value: unknown) => void },
 ) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-DS-Plugin');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-DS-Plugin, X-DS-Plugin-Contract');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   // Figma (site public) vers 127.0.0.1 : accès au réseau privé à autoriser explicitement.
   res.setHeader('Access-Control-Allow-Private-Network', 'true');
@@ -148,6 +156,18 @@ export async function handlePlugin(
   const expected = Buffer.from(ctx.code);
   if (given.length !== expected.length || !timingSafeEqual(given, expected))
     throw new StudioError('Code d’appairage invalide : recopie celui affiché dans l’atelier (bouton Figma).', 401);
+  // Contrat : vérifié après le code (rien n'est dit à qui n'est pas appairé).
+  const contract = Number(req.headers['x-ds-plugin-contract'] ?? 1);
+  if (!Number.isInteger(contract) || contract < PLUGIN_CONTRACT)
+    throw new StudioError(
+      `Plugin DS-Studio trop ancien (contrat v${contract}, l’atelier attend v${PLUGIN_CONTRACT}) : mets-le à jour depuis la Community (Figma → Plugins → DS-Studio), ou réimporte figma-plugin/manifest.json en développement. Rien n’a été modifié.`,
+      426,
+    );
+  if (contract > PLUGIN_CONTRACT)
+    throw new StudioError(
+      `Atelier DS-Studio trop ancien pour ce plugin (contrat v${contract}, l’atelier connaît v${PLUGIN_CONTRACT}) : mets à jour DS-Studio (Réglages → Rechercher une mise à jour). Rien n’a été modifié.`,
+      426,
+    );
 
   const instance = () => ctx.registry.get(url.searchParams.get('project') ?? undefined);
   // Version acceptée avant que le projet ait une cible : elle prend la cible

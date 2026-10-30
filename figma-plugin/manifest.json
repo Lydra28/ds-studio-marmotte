@@ -8,16 +8,12 @@
     "figma"
   ],
   "documentAccess": "dynamic-page",
-  "enablePrivatePluginApi": true,
   "networkAccess": {
     "allowedDomains": [
-      "none"
-    ],
-    "devAllowedDomains": [
       "http://localhost:4310",
       "http://localhost:4311",
       "http://localhost:4312"
     ],
-    "reasoning": "Lit l'atelier DS-Studio qui tourne sur ce poste (localhost)."
+    "reasoning": "DS-Studio est une application installée sur le poste du designer. Le plugin lit la dernière version acceptée du design system et renvoie les composants du fichier à cette application locale seulement (port 4310 : app installée ; 4311 : app en développement ; 4312 : tests). Aucune donnée ne quitte le poste."
   }
 }

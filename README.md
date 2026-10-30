@@ -213,9 +213,12 @@ Détails et limites : [SECURITY](docs/SECURITY.md), [AGENTS](docs/AGENT_ADAPTERS
 
 ### Figma
 
-Plugin DS-Studio (développement) : Figma Desktop → Plugins → Développement →
-Importer un plugin depuis un manifeste → `figma-plugin/manifest.json`. Code
-d'appairage : bouton **Figma** de l'atelier. Le plugin écrit la dernière
+Plugin DS-Studio : Figma → Plugins → « DS-Studio » dans la Community ; en
+développement : Figma Desktop → Plugins → Développement → Importer un plugin
+depuis un manifeste → `figma-plugin/manifest.json`. Le manifeste est celui de
+la Community (origines locales déclarées, pas d'API privée) ; le plugin et
+l'atelier partagent un numéro de contrat, un plugin trop ancien est refusé
+avec un message clair. Code d'appairage : bouton **Figma** de l'atelier. Le plugin écrit la dernière
 version acceptée (variables, Button) dans le fichier cible du projet, page
 dédiée seulement, et renvoie les composants du fichier comme fiches à relire
 par diff. Il refuse tout autre fichier et ne supprime rien.
