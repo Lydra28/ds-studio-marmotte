@@ -66,7 +66,10 @@
       "templates/**",
       "projects/marmotte/**",
       "!projects/marmotte/.ds-studio/**",
-      "!**/node_modules/**"
+      "!node_modules/react/**",
+      "!node_modules/react-dom/**",
+      "!node_modules/scheduler/**",
+      "!node_modules/zod/**"
     ],
     "publish": {
       "provider": "generic",

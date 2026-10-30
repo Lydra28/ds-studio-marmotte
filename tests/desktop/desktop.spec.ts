@@ -14,7 +14,24 @@ const free = (port: number) =>
     s.listen(port, '127.0.0.1', () => s.close(() => resolve(true)));
   });
 
+// L'app empaquetée est copiée hors du dépôt avant d'être lancée : depuis
+// release/, Node remonte jusqu'à studio/node_modules et masque une dépendance
+// absente du paquet (electron-updater manquant dans l'app installée, 2026-10-30).
+async function isolate(exe: string, temp: string) {
+  const source = path.resolve(exe);
+  let unpacked = path.dirname(source);
+  while (path.basename(path.dirname(unpacked)) !== 'release') {
+    const parent = path.dirname(unpacked);
+    if (parent === unpacked) throw new Error(`DS_STUDIO_EXE doit pointer dans release/ : ${exe}`);
+    unpacked = parent;
+  }
+  const copy = path.join(temp, 'app');
+  await fs.cp(unpacked, copy, { recursive: true, verbatimSymlinks: true });
+  return path.join(copy, path.relative(unpacked, source));
+}
+
 test('app desktop : ouvre l’atelier, un projet, puis rend le port en quittant', async () => {
+  test.setTimeout(180_000);
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'ds-desktop-'));
   const projects = path.join(temp, 'projets');
   await fs.cp('projects/marmotte', path.join(projects, 'marmotte'), {
@@ -22,7 +39,7 @@ test('app desktop : ouvre l’atelier, un projet, puis rend le port en quittant'
     filter: (src) => !src.includes(`${path.sep}.ds-studio`),
   });
   // DS_STUDIO_EXE : l'exe empaqueté (release/win-unpacked/DS-Studio.exe) au lieu des sources.
-  const exe = process.env.DS_STUDIO_EXE;
+  const exe = process.env.DS_STUDIO_EXE ? await isolate(process.env.DS_STUDIO_EXE, temp) : undefined;
   // Linux en CI : le bac à sable setuid de Chromium n'est pas installable sur le
   // runner ; la fenêtre garde son propre bac à sable (webPreferences.sandbox).
   const exeArgs = exe && process.platform === 'linux' ? ['--no-sandbox'] : [];
@@ -78,5 +95,5 @@ test('app desktop : ouvre l’atelier, un projet, puis rend le port en quittant'
     await app.close();
   }
   await expect.poll(() => free(PORT)).toBe(true);
-  await fs.rm(temp, { recursive: true, force: true });
+  await fs.rm(temp, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
 });
