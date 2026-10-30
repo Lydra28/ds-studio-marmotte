@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Registry } from '../app/server/registry.js';
-import { createSiteRelay, injectLive, liveScript } from '../app/server/site-relay.js';
+import { createSiteRelay, injectLive, liveScript, scrollbarCss } from '../app/server/site-relay.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -85,4 +85,8 @@ test('site en direct : script injecté même sans <head>, origine de l’atelier
   // Défilement lié : position bornée entre 0 et 1, écho coupé, envoyée à l'atelier seul.
   assert.match(liveScript('http://127.0.0.1:4310'), /Math\.min\(1, Math\.max\(0,/);
   assert.match(liveScript('http://127.0.0.1:4310'), /if \(Date\.now\(\) > quiet\) parent\.postMessage\(\{ type: 'ds-scroll'.*\}, atelier\)/);
+  // Barres pixel de l'atelier : injectées dès le chargement, sans réafficher ce que le site cache.
+  assert.match(liveScript('http://127.0.0.1:4310'), /ds-studio-scrollbars/);
+  assert.match(scrollbarCss, /::-webkit-scrollbar-thumb\{/);
+  assert.doesNotMatch(scrollbarCss, /scrollbar-width/);
 });

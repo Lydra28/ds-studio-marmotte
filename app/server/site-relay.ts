@@ -11,12 +11,27 @@ const MAX_BODY = 25_000_000;
 const MAX_CACHE = 80_000_000;
 const CACHE_MS = 10 * 60_000;
 
+// Barres de défilement pixel de l'atelier (couleurs de pixel.css en dur : le
+// site n'a pas les variables de l'atelier). `scrollbar-color: auto` sur la
+// racine seulement : une valeur posée par le site masquerait ces règles dans
+// Chromium ; les zones que le site cache (`scrollbar-width: none`) restent cachées.
+export const scrollbarCss = `html{scrollbar-color:auto!important}
+::-webkit-scrollbar{width:14px;height:14px}
+::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background-color:#0b0b0c;background-image:radial-gradient(#2a2a2e 1px,transparent 1.2px);background-size:4px 4px}
+::-webkit-scrollbar-thumb{background:#9a9890;border:3px solid #0b0b0c;box-shadow:inset -2px -2px 0 rgba(0,0,0,.45),inset 2px 2px 0 rgba(255,255,255,.35)}
+::-webkit-scrollbar-thumb:hover{background:#e8ff3a}
+::-webkit-scrollbar-button{display:none}`;
+
 // Script injecté dans chaque page : la feuille reçue passe toujours en dernier
 // dans <head>, donc l'emporte sur les tokens du site (comme l'import de la PR).
 export const liveScript = (atelier: string) => `(() => {
   const atelier = ${JSON.stringify(atelier)};
   const style = document.createElement('style');
   style.id = 'ds-studio-live';
+  const bars = document.createElement('style');
+  bars.id = 'ds-studio-scrollbars';
+  bars.textContent = ${JSON.stringify(scrollbarCss)};
+  (document.head || document.documentElement).appendChild(bars);
   // Défilement lié (comparaison côte à côte) : position en fraction de la page,
   // sans renvoyer l'écho d'un défilement demandé par l'atelier.
   let quiet = 0;

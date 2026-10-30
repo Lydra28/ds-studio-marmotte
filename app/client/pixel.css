@@ -805,35 +805,31 @@ dialog.diff h2 {
   white-space: pre;
 }
 
-/* Barres de défilement pixel (atelier seulement, la preview garde celles du
-   projet) : rail à points, curseur carré en relief, sans flèches. Aucune
-   `scrollbar-color` ici : dans Chromium, elle remplacerait ces règles. */
-html:not(:has(body.preview-body))::-webkit-scrollbar,
-body:not(.preview-body) *::-webkit-scrollbar {
+/* Barres de défilement pixel, partout dans l'atelier, preview comprise (les
+   barres sont le cadre de l'atelier, pas le design du projet) : rail à
+   points, curseur carré en relief, sans flèches. Même rendu injecté dans le
+   Site en direct (`scrollbarCss` de site-relay.ts). Aucune `scrollbar-color`
+   ici : dans Chromium, elle remplacerait ces règles. */
+::-webkit-scrollbar {
   width: 14px;
   height: 14px;
 }
-html:not(:has(body.preview-body))::-webkit-scrollbar-track,
-body:not(.preview-body) *::-webkit-scrollbar-track,
-html:not(:has(body.preview-body))::-webkit-scrollbar-corner,
-body:not(.preview-body) *::-webkit-scrollbar-corner {
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
   background-color: var(--c-bg);
   background-image: radial-gradient(var(--c-line) 1px, transparent 1.2px);
   background-size: 4px 4px;
 }
-html:not(:has(body.preview-body))::-webkit-scrollbar-thumb,
-body:not(.preview-body) *::-webkit-scrollbar-thumb {
+::-webkit-scrollbar-thumb {
   background: var(--c-muted);
   border: 3px solid var(--c-bg);
   box-shadow:
     inset -2px -2px 0 rgba(0, 0, 0, 0.45),
     inset 2px 2px 0 rgba(255, 255, 255, 0.35);
 }
-html:not(:has(body.preview-body))::-webkit-scrollbar-thumb:hover,
-body:not(.preview-body) *::-webkit-scrollbar-thumb:hover {
+::-webkit-scrollbar-thumb:hover {
   background: var(--c-accent);
 }
-html:not(:has(body.preview-body))::-webkit-scrollbar-button,
-body:not(.preview-body) *::-webkit-scrollbar-button {
+::-webkit-scrollbar-button {
   display: none;
 }
