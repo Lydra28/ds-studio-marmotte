@@ -15,7 +15,20 @@ import { clearInbox, handlePlugin, readInbox } from './plugin.js';
 import { githubFromEnv, publishVersion, type GithubOptions } from './github.js';
 import { atomicWrite } from './files.js';
 import { figmaStatus } from '../../connectors/figma/contract.js';
+import { inDesktop, requestDesktop, updateState } from './desktop.js';
 import type { RecordInfo } from '../../scripts/runtime.mjs';
+
+// Vue Réglages : ce que l'app sait d'elle-même, sans jamais une valeur de secret.
+export interface SettingsInfo {
+  version: string;
+  appName: string;
+  // Dossier des projets (null pour une instance fixe `--project=`).
+  projects: string | null;
+  services: { assistant: boolean };
+}
+const desktopActionSchema = z
+  .object({ action: z.enum(['choose-projects', 'check-update', 'install-update']) })
+  .strict();
 
 export async function createStudioServer(
   options: {
@@ -28,6 +41,7 @@ export async function createStudioServer(
     // Port du relais « Site en direct » (site-relay.ts) ; absent : pas de site.
     relayPort?: number;
     control?: { record: RecordInfo; stop: () => void };
+    settings?: SettingsInfo;
   } & (
     | { registry: Registry }
     | { store: Store; projectDir: string; config: Config }
@@ -143,8 +157,22 @@ export async function createStudioServer(
               plugin: options.pluginCode ?? null,
               github: !!github.token,
               relay: options.relayPort ?? null,
+              desktop: inDesktop,
             });
           if (url.pathname === '/api/projects') return send(200, await registry.list());
+          if (url.pathname === '/api/settings')
+            return send(200, {
+              desktop: inDesktop,
+              app: { name: options.settings?.appName ?? 'DS-Studio', version: options.settings?.version ?? '0.0.0' },
+              projects: options.settings?.projects ?? null,
+              update: updateState(),
+              services: {
+                assistant: options.settings?.services.assistant ?? false,
+                github: !!github.token,
+                relay: !!options.relayPort,
+                plugin: !!options.pluginCode,
+              },
+            });
           const { store, dir: projectDir, config, brief: project, assistant, wall } = await instance();
           if (url.pathname === '/api/config') return send(200, config);
           if (url.pathname === '/api/wall') return send(200, { ...(await wall.read()), enabled: assistant.status.enabled });
@@ -198,6 +226,12 @@ export async function createStudioServer(
         }
         if (url.pathname === '/api/projects')
           return send(200, { slug: await registry.create(newProjectSchema.parse(body)) });
+        if (url.pathname === '/api/desktop') {
+          // Réglages : l'app Electron exécute (dialogue de dossier, mise à jour) ; hors de l'app, rien.
+          if (!inDesktop) throw new StudioError('Disponible dans l’app DS-Studio installée seulement.', 409);
+          requestDesktop(desktopActionSchema.parse(body).action);
+          return send(200, { ok: true });
+        }
         const { store, dir: projectDir, config, brief: project, assistant, wall } = await instance();
         if (url.pathname === '/api/wall/image') return send(200, await wall.addImage(imageSchema.parse(body)));
         if (url.pathname === '/api/wall/link') return send(200, await wall.addLink(linkSchema.parse(body).url));

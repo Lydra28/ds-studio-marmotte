@@ -1,4 +1,5 @@
 import { StudioError } from './store.js';
+import { githubOff } from './hints.js';
 import type { TokenSet } from '../shared/model.js';
 import { exportCss, exportJson } from '../shared/export.js';
 export { exportCss, exportJson, exportName } from '../shared/export.js';
@@ -46,8 +47,7 @@ export async function publishVersion(
   target: Target,
   version: { project: string; revision: number; hash: string; set: TokenSet },
 ) {
-  if (!options.token)
-    throw new StudioError('GITHUB_TOKEN absent de .env : PR non ouverte. Ajoute le jeton puis relance l’atelier.', 503);
+  if (!options.token) throw new StudioError(githubOff(), 503);
   const call = async (method: string, route: string, body?: unknown) => {
     const res = await (options.fetch ?? fetch)(`https://api.github.com/repos/${target.repo}${route}`, {
       method,

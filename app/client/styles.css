@@ -1275,6 +1275,51 @@ dialog.diff::backdrop,
   margin: 0;
 }
 
+/* Réglages : lecture seule, deux actions réservées à l'app installée */
+.home-settings {
+  margin-top: 16px;
+}
+.settings-back {
+  margin-bottom: 16px;
+}
+.settings-grid {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+  max-width: 760px;
+}
+.settings-block {
+  background: var(--c-panel);
+  border: 1px solid var(--c-line);
+  border-radius: 10px;
+  padding: 20px;
+}
+.settings-block h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+.settings-block dl {
+  display: grid;
+  grid-template-columns: minmax(140px, 200px) 1fr;
+  gap: 8px 16px;
+  margin: 0;
+  font-size: 14px;
+}
+.settings-block dt {
+  color: var(--c-muted);
+}
+.settings-block dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.settings-block .form-actions {
+  margin-top: 14px;
+  justify-content: flex-start;
+}
+.settings-block .hint {
+  margin: 12px 0 0;
+}
+
 /* Assistant : panneau ancré à droite, l'atelier reste visible */
 .studio.with-assistant {
   grid-template-columns: minmax(0, 1fr) 360px;

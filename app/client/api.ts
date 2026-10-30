@@ -11,7 +11,28 @@ export interface Bootstrap {
   github: boolean;
   // Port du relais « Site en direct », null s'il n'a pas démarré.
   relay: number | null;
+  // Servi par l'app DS-Studio (Electron) : Réglages peut agir, messages sans `.env`.
+  desktop: boolean;
 }
+// Vue Réglages : ce que l'app sait d'elle-même, jamais une valeur de secret.
+export interface UpdateState {
+  status: 'disabled' | 'idle' | 'checking' | 'up-to-date' | 'downloading' | 'ready' | 'error';
+  version: string;
+  channel: string;
+  reason: string | null;
+  available: string | null;
+  progress: number | null;
+  message: string | null;
+  checkedAt: string | null;
+}
+export interface Settings {
+  desktop: boolean;
+  app: { name: string; version: string };
+  projects: string | null;
+  update: UpdateState | null;
+  services: { assistant: boolean; github: boolean; relay: boolean; plugin: boolean };
+}
+export type DesktopAction = 'choose-projects' | 'check-update' | 'install-update';
 export interface ProjectSummary {
   slug: string;
   name: string;
@@ -84,6 +105,8 @@ export async function bootstrap() {
   csrf = b.csrf;
   return b;
 }
+export const getSettings = () => request<Settings>('settings');
+export const desktopAction = (action: DesktopAction) => request<{ ok: true }>('desktop', { action });
 export const getState = () => request<State>('state');
 export const getConfig = () => request<Config>('config');
 export const listProjects = () => request<ProjectSummary[]>('projects');

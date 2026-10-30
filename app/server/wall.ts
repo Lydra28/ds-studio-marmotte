@@ -8,6 +8,7 @@ import { normalize } from '../shared/normalize.js';
 import type { Project } from '../shared/project.js';
 import { atomicWrite, readPrivate } from './files.js';
 import { StudioError } from './store.js';
+import { assistantOff } from './hints.js';
 import { callOpenRouter, DEFAULT_MODEL, type AssistantOptions } from './assistant.js';
 import { captureInDesktop, inDesktop } from './desktop.js';
 
@@ -152,8 +153,7 @@ export class Wall {
   }
   directions(request: z.infer<typeof directionsRequestSchema>, context: { project: Project; name: string; set: TokenSet }) {
     return this.serial(async () => {
-      if (!this.options.apiKey)
-        throw new StudioError('Assistant désactivé : ajoute OPENROUTER_API_KEY dans .env, puis relance l’atelier.', 503);
+      if (!this.options.apiKey) throw new StudioError(assistantOff(), 503);
       const index = await this.read();
       const images = await Promise.all(
         index.inspirations.map(async (i) => {

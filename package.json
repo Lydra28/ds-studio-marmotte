@@ -23,11 +23,16 @@
     "doctor": "node scripts/doctor.mjs",
     "qualify": "node scripts/qualify-local.mjs",
     "format": "prettier --write .",
+    "build:desktop": "node scripts/build-desktop.mjs",
     "desktop": "npm run build && node scripts/build-desktop.mjs && electron .",
-    "dist:win": "npm run build && node scripts/build-desktop.mjs && electron-builder --win nsis",
+    "dist": "npm run build && node scripts/build-desktop.mjs && electron-builder --publish never",
+    "dist:win": "npm run build && node scripts/build-desktop.mjs && electron-builder --win --publish never",
+    "dist:mac": "npm run build && node scripts/build-desktop.mjs && electron-builder --mac --publish never",
+    "dist:linux": "npm run build && node scripts/build-desktop.mjs && electron-builder --linux --publish never",
     "test:desktop": "node scripts/build-desktop.mjs && playwright test --config tests/desktop/playwright.config.ts"
   },
   "dependencies": {
+    "electron-updater": "6.8.12",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "zod": "4.6.7"
@@ -54,6 +59,7 @@
     "files": [
       "package.json",
       "desktop/main.mjs",
+      "desktop/update-config.mjs",
       "desktop/icon.png",
       "desktop/build/**",
       "dist/**",
@@ -62,9 +68,34 @@
       "!projects/marmotte/.ds-studio/**",
       "!**/node_modules/**"
     ],
+    "publish": {
+      "provider": "generic",
+      "url": "https://releases.ds-studio.invalid/stable",
+      "channel": "stable"
+    },
     "win": {
       "target": "nsis",
       "icon": "desktop/icon.png"
+    },
+    "mac": {
+      "target": ["dmg", "zip"],
+      "category": "public.app-category.developer-tools",
+      "icon": "desktop/icon-512.png",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "desktop/entitlements.mac.plist",
+      "entitlementsInherit": "desktop/entitlements.mac.plist",
+      "notarize": true,
+      "artifactName": "DS-Studio-${version}-${arch}.${ext}"
+    },
+    "dmg": {
+      "artifactName": "DS-Studio-${version}-${arch}.dmg"
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "category": "Development",
+      "icon": "desktop/icon-512.png",
+      "artifactName": "DS-Studio-${version}-${arch}.AppImage"
     },
     "nsis": {
       "oneClick": false,

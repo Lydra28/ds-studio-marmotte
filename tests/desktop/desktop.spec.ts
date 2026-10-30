@@ -22,8 +22,11 @@ test('app desktop : ouvre l’atelier, un projet, puis rend le port en quittant'
   });
   // DS_STUDIO_EXE : l'exe empaqueté (release/win-unpacked/DS-Studio.exe) au lieu des sources.
   const exe = process.env.DS_STUDIO_EXE;
+  // Linux en CI : le bac à sable setuid de Chromium n'est pas installable sur le
+  // runner ; la fenêtre garde son propre bac à sable (webPreferences.sandbox).
+  const exeArgs = exe && process.platform === 'linux' ? ['--no-sandbox'] : [];
   const app = await electron.launch({
-    ...(exe ? { executablePath: path.resolve(exe), args: [] } : { args: ['desktop/main.mjs'] }),
+    ...(exe ? { executablePath: path.resolve(exe), args: exeArgs } : { args: ['desktop/main.mjs'] }),
     env: {
       ...process.env,
       DS_STUDIO_PROJECTS: projects,
@@ -36,6 +39,19 @@ test('app desktop : ouvre l’atelier, un projet, puis rend le port en quittant'
   try {
     const page = await app.firstWindow();
     await expect(page).toHaveTitle(/DS-Studio/);
+    // Réglages : l'app se décrit (version, dossier choisi, mises à jour) et
+    // propose ses actions ; depuis les sources, les mises à jour sont désactivées.
+    const settings = await (await page.request.get(`http://127.0.0.1:${PORT}/api/settings`)).json();
+    expect(settings.desktop).toBe(true);
+    expect(settings.app.name).toBe(exe ? 'DS-Studio' : 'DS-Studio Dev');
+    expect(settings.app.version).toMatch(/^\d+\.\d+\.\d+/);
+    expect(settings.projects).toBe(projects);
+    expect(settings.update?.status).toBe('disabled');
+    expect(JSON.stringify(settings)).not.toMatch(/sk-|ghp_|OPENROUTER|GITHUB_TOKEN/);
+    await page.getByRole('button', { name: 'Réglages' }).click();
+    await expect(page.getByRole('button', { name: 'Changer de dossier…' })).toBeVisible();
+    await expect(page.getByText(exe ? /mise à jour/i : 'Mises à jour désactivées depuis les sources.')).toBeVisible();
+    await page.getByRole('button', { name: '← Retour' }).click();
     await page.getByRole('button', { name: /Marmotte r\d+/ }).click();
     await expect(page.locator('.bar .project')).toHaveText('Marmotte');
     // La fenêtre est isolée : aucun accès Node côté page.

@@ -66,6 +66,38 @@ test('assistant : ouvert par la mascotte, désactivé proprement sans clé, masc
   await expect(page.getByRole('button', { name: 'Ouvrir l’assistant' })).toBeVisible();
 });
 
+test('réglages : version, dossier et services affichés, aucune valeur de secret, actions réservées à l’app', async ({ page }) => {
+  // Depuis le projet, puis retour : la page est la même que depuis l'accueil.
+  await page.getByRole('button', { name: 'Réglages' }).click();
+  await expect(page).toHaveURL(/#\/reglages$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('DS-Studio');
+  const settings = await (await page.request.get('/api/settings')).json();
+  expect(settings.desktop).toBe(false);
+  expect(settings.app.version).toMatch(/^\d+\.\d+\.\d+/);
+  expect(settings.projects).toMatch(/projects$/);
+  expect(settings.update).toBeNull();
+  expect(settings.services).toEqual({ assistant: false, github: false, relay: expect.any(Boolean), plugin: true });
+  // Jamais une clé ni un jeton dans la réponse, quel que soit le `.env` de la machine.
+  expect(JSON.stringify(settings)).not.toMatch(/sk-|ghp_|OPENROUTER|GITHUB_TOKEN/);
+  await expect(page.getByText(`Version ${settings.app.version}`)).toBeVisible();
+  await expect(page.getByText('Mises à jour gérées hors de l’app')).toBeVisible();
+  await expect(page.getByText('Indisponible')).toBeVisible();
+  // Hors de l'app Electron : pas de bouton d'action, et la route refuse proprement.
+  await expect(page.getByRole('button', { name: 'Changer de dossier…' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Rechercher une mise à jour' })).toHaveCount(0);
+  const csrf = (await (await page.request.get('/api/bootstrap')).json()).csrf as string;
+  const refused = await page.request.post('/api/desktop', {
+    headers: { 'X-DS-Studio': csrf, 'Content-Type': 'application/json' },
+    data: { action: 'check-update' },
+  });
+  expect(refused.status()).toBe(409);
+  await page.getByRole('button', { name: '← Retour' }).click();
+  await expect(page.locator('.bar .project')).toHaveText('Marmotte');
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Réglages' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('DS-Studio');
+});
+
 test('mur des DA : image déposée, réduite, retirée ; génération bloquée sans clé', async ({ page }) => {
   await page.getByRole('navigation').getByRole('button', { name: 'Mur des DA' }).click();
   await expect(page.getByRole('heading', { name: 'Mur des DA' })).toBeVisible();

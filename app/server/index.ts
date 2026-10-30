@@ -7,6 +7,7 @@ import { loadPluginCode } from './plugin.js';
 import { createSiteRelay } from './site-relay.js';
 import { acquireLease } from '../../scripts/runtime.mjs';
 import { desktopReady, onDesktopStop } from './desktop.js';
+import { assistantFromEnv } from './assistant.js';
 
 // L'app Electron donne la racine (serveur compilé en un seul fichier) et le
 // chemin du `.env` (dans les réglages de l'utilisateur, jamais dans l'exe).
@@ -75,12 +76,20 @@ try {
       ),
     )
   )[0];
+  // Vue Réglages : version et nom donnés par l'app Electron, sinon ceux du dépôt.
+  const pkg = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8')) as { version?: string };
   const app = await createStudioServer({
     root,
     registry,
     dev: process.argv.includes('--dev'),
     relayPort: relayUp ? relayPort : undefined,
     pluginCode: await loadPluginCode(directory),
+    settings: {
+      version: process.env.DS_STUDIO_APP_VERSION || pkg.version || '0.0.0',
+      appName: process.env.DS_STUDIO_APP_NAME || 'DS-Studio',
+      projects: projectsDir,
+      services: { assistant: !!assistantFromEnv().apiKey },
+    },
     control: {
       record: lease.record,
       stop: () => {

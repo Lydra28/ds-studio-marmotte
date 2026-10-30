@@ -36,7 +36,8 @@ import {
 } from './api.js';
 import type { Config } from '../shared/project.js';
 import Board from './Board.js';
-import { foldable, Home, SectionBar, TopNav, useRoute, type View } from './Shell.js';
+import { foldable, Home, openSettings, SectionBar, TopNav, useRoute, type View } from './Shell.js';
+import { SettingsPage } from './Settings.js';
 import AssistantPanel from './Assistant.js';
 import { brandColor, MascotDock } from './Mascot.js';
 import Wall from './Wall.js';
@@ -99,16 +100,28 @@ function announce(slug: string) {
 export default function App() {
   const [boot, setBoot] = useState<Bootstrap>();
   const [bootError, setBootError] = useState('');
-  const [route, go] = useRoute();
+  const [route, go, settings] = useRoute();
   useEffect(() => {
     bootstrap().then(setBoot).catch((e) => setBootError(e.message));
   }, []);
   if (!boot) return <p className="loading" role="alert">{bootError || 'Chargement…'}</p>;
+  if (settings) return <SettingsPage onBack={() => (history.length > 1 ? history.back() : go())} />;
   // Instance fixe (--project=) : pas d'accueil, son unique projet s'ouvre.
   const slug = route ?? (boot.multi ? undefined : boot.fallback);
   if (!slug) return <Home onOpen={go} />;
   setProject(slug);
-  return <Workspace key={slug} slug={slug} multi={boot.multi} plugin={boot.plugin} github={boot.github} relay={boot.relay} onOpen={go} />;
+  return (
+    <Workspace
+      key={slug}
+      slug={slug}
+      multi={boot.multi}
+      plugin={boot.plugin}
+      github={boot.github}
+      relay={boot.relay}
+      desktop={boot.desktop}
+      onOpen={go}
+    />
+  );
 }
 
 function Workspace({
@@ -117,6 +130,7 @@ function Workspace({
   plugin,
   github,
   relay,
+  desktop,
   onOpen,
 }: {
   slug: string;
@@ -124,6 +138,7 @@ function Workspace({
   plugin: string | null;
   github: boolean;
   relay: number | null;
+  desktop: boolean;
   onOpen: (slug?: string) => void;
 }) {
   const { state, setState, error: stateError } = useCommittedState(slug);
@@ -421,7 +436,9 @@ function Workspace({
       const code = config?.github
         ? github
           ? ` Une pull request sera ouverte sur ${config.github.repo} (branche ds-studio/v${state!.revision}) ; rien n’arrive sur ${config.github.base} sans ton merge.`
-          : ' GITHUB_TOKEN absent de .env : la pull request ne sera pas ouverte.'
+          : desktop
+            ? ' Aucun jeton GitHub dans cette installation : la pull request ne sera pas ouverte.'
+            : ' GITHUB_TOKEN absent de .env : la pull request ne sera pas ouverte.'
         : '';
       setComparison({
         title: last !== undefined
@@ -507,6 +524,9 @@ function Workspace({
               Fiches reçues de Figma ({Object.keys(inbox.file.components).length})
             </button>
           )}
+          <button onClick={openSettings} title="Réglages de l’application">
+            Réglages
+          </button>
           <button onClick={() => setFigmaOpen(true)}>Figma</button>
           <button onClick={() => file.current?.click()}>Importer</button>
           <input
@@ -722,7 +742,7 @@ function Workspace({
       </main>
       </div>
       {assistantOpen ? (
-        <AssistantPanel color={mascotColor} onDraft={draftChanges} onClose={() => toggleAssistant(false)} />
+        <AssistantPanel color={mascotColor} desktop={desktop} onDraft={draftChanges} onClose={() => toggleAssistant(false)} />
       ) : (
         <MascotDock
           color={mascotColor}

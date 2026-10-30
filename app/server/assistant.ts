@@ -6,6 +6,7 @@ import { checkComponentName, runRules } from '../shared/rules.js';
 import type { Project } from '../shared/project.js';
 import { atomicWrite, readPrivate } from './files.js';
 import { StudioError } from './store.js';
+import { assistantOff } from './hints.js';
 
 // Assistant du projet : il explique et propose, il n'écrit jamais. Une
 // proposition devient un brouillon côté navigateur, puis diff et validation
@@ -191,8 +192,7 @@ export class Assistant {
   }
   chat(message: string, context: { project: Project; name: string; set: TokenSet }) {
     return this.serial(async () => {
-      if (!this.options.apiKey)
-        throw new StudioError('Assistant désactivé : ajoute OPENROUTER_API_KEY dans .env, puis relance l’atelier.', 503);
+      if (!this.options.apiKey) throw new StudioError(assistantOff(), 503);
       const history = await this.history();
       const question: AssistantMessage = { role: 'user', content: message, date: new Date().toISOString() };
       const reply = await this.complete(context, [...history, question]);
@@ -204,8 +204,7 @@ export class Assistant {
   // d'outil, donc pas de proposition), rien d'enregistré ici, la conversation
   // vit dans le plugin.
   async ask(request: AskRequest, context: { project: Project; name: string; set: TokenSet }) {
-    if (!this.options.apiKey)
-      throw new StudioError('Assistant désactivé : ajoute OPENROUTER_API_KEY dans .env, puis relance l’atelier.', 503);
+    if (!this.options.apiKey) throw new StudioError(assistantOff(), 503);
     const findings = request.selection ? selectionFindings(request.selection.nodes) : [];
     const figma = [
       'Tu réponds dans le plugin Figma DS-Studio, à côté du fichier ouvert. Tu ne modifies rien et ne proposes aucun changement automatique : dis quoi corriger à la main dans Figma (quel calque, quelle propriété, quel token du projet), et rappelle qu’un changement du DS lui-même passe par l’atelier.',

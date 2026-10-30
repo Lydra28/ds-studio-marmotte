@@ -1,20 +1,25 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { createProject, listProjects, type ProjectSummary } from './api.js';
 
-// Route dans le hash : `#/p/<projet>` ouvre un projet, sinon l'accueil.
-const read = () => /^#\/p\/([a-z0-9-]+)$/.exec(location.hash)?.[1];
-export function useRoute(): [string | undefined, (slug?: string) => void] {
-  const [route, setRoute] = useState(read);
+// Route dans le hash : `#/p/<projet>` ouvre un projet, `#/reglages` les
+// réglages de l'application, sinon l'accueil.
+const SETTINGS = '#/reglages';
+const slugOf = (hash: string) => /^#\/p\/([a-z0-9-]+)$/.exec(hash)?.[1];
+export function useRoute(): [string | undefined, (slug?: string) => void, boolean] {
+  const [hash, setHash] = useState(() => location.hash);
   useEffect(() => {
-    const on = () => setRoute(read());
+    const on = () => setHash(location.hash);
     window.addEventListener('hashchange', on);
     return () => window.removeEventListener('hashchange', on);
   }, []);
   const go = (slug?: string) => {
     location.hash = slug ? `/p/${slug}` : slug === undefined ? '/' : '/nouveau';
   };
-  return [route, go];
+  return [slugOf(hash), go, hash === SETTINGS];
 }
+export const openSettings = () => {
+  location.hash = SETTINGS.slice(1);
+};
 
 function useProjects() {
   const [projects, setProjects] = useState<ProjectSummary[]>();
@@ -217,6 +222,9 @@ export function Home({ onOpen }: { onOpen: (slug?: string) => void }) {
           <p className="home-kicker">Atelier de design system</p>
           <h1>DS-Studio</h1>
           <p className="home-lead">Un atelier par projet : essais en direct, règles, versions, transfert Figma.</p>
+          <button className="home-settings" onClick={openSettings}>
+            Réglages
+          </button>
         </div>
         <div className="home-stairs" aria-hidden="true">
           {[1, 2, 3, 4, 5].map((i) => (

@@ -1,0 +1,113 @@
+# Installateurs Windows, Mac et Linux à chaque tag `v*`, fumée desktop sur
+# l'app empaquetée, puis envoi vers le bucket R2 des mises à jour.
+# Variables du dépôt : DS_STUDIO_UPDATE_URL (dossier public du canal, https,
+# lu par electron-updater), R2_BUCKET. Secrets : R2_ACCESS_KEY_ID,
+# R2_SECRET_ACCESS_KEY, R2_ENDPOINT (https://<compte>.r2.cloudflarestorage.com).
+# L'app demande `<canal>.yml` (`stable.yml`, `stable-mac.yml`,
+# `stable-linux.yml`) ; electron-builder produit aussi `latest*.yml`, publiés
+# avec. Signature Mac quand ils existent :
+# CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID.
+# Sans eux : Mac non signé (ouverture par clic droit), mises à jour Mac désactivées.
+name: Publier les installateurs
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: --win
+            exe: release/win-unpacked/DS-Studio.exe
+          - os: macos-latest
+            target: --mac
+            exe: release/mac-arm64/DS-Studio.app/Contents/MacOS/DS-Studio
+          - os: ubuntu-latest
+            target: --linux
+            exe: release/linux-unpacked/ds-studio
+    runs-on: ${{ matrix.os }}
+    env:
+      DS_STUDIO_UPDATE_URL: ${{ vars.DS_STUDIO_UPDATE_URL }}
+      DS_STUDIO_UPDATE_CHANNEL: stable
+      DS_STUDIO_MAC_SIGNED: ${{ secrets.CSC_LINK != '' && '1' || '0' }}
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.CSC_LINK != '' }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      # Jamais d'appel OpenRouter ni GitHub pendant la fumée.
+      OPENROUTER_API_KEY: ''
+      GITHUB_TOKEN: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node scripts/build-desktop.mjs
+      - run: npx electron-builder ${{ matrix.target }} --publish never
+      - name: Fumée de l'app empaquetée
+        if: runner.os != 'Linux'
+        run: npx playwright test --config tests/desktop/playwright.config.ts
+        env:
+          DS_STUDIO_EXE: ${{ matrix.exe }}
+      - name: Fumée de l'app empaquetée (écran virtuel)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npx playwright test --config tests/desktop/playwright.config.ts
+        env:
+          DS_STUDIO_EXE: ${{ matrix.exe }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installateurs-${{ runner.os }}
+          path: |
+            release/*.exe
+            release/*.blockmap
+            release/*.dmg
+            release/*.zip
+            release/*.AppImage
+            release/latest*.yml
+            release/stable*.yml
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fumee-${{ runner.os }}
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+  publish:
+    # Flux de mise à jour : les paquets et les fichiers du canal (`stable*.yml`,
+    # demandés par l'app ; `latest*.yml` aussi) dans le dossier du canal.
+    needs: build
+    if: vars.R2_BUCKET != ''
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      # Précaution R2 : l'AWS CLI récente envoie par défaut des sommes de
+      # contrôle CRC en fin de flux que R2 n'a pas toujours acceptées ; on ne
+      # les calcule que si l'API l'exige.
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: installateurs-*
+          path: release
+          merge-multiple: true
+      - run: ls -l release
+      - run: >
+          aws s3 sync release/ "s3://${{ vars.R2_BUCKET }}/stable/"
+          --endpoint-url "${{ secrets.R2_ENDPOINT }}"
+          --exclude "*" --include "*.exe" --include "*.blockmap" --include "*.dmg"
+          --include "*.zip" --include "*.AppImage" --include "latest*.yml" --include "stable*.yml"
