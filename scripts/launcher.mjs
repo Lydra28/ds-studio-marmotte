@@ -7,6 +7,7 @@ import {
   acquireLease,
   readRecord,
   control,
+  controlDetail,
   alive,
   delay,
   openBrowser,
@@ -146,13 +147,16 @@ async function serve() {
     // Un serveur vivant peut rester muet quelques secondes (module compilé par
     // tsx à la première requête, runner de CI lent) : trois sondes espacées
     // avant de conclure qu'un autre processus a repris le PID.
+    let reason = '';
     for (let attempt = 0; attempt < 3; attempt++) {
-      if (await control(record)) return record;
+      const probe = await controlDetail(record);
+      if (probe.result) return record;
+      reason = probe.reason;
       if (!alive(record.pid)) return null;
       if (attempt < 2) await delay(500);
     }
     throw new Error(
-      'Le PID enregistré ne répond pas comme DS-Studio. Aucun arrêt forcé. Réessayez ou consultez le guide.',
+      `Le PID enregistré ne répond pas comme DS-Studio (${reason}). Aucun arrêt forcé. Réessayez ou consultez le guide.`,
     );
   }
   async function serverLog() {

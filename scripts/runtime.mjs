@@ -118,15 +118,18 @@ export async function acquireLease(directory, name, extra = {}) {
     },
   };
 }
-export async function control(record, action = 'health') {
+// Sonde d'identité du serveur : `result` quand il répond comme DS-Studio,
+// sinon `reason` dit pourquoi (pour un message d'erreur qui aide à comprendre
+// un refus intermittent, vu en CI Ubuntu le 2026-10-30).
+export async function controlDetail(record, action = 'health') {
   if (
     !record ||
     !Number.isInteger(record.port) ||
     record.port < 1024 ||
-    record.port > 65535 ||
-    !alive(record.pid)
+    record.port > 65535
   )
-    return null;
+    return { result: null, reason: 'verrou sans port valide' };
+  if (!alive(record.pid)) return { result: null, reason: 'processus absent' };
   try {
     const response = await fetch(
       `http://127.0.0.1:${record.port}/_studio/${action}`,
@@ -136,17 +139,29 @@ export async function control(record, action = 'health') {
         signal: AbortSignal.timeout(2000),
       },
     );
-    if (!response.ok) return null;
+    if (!response.ok)
+      return { result: null, reason: `réponse HTTP ${response.status}` };
     const result = await response.json();
-    return result.id === record.id &&
+    const same =
+      result.id === record.id &&
       result.pid === record.pid &&
       result.root === record.root &&
-      result.directory === record.directory
-      ? result
-      : null;
-  } catch {
-    return null;
+      result.directory === record.directory;
+    return same
+      ? { result, reason: null }
+      : { result: null, reason: 'identité différente' };
+  } catch (e) {
+    return {
+      result: null,
+      reason:
+        e?.name === 'TimeoutError'
+          ? 'aucune réponse en 2 s'
+          : `réseau : ${e?.cause?.code ?? e?.code ?? e?.message ?? 'inconnu'}`,
+    };
   }
+}
+export async function control(record, action = 'health') {
+  return (await controlDetail(record, action)).result;
 }
 export function openBrowser(url) {
   const [command, args] =
