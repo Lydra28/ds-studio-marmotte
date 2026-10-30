@@ -306,7 +306,9 @@ async function serve() {
     } finally {
       await log.close();
     }
-    for (let i = 0; i < 200; i++) {
+    // 60 s : tsx compile le serveur au lancement, plus de 20 s sur un poste
+    // ou un runner de CI lent.
+    for (let i = 0; i < 600; i++) {
       if (failure || serverChild.exitCode !== null)
         throw new Error(
           (await serverLog()).trim() || failure?.message || 'Échec du serveur.',

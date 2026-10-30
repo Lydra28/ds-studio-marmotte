@@ -358,7 +358,14 @@ test(
           await page
             .getByLabel('bg/brand light', { exact: true })
             .fill('#224477');
-          await action('restart');
+          // Redémarrage vérifié avant de cliquer : sur un runner lent, un échec
+          // de démarrage passait inaperçu et l'onglet cliquait dans le vide.
+          const restarted = await action('restart');
+          assert.equal(restarted.phase, 'actif', JSON.stringify(restarted));
+          await until(
+            () => serverState().then(() => true, () => false),
+            'serveur joignable après redémarrage',
+          );
           // Juste après le redémarrage, le premier appel peut tomber avant que
           // l'onglet ait renouvelé sa session (macOS en CI) : on réessaie.
           const dialog = page.getByRole('dialog');
