@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import { resolveUpdateConfig } from '../../desktop/update-config.mjs';
 
 // Fumée de l'app desktop : serveur embarqué, projets d'un dossier jetable,
 // réglages isolés, port de test (4312). Aucune clé : OpenRouter et GitHub coupés.
@@ -40,17 +41,31 @@ test('app desktop : ouvre l’atelier, un projet, puis rend le port en quittant'
     const page = await app.firstWindow();
     await expect(page).toHaveTitle(/DS-Studio/);
     // Réglages : l'app se décrit (version, dossier choisi, mises à jour) et
-    // propose ses actions ; depuis les sources, les mises à jour sont désactivées.
+    // propose ses actions. Mises à jour : même décision que l'app
+    // (desktop/update-config.mjs, flux écrit au build dans desktop/build/update.json) :
+    // désactivées depuis les sources, sans flux ou sur Mac non signé ; sinon
+    // l'app part vérifier le flux (CI de release : flux R2 réel).
     const settings = await (await page.request.get(`http://127.0.0.1:${PORT}/api/settings`)).json();
     expect(settings.desktop).toBe(true);
     expect(settings.app.name).toBe(exe ? 'DS-Studio' : 'DS-Studio Dev');
     expect(settings.app.version).toMatch(/^\d+\.\d+\.\d+/);
     expect(settings.projects).toBe(projects);
-    expect(settings.update?.status).toBe('disabled');
+    const build = JSON.parse(await fs.readFile('desktop/build/update.json', 'utf8').catch(() => 'null'));
+    const updates = resolveUpdateConfig({ platform: process.platform, packaged: !!exe, build });
+    if (updates.enabled) {
+      expect(['idle', 'checking', 'downloading', 'up-to-date', 'error']).toContain(settings.update?.status);
+    } else {
+      expect(settings.update?.status).toBe('disabled');
+      expect(settings.update?.reason).toBe(updates.reason);
+    }
     expect(JSON.stringify(settings)).not.toMatch(/sk-|ghp_|OPENROUTER|GITHUB_TOKEN/);
     await page.getByRole('button', { name: 'Réglages' }).click();
     await expect(page.getByRole('button', { name: 'Changer de dossier…' })).toBeVisible();
-    await expect(page.getByText(exe ? /mise à jour/i : 'Mises à jour désactivées depuis les sources.')).toBeVisible();
+    if (updates.enabled) {
+      await expect(page.getByRole('button', { name: 'Rechercher une mise à jour' })).toBeVisible();
+    } else {
+      await expect(page.getByText(updates.reason ?? '')).toBeVisible();
+    }
     await page.getByRole('button', { name: '← Retour' }).click();
     await page.getByRole('button', { name: /Marmotte r\d+/ }).click();
     await expect(page.locator('.bar .project')).toHaveText('Marmotte');

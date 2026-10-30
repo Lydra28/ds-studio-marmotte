@@ -143,12 +143,17 @@ async function serve() {
       throw new Error(
         'Verrou existant non identifiable (ancienne version ou autre projet). Aucun processus arrêté. Voir le guide de lancement.',
       );
-    if (await control(record)) return record;
-    if (alive(record.pid))
-      throw new Error(
-        'Le PID enregistré ne répond pas comme DS-Studio. Aucun arrêt forcé. Réessayez ou consultez le guide.',
-      );
-    return null;
+    // Un serveur vivant peut rester muet quelques secondes (module compilé par
+    // tsx à la première requête, runner de CI lent) : trois sondes espacées
+    // avant de conclure qu'un autre processus a repris le PID.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (await control(record)) return record;
+      if (!alive(record.pid)) return null;
+      if (attempt < 2) await delay(500);
+    }
+    throw new Error(
+      'Le PID enregistré ne répond pas comme DS-Studio. Aucun arrêt forcé. Réessayez ou consultez le guide.',
+    );
   }
   async function serverLog() {
     try {

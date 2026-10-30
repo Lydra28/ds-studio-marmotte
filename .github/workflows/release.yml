@@ -35,12 +35,11 @@ jobs:
       DS_STUDIO_UPDATE_URL: ${{ vars.DS_STUDIO_UPDATE_URL }}
       DS_STUDIO_UPDATE_CHANNEL: stable
       DS_STUDIO_MAC_SIGNED: ${{ secrets.CSC_LINK != '' && '1' || '0' }}
-      CSC_LINK: ${{ secrets.CSC_LINK }}
-      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      # Sans identité : pas de recherche de certificat dans le trousseau. Les
+      # variables CSC_* et APPLE_* ne sont posées que si les secrets existent
+      # (étape ci-dessous) : vide, CSC_LINK serait pris pour un chemin de
+      # certificat et electron-builder échouerait (« not a file »).
       CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.CSC_LINK != '' }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       # Jamais d'appel OpenRouter ni GitHub pendant la fumée.
       OPENROUTER_API_KEY: ''
       GITHUB_TOKEN: ''
@@ -53,6 +52,16 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: node scripts/build-desktop.mjs
+      - name: Identité de signature et notarisation Mac (secrets présents seulement)
+        if: runner.os == 'macOS' && env.DS_STUDIO_MAC_SIGNED == '1'
+        run: |
+          {
+            echo "CSC_LINK=${{ secrets.CSC_LINK }}"
+            echo "CSC_KEY_PASSWORD=${{ secrets.CSC_KEY_PASSWORD }}"
+            echo "APPLE_ID=${{ secrets.APPLE_ID }}"
+            echo "APPLE_APP_SPECIFIC_PASSWORD=${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}"
+            echo "APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}"
+          } >> "$GITHUB_ENV"
       - run: npx electron-builder ${{ matrix.target }} --publish never
       - name: Fumée de l'app empaquetée
         if: runner.os != 'Linux'
