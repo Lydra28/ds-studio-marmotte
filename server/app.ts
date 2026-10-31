@@ -5,6 +5,7 @@
 import { Hono } from 'hono';
 import { authRoutes, requireAccount } from './auth.js';
 import { ApiError, clock, type Deps } from './core.js';
+import { issueLicense } from './license.js';
 
 export { ApiError, type Deps } from './core.js';
 
@@ -28,6 +29,20 @@ export function createApp(deps: Deps) {
 
   // Le compte de la session : ce que l'app affiche dans Réglages (lot 3).
   app.get('/v1/me', async (c) => c.json(await account(c)));
+
+  // Licence signée, renouvelée par l'app à chaque lancement connecté ; la clé
+  // publique est aussi servie pour vérification croisée.
+  app.post('/v1/license', async (c) => {
+    const me = await account(c);
+    const { token, payload } = issueLicense(deps.keys, me, clock(deps)());
+    return c.json({
+      license: token,
+      expiresAt: new Date(payload.exp).toISOString(),
+      graceUntil: new Date(payload.grace).toISOString(),
+      tier: payload.tier,
+    });
+  });
+  app.get('/v1/license/key', (c) => c.json({ alg: 'Ed25519', publicKey: deps.keys.publicKeyPem }));
 
   return app;
 }

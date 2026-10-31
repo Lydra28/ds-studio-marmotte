@@ -32,7 +32,8 @@
     "test:desktop": "node scripts/build-desktop.mjs && playwright test --config tests/desktop/playwright.config.ts",
     "dev:server": "tsx server/index.ts",
     "test:server": "tsx --test tests/server/*.test.ts",
-    "build:server": "node scripts/build-server.mjs"
+    "build:server": "node scripts/build-server.mjs",
+    "admin": "tsx server/admin.ts"
   },
   "dependencies": {
     "electron-updater": "6.8.12",

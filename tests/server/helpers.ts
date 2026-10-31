@@ -5,6 +5,7 @@
 import { randomBytes } from 'node:crypto';
 import { createApp, type Deps } from '../../server/app.js';
 import { memoryDb, migrate, pgDb, type Db } from '../../server/db.js';
+import { generateKeys } from '../../server/license.js';
 import { memoryMailer } from '../../server/mail.js';
 
 export async function testDb(): Promise<Db> {
@@ -37,7 +38,8 @@ export async function testApp(overrides: Partial<Deps> = {}) {
   // Horloge réglable : `tick(ms)` avance le temps vu par le serveur.
   let t = T0.getTime();
   const tick = (ms: number) => (t += ms);
-  const app = createApp({ db, mailer, publicUrl: 'http://server.test', version: 'test', now: () => new Date(t), ...overrides });
+  const keys = generateKeys();
+  const app = createApp({ db, mailer, keys, publicUrl: 'http://server.test', version: 'test', now: () => new Date(t), ...overrides });
   const api = async (path: string, init: RequestInit & { json?: unknown; token?: string } = {}) => {
     const { json, token, ...rest } = init;
     const headers = new Headers(rest.headers);
@@ -58,7 +60,7 @@ export async function testApp(overrides: Partial<Deps> = {}) {
     }
     return { status: res.status, body, headers: res.headers };
   };
-  return { app, db, api, mailer, tick, close: () => db.close() };
+  return { app, db, api, mailer, keys, tick, now: () => new Date(t), close: () => db.close() };
 }
 
 // Le dernier mail reçu par une adresse, et le jeton qu'il contient (lien ou code).

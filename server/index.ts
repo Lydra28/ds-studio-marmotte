@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createApp } from './app.js';
 import { memoryDb, migrate, pgDb } from './db.js';
+import { generateKeys, loadKeys, type LicenseKeys } from './license.js';
 import { consoleMailer, resendMailer } from './mail.js';
 
 const env = process.env;
@@ -62,9 +63,20 @@ const port = Number(env.PORT ?? 8787);
 const mailer = env.RESEND_API_KEY
   ? resendMailer(env.RESEND_API_KEY, env.MAIL_FROM ?? 'DS-Studio <no-reply@design-system-studio.fr>')
   : consoleMailer();
+// Clé de signature des licences : PEM Ed25519 dans l'environnement. Sans
+// elle (développement), une paire éphémère : les licences émises ne
+// survivent pas au redémarrage.
+let keys: LicenseKeys;
+if (env.LICENSE_PRIVATE_KEY) {
+  keys = loadKeys(env.LICENSE_PRIVATE_KEY);
+} else {
+  keys = generateKeys();
+  console.warn('LICENSE_PRIVATE_KEY absente : clé de licence éphémère (développement seulement).');
+}
 const app = createApp({
   db,
   mailer,
+  keys,
   publicUrl: (env.API_PUBLIC_URL ?? `http://127.0.0.1:${port}`).replace(/\/+$/, ''),
   cookieDomain: env.COOKIE_DOMAIN || undefined,
   version,
