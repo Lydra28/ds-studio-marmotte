@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createApp } from './app.js';
 import { memoryDb, migrate, pgDb } from './db.js';
+import { consoleMailer, resendMailer } from './mail.js';
 
 const env = process.env;
 
@@ -56,7 +57,18 @@ const applied = await migrate(db, fileURLToPath(new URL('migrations/', dir)));
 if (applied.length) console.log(`Migrations appliquées : ${applied.join(', ')}`);
 
 const port = Number(env.PORT ?? 8787);
-const app = createApp({ db, version });
+// Mails : Resend avec sa clé ; sans clé (développement), les mails et leurs
+// liens s'écrivent dans la console.
+const mailer = env.RESEND_API_KEY
+  ? resendMailer(env.RESEND_API_KEY, env.MAIL_FROM ?? 'DS-Studio <no-reply@design-system-studio.fr>')
+  : consoleMailer();
+const app = createApp({
+  db,
+  mailer,
+  publicUrl: (env.API_PUBLIC_URL ?? `http://127.0.0.1:${port}`).replace(/\/+$/, ''),
+  cookieDomain: env.COOKIE_DOMAIN || undefined,
+  version,
+});
 const server = serve({ fetch: app.fetch, port, hostname: '0.0.0.0' }, () => {
   console.log(`Serveur DS-Studio ${version} sur le port ${port}`);
 });
