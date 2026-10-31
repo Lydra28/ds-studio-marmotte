@@ -1,0 +1,63 @@
+# Blueprint Render du serveur DS-Studio (lot 2, étape 2.5) : un service web
+# Node et un Postgres géré, à Francfort. Les secrets (`sync: false`) se
+# saisissent dans le tableau de bord à la création, jamais ici. Runbook :
+# 03_automations/Perso/ds-studio/references/server.md (workspace EGX).
+services:
+  - type: web
+    name: ds-studio-server
+    runtime: node
+    region: frankfurt
+    plan: 0.5c-512mb
+    branch: main
+    # Dépendances de la racine (esbuild) sans Electron ni Chromium, puis celles
+    # du serveur, puis le bundle.
+    buildCommand: npm ci && npm --prefix server ci && npm run build:server
+    startCommand: node server/dist/index.mjs
+    healthCheckPath: /v1/health
+    autoDeployTrigger: commit
+    # Un commit de l'app ne redéploie pas le serveur.
+    buildFilter:
+      paths:
+        - server/**
+        - package.json
+        - package-lock.json
+        - scripts/build-server.mjs
+        - render.yaml
+      ignoredPaths:
+        - server/**/*.md
+        - server/.env.example
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: ELECTRON_SKIP_BINARY_DOWNLOAD
+        value: "1"
+      - key: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD
+        value: "1"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ds-studio-db
+          property: connectionString
+      # URL interne (réseau privé Render) : sans TLS. `require` si la connexion échoue.
+      - key: DATABASE_SSL
+        value: "off"
+      - key: API_PUBLIC_URL
+        value: https://api.design-system-studio.fr
+      - key: COOKIE_DOMAIN
+        value: .design-system-studio.fr
+      - key: MAIL_FROM
+        value: DS-Studio <no-reply@design-system-studio.fr>
+      - key: RESEND_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: LICENSE_PRIVATE_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+databases:
+  - name: ds-studio-db
+    region: frankfurt
+    plan: 0.1c-256mb
+    postgresMajorVersion: "17"
+    databaseName: ds_studio
+    user: ds_studio

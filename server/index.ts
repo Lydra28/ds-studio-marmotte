@@ -2,6 +2,7 @@
 // d'environnement, migrations, puis écoute. Secrets uniquement dans
 // l'environnement (Render) ou `server/.env` en local, jamais dans le dépôt.
 import { serve } from '@hono/node-server';
+import * as Sentry from '@sentry/node';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createApp } from './app.js';
@@ -47,6 +48,20 @@ const required = (name: string) => {
 const pkg = JSON.parse(await readFile(new URL('package.json', dir), 'utf8')) as { version: string };
 const version = `${pkg.version}${env.RENDER_GIT_COMMIT ? '+' + env.RENDER_GIT_COMMIT.slice(0, 7) : ''}`;
 
+// Sentry : erreurs inattendues seulement (pas de traces, pas de données
+// personnelles). `SENTRY_TEST_EVENT=1` envoie un message au démarrage pour
+// vérifier le branchement, à retirer ensuite.
+const sentryDsn = env.SENTRY_DSN || '';
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    release: `ds-studio-server@${version}`,
+    environment: env.RENDER ? 'production' : 'development',
+    tracesSampleRate: 0,
+  });
+  if (env.SENTRY_TEST_EVENT) Sentry.captureMessage(`Test Sentry au démarrage de ${version}`);
+}
+
 // `DATABASE_URL=memory` : Postgres en mémoire (PGlite, dépendance de
 // développement), pour `npm run dev:server` sans base installée ; tout est
 // perdu à l'arrêt. Render fournit une vraie URL.
@@ -69,6 +84,14 @@ const mailer = env.RESEND_API_KEY
 let keys: LicenseKeys;
 if (env.LICENSE_PRIVATE_KEY) {
   keys = loadKeys(env.LICENSE_PRIVATE_KEY);
+  // La clé publique embarquée dans l'app (`server/license-public.pem`, suivie
+  // par git) doit être celle de la clé privée du serveur, sinon aucune licence
+  // émise ne sera acceptée : on refuse de démarrer.
+  const committed = await readFile(new URL('license-public.pem', dir), 'utf8').catch(() => '');
+  if (committed && committed.trim() !== keys.publicKeyPem.trim()) {
+    console.error('LICENSE_PRIVATE_KEY ne correspond pas à server/license-public.pem : licences invalides, arrêt.');
+    process.exit(1);
+  }
 } else {
   keys = generateKeys();
   console.warn('LICENSE_PRIVATE_KEY absente : clé de licence éphémère (développement seulement).');
@@ -85,6 +108,7 @@ const app = createApp({
   publicUrl: (env.API_PUBLIC_URL ?? `http://127.0.0.1:${port}`).replace(/\/+$/, ''),
   cookieDomain: env.COOKIE_DOMAIN || undefined,
   version,
+  report: sentryDsn ? (err) => Sentry.captureException(err) : undefined,
 });
 const server = serve({ fetch: app.fetch, port, hostname: '0.0.0.0' }, () => {
   console.log(`Serveur DS-Studio ${version} sur le port ${port}`);
@@ -93,7 +117,7 @@ const server = serve({ fetch: app.fetch, port, hostname: '0.0.0.0' }, () => {
 // Arrêt propre (Render envoie SIGTERM au redéploiement).
 const stop = () => {
   server.close(() => {
-    db.close().finally(() => process.exit(0));
+    Promise.all([db.close(), sentryDsn ? Sentry.flush(2000) : null]).finally(() => process.exit(0));
   });
   setTimeout(() => process.exit(0), 5000).unref();
 };

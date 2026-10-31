@@ -17,6 +17,7 @@ export function createApp(deps: Deps) {
   app.onError((err, c) => {
     if (err instanceof ApiError) return c.json({ error: err.message }, err.status as 400);
     console.error(err);
+    deps.report?.(err);
     return c.json({ error: 'Erreur interne du serveur DS-Studio.' }, 500);
   });
   app.notFound((c) => c.json({ error: 'Route inconnue.' }, 404));
