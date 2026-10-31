@@ -17,6 +17,10 @@ export interface Account {
   plan: 'free' | 'pro';
   gifted: boolean;
   dailyCapCents: number;
+  /** Crédits prépayés restants, centimes (peut passer sous zéro d'un appel). */
+  creditCents: number;
+  /** Usage inclus Pro par mois, centimes. */
+  monthlyIncludedCents: number;
   emailVerifiedAt: string | null;
   createdAt: string;
 }
@@ -63,6 +67,8 @@ type Row = {
   plan: 'free' | 'pro';
   gifted: boolean;
   daily_cap_cents: number;
+  credit_cents: number | string; // numeric : chaîne avec pg
+  monthly_included_cents: number;
   email_verified_at: Date | string | null;
   created_at: Date | string;
 };
@@ -73,11 +79,13 @@ const toAccount = (r: Row): Account => ({
   plan: r.plan,
   gifted: r.gifted,
   dailyCapCents: r.daily_cap_cents,
+  creditCents: Number(r.credit_cents),
+  monthlyIncludedCents: r.monthly_included_cents,
   emailVerifiedAt: iso(r.email_verified_at),
   createdAt: iso(r.created_at) as string,
 });
 
-const ACCOUNT_COLUMNS = 'id, email, password_hash, plan, gifted, daily_cap_cents, email_verified_at, created_at';
+const ACCOUNT_COLUMNS = 'id, email, password_hash, plan, gifted, daily_cap_cents, credit_cents, monthly_included_cents, email_verified_at, created_at';
 
 export function authRoutes(deps: Deps) {
   const now = () => (deps.now ?? (() => new Date()))();

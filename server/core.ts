@@ -9,6 +9,8 @@ export interface Deps {
   mailer: Mailer;
   /** Paire Ed25519 qui signe les licences ; clé publique embarquée dans l'app. */
   keys: LicenseKeys;
+  /** Clé OpenRouter du serveur (vide : relais désactivé) ; `fetch` remplaçable par les tests. */
+  openRouter: { apiKey: string; fetch?: typeof fetch };
   /** URL publique du serveur, pour les liens des mails (https://api.design-system-studio.fr). */
   publicUrl: string;
   /** Domaine du cookie de session du site (.design-system-studio.fr) ; absent en local. */

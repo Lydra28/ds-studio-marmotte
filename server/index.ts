@@ -73,10 +73,15 @@ if (env.LICENSE_PRIVATE_KEY) {
   keys = generateKeys();
   console.warn('LICENSE_PRIVATE_KEY absente : clé de licence éphémère (développement seulement).');
 }
+// Clé OpenRouter du serveur (dédiée, avec limite de dépense) : sans elle,
+// le relais répond 503 et le reste fonctionne.
+const openRouterKey = env.OPENROUTER_API_KEY ?? '';
+if (!openRouterKey) console.warn('OPENROUTER_API_KEY absente : relais OpenRouter désactivé (503).');
 const app = createApp({
   db,
   mailer,
   keys,
+  openRouter: { apiKey: openRouterKey },
   publicUrl: (env.API_PUBLIC_URL ?? `http://127.0.0.1:${port}`).replace(/\/+$/, ''),
   cookieDomain: env.COOKIE_DOMAIN || undefined,
   version,

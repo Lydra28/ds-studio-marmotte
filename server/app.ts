@@ -6,6 +6,7 @@ import { Hono } from 'hono';
 import { authRoutes, requireAccount } from './auth.js';
 import { ApiError, clock, type Deps } from './core.js';
 import { issueLicense } from './license.js';
+import { relayRoutes, usageSummary } from './relay.js';
 
 export { ApiError, type Deps } from './core.js';
 
@@ -27,8 +28,23 @@ export function createApp(deps: Deps) {
 
   app.route('/v1/auth', authRoutes(deps));
 
-  // Le compte de la session : ce que l'app affiche dans Réglages (lot 3).
-  app.get('/v1/me', async (c) => c.json(await account(c)));
+  // Le compte de la session et son usage : ce que l'app affiche dans
+  // Réglages (lot 3). Centimes de dollar (crédits OpenRouter).
+  app.get('/v1/me', async (c) => {
+    const me = await account(c);
+    const usage = await usageSummary(deps.db, me, clock(deps)());
+    return c.json({
+      ...me,
+      usage: {
+        todayCents: usage.todayCents,
+        monthCents: usage.monthCents,
+        resetAt: usage.resetAt,
+        includedLeftCents: Math.max(0, me.monthlyIncludedCents - usage.monthProCents),
+      },
+    });
+  });
+
+  app.route('/v1/relay', relayRoutes(deps));
 
   // Licence signée, renouvelée par l'app à chaque lancement connecté ; la clé
   // publique est aussi servie pour vérification croisée.
