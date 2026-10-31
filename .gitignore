@@ -35,3 +35,6 @@ projects/*
 # App desktop : serveur compilé et installateurs générés.
 desktop/build/
 release/
+
+# Serveur (lot 2) : bundle pour Render.
+server/dist/

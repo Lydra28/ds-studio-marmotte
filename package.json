@@ -29,7 +29,10 @@
     "dist:win": "npm run build && node scripts/build-desktop.mjs && electron-builder --win --publish never",
     "dist:mac": "npm run build && node scripts/build-desktop.mjs && electron-builder --mac --publish never",
     "dist:linux": "npm run build && node scripts/build-desktop.mjs && electron-builder --linux --publish never",
-    "test:desktop": "node scripts/build-desktop.mjs && playwright test --config tests/desktop/playwright.config.ts"
+    "test:desktop": "node scripts/build-desktop.mjs && playwright test --config tests/desktop/playwright.config.ts",
+    "dev:server": "tsx server/index.ts",
+    "test:server": "tsx --test tests/server/*.test.ts",
+    "build:server": "node scripts/build-server.mjs"
   },
   "dependencies": {
     "electron-updater": "6.8.12",

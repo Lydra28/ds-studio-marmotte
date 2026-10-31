@@ -16,6 +16,8 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # Dépendances du serveur (paquet à part, server/package.json) : tsc les type-vérifie.
+      - run: npm --prefix server ci
       - run: npm run build
       # Bundle du serveur desktop à blanc : une régression du bundle casse ici, pas au tag.
       - run: node scripts/build-desktop.mjs
@@ -32,3 +34,33 @@ jobs:
           path: test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  # Serveur DS-Studio (lot 2) : mêmes tests sur PGlite puis sur un vrai Postgres, bundle à blanc.
+  server:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: ds
+          POSTGRES_PASSWORD: ds
+          POSTGRES_DB: ds_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ds"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm --prefix server ci
+      - run: npm run test:server
+      - run: npm run test:server
+        env:
+          DATABASE_URL: postgres://ds:ds@localhost:5432/ds_test
+      - run: npm run build:server
