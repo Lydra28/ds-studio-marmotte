@@ -176,8 +176,8 @@ export function relayRoutes(deps: Deps) {
         console.warn(`Coût inconnu pour ${model} (ni usage.cost ni prix public) : événement compté à 0.`);
       }
     }
-    // Événement et débit des crédits en une seule instruction (pas de
-    // transaction multi-requêtes avec un pool).
+    // Événement et débit des crédits en une seule instruction : atomique
+    // sans `db.transaction`, et une seule requête sur le pool.
     await deps.db.query(
       `WITH e AS (
          INSERT INTO usage_events (account_id, origin, model, prompt_tokens, completion_tokens, cost_cents, cost_source, charged_to, generation_id, created_at)

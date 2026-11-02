@@ -2,8 +2,9 @@
 // remplissent `pg` en production et PGlite (Postgres en WebAssembly, en
 // mémoire) dans les tests, sans serveur à installer. Migrations : fichiers
 // SQL numérotés de `server/migrations/`, appliqués une fois chacun, dans
-// l'ordre, chacun dans sa transaction ; la table `schema_migrations` garde
-// la liste. Jamais de migration destructive sans sauvegarde (AGENTS.md).
+// l'ordre, chacun dans sa transaction (`db.transaction`, une seule
+// connexion) ; la table `schema_migrations` garde la liste. Jamais de
+// migration destructive sans sauvegarde (AGENTS.md).
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,8 +14,16 @@ export interface Db {
   query<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<{ rows: T[] }>;
   /** Un script SQL de plusieurs instructions, sans paramètre. */
   exec(sql: string): Promise<void>;
+  /**
+   * Plusieurs requêtes dans une transaction, sur une seule connexion :
+   * validée si `fn` aboutit, annulée sinon. Avec un pool, deux `query` ou
+   * `exec` successifs peuvent changer de connexion (pg-pool jette celle
+   * d'une requête en erreur) : jamais de BEGIN/COMMIT par `exec`.
+   */
+  transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T>;
   close(): Promise<void>;
 }
+export type Tx = Pick<Db, 'query' | 'exec'>;
 
 export const MIGRATIONS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'migrations');
 
@@ -36,6 +45,28 @@ export async function pgDb(url: string, sslMode = process.env.DATABASE_SSL): Pro
     async exec(sql) {
       await pool.query(sql);
     },
+    async transaction(fn) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const result = await fn({
+          async query(text, params) {
+            const r = await client.query(text, params as unknown[]);
+            return { rows: r.rows };
+          },
+          async exec(sql) {
+            await client.query(sql);
+          },
+        });
+        await client.query('COMMIT');
+        client.release();
+        return result;
+      } catch (e) {
+        // Connexion rendue propre après ROLLBACK, jetée si elle ne répond plus.
+        await client.query('ROLLBACK').then(() => client.release(), () => client.release(true));
+        throw e;
+      }
+    },
     close: () => pool.end(),
   };
 }
@@ -53,6 +84,18 @@ export async function memoryDb(): Promise<Db> {
     async exec(sql) {
       await lite.exec(sql);
     },
+    transaction: (fn) =>
+      lite.transaction((tx) =>
+        fn({
+          async query(text, params) {
+            const result = await tx.query(text, params as unknown[]);
+            return { rows: result.rows as never[] };
+          },
+          async exec(sql) {
+            await tx.exec(sql);
+          },
+        }),
+      ),
     close: () => lite.close(),
   };
 }
@@ -67,13 +110,12 @@ export async function migrate(db: Db, dir = MIGRATIONS_DIR): Promise<string[]> {
   for (const file of files) {
     if (done.has(file)) continue;
     const sql = await readFile(path.join(dir, file), 'utf8');
-    await db.exec('BEGIN');
     try {
-      await db.exec(sql);
-      await db.query('INSERT INTO schema_migrations (name) VALUES ($1)', [file]);
-      await db.exec('COMMIT');
+      await db.transaction(async (tx) => {
+        await tx.exec(sql);
+        await tx.query('INSERT INTO schema_migrations (name) VALUES ($1)', [file]);
+      });
     } catch (e) {
-      await db.exec('ROLLBACK');
       throw new Error(`Migration ${file} échouée : ${(e as Error).message}`);
     }
     applied.push(file);

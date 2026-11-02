@@ -15,12 +15,18 @@ export async function testDb(): Promise<Db> {
     await migrate(db);
     return db;
   }
+  // Un schéma jetable par test, posé dans le `search_path` de chaque
+  // connexion du pool (paramètre `options` de l'URL) : un `SET` ne tiendrait
+  // que sur une connexion, et pg-pool jette celle d'une requête en erreur.
   const schema = 'test_' + randomBytes(6).toString('hex');
-  const db = await pgDb(url);
-  await db.exec(`CREATE SCHEMA ${schema}; SET search_path TO ${schema}`);
+  const admin = await pgDb(url);
+  await admin.exec(`CREATE SCHEMA ${schema}`);
+  await admin.close();
+  const db = await pgDb(`${url}${url.includes('?') ? '&' : '?'}options=${encodeURIComponent(`-c search_path=${schema}`)}`);
   const scoped: Db = {
     query: (text, params) => db.query(text, params),
     exec: (sql) => db.exec(sql),
+    transaction: (fn) => db.transaction(fn),
     close: async () => {
       await db.exec(`DROP SCHEMA ${schema} CASCADE`);
       await db.close();
