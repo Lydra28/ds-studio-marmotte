@@ -10,18 +10,39 @@ const marmotte = path.join(dir, 'projects', 'marmotte');
 await mkdir(marmotte, { recursive: true });
 for (const file of ['design-system.tokens.json', 'project.config.json', 'components.json'])
   await copyFile(path.join('projects/marmotte', file), path.join(marmotte, file));
+// Faux serveur DS-Studio (tests/e2e/fake-api.ts) : compte Pro offert et relais
+// simulé, clé de licence générée pour ce lancement. Jamais le vrai serveur ni
+// GitHub en test. Prêt avant l'atelier, qui lit la clé au démarrage.
+const fakePort = 4319;
+const keyFile = path.join(dir, 'license-public.pem');
+const fake = spawn(process.execPath, ['--import', 'tsx', 'tests/e2e/fake-api.ts', keyFile, String(fakePort)], {
+  stdio: ['ignore', 'pipe', 'inherit'],
+});
+await new Promise((resolve, reject) => {
+  fake.stdout.on('data', (data) => {
+    process.stdout.write(data);
+    if (String(data).includes('faux serveur')) resolve();
+  });
+  fake.on('exit', (code) => reject(new Error(`faux serveur DS-Studio arrêté (${code})`)));
+});
 const child = spawn(
   process.execPath,
   ['--import', 'tsx', 'app/server/index.ts', `--projects=${path.join(dir, 'projects')}`],
   {
-    // Jamais d'appel au serveur DS-Studio ni à GitHub en test : adresse inerte, jeton vide.
-    env: { ...process.env, PORT: '4318', DS_STUDIO_API_URL: 'http://127.0.0.1:9', GITHUB_TOKEN: '' },
+    env: {
+      ...process.env,
+      PORT: '4318',
+      DS_STUDIO_API_URL: `http://127.0.0.1:${fakePort}`,
+      DS_STUDIO_LICENSE_KEY_FILE: keyFile,
+      GITHUB_TOKEN: '',
+    },
     stdio: 'inherit',
   },
 );
 for (const signal of ['SIGINT', 'SIGTERM'])
   process.on(signal, () => child.kill('SIGTERM'));
 child.on('exit', async (code) => {
+  fake.kill('SIGTERM');
   await rm(dir, { recursive: true, force: true });
   process.exit(code ?? 0);
 });

@@ -83,6 +83,10 @@ test('réglages : version, dossier et services affichés, aucune valeur de secre
   await expect(page.getByText(`Version ${settings.app.version}`)).toBeVisible();
   await expect(page.getByText('Mises à jour gérées hors de l’app')).toBeVisible();
   await expect(page.getByText('Indisponible')).toBeVisible();
+  // Sans compte : le formulaire de connexion, et rien d'autre, dans la section Compte.
+  await expect(page.getByRole('form', { name: 'Compte DS-Studio' })).toBeVisible();
+  expect((await (await page.request.get('/api/account')).json()).status).toBe('none');
+  await page.screenshot({ path: 'test-results/reglages-sans-compte.png', fullPage: true });
   // Hors de l'app Electron : pas de bouton d'action, et la route refuse proprement.
   await expect(page.getByRole('button', { name: 'Changer de dossier…' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Rechercher une mise à jour' })).toHaveCount(0);
@@ -97,6 +101,49 @@ test('réglages : version, dossier et services affichés, aucune valeur de secre
   await page.goto('/');
   await page.getByRole('button', { name: 'Réglages' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('DS-Studio');
+});
+
+test('compte : connexion dans Réglages, Pro (offert) et usage affichés, assistant actif par le relais, déconnexion', async ({ page }) => {
+  // Faux serveur DS-Studio de scripts/e2e-server.mjs (tests/e2e/fake-api.ts) : jamais le vrai.
+  await page.getByRole('button', { name: 'Réglages' }).click();
+  const form = page.getByRole('form', { name: 'Compte DS-Studio' });
+  await form.getByLabel('Adresse mail').fill('associe@example.com');
+  await form.getByLabel('Mot de passe').fill('mauvais');
+  await form.getByRole('button', { name: 'Se connecter' }).click();
+  await expect(form.getByRole('alert')).toContainText('incorrect');
+  await form.getByLabel('Mot de passe').fill('mot-de-passe-de-test');
+  await form.getByRole('button', { name: 'Se connecter' }).click();
+  const account = page.getByRole('region', { name: 'Compte' });
+  await expect(account).toContainText('associe@example.com');
+  await expect(account).toContainText('Pro (offert)');
+  await expect(account).toContainText('Valide jusqu’au');
+  await expect(account).toContainText('0,12 $ sur 2,00 $');
+  await expect(account).toContainText('jamais débité');
+  await expect(page.getByText('Actif', { exact: true })).toBeVisible();
+  // Le navigateur ne voit jamais le jeton de session, seulement l'état.
+  const status = await (await page.request.get('/api/account')).json();
+  expect(status.status).toBe('connected');
+  expect(status.tier).toBe('pro');
+  expect(JSON.stringify(status)).not.toMatch(/jeton-e2e/);
+  await page.screenshot({ path: 'test-results/reglages-compte.png', fullPage: true });
+  // L'assistant répond, par le relais du serveur, avec le compte connecté.
+  await page.getByRole('button', { name: '← Retour' }).click();
+  await expect(page.locator('.bar .project')).toHaveText('Marmotte');
+  await page.getByRole('button', { name: 'Ouvrir l’assistant' }).click();
+  const panel = page.getByRole('complementary', { name: 'Assistant' });
+  await expect(panel.getByLabel('Message à l’assistant')).toBeEnabled();
+  await panel.getByLabel('Message à l’assistant').fill('Bonjour');
+  await panel.getByRole('button', { name: 'Envoyer' }).click();
+  await expect(panel).toContainText('Réponse simulée 1 (assistant)');
+  await panel.getByRole('button', { name: 'Effacer' }).click();
+  await panel.getByRole('button', { name: 'Fermer l’assistant' }).click();
+  // Déconnexion : le formulaire revient, l'assistant se grise de nouveau.
+  await page.getByRole('button', { name: 'Réglages' }).click();
+  await page.getByRole('button', { name: 'Se déconnecter' }).click();
+  await expect(form).toBeVisible();
+  expect((await (await page.request.get('/api/account')).json()).status).toBe('none');
+  await page.getByRole('button', { name: '← Retour' }).click();
+  await expect(page.locator('.bar .project')).toHaveText('Marmotte');
 });
 
 test('mur des DA : image déposée, réduite, retirée ; génération bloquée sans compte', async ({ page }) => {

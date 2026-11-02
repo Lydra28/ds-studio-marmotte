@@ -33,6 +33,23 @@ export interface Settings {
   services: { assistant: boolean; github: boolean; relay: boolean; plugin: boolean };
 }
 export type DesktopAction = 'choose-projects' | 'check-update' | 'install-update';
+// Compte DS-Studio (lot 3) : état rendu par le serveur local, jamais le jeton de session.
+export interface AccountStatus {
+  status: 'none' | 'connected';
+  // Faux dès qu'un appel au serveur DS-Studio a échoué (réseau), vrai au suivant qui aboutit.
+  online: boolean;
+  email: string | null;
+  // Palier effectif : celui d'une licence valide ou en grâce, sinon gratuit.
+  tier: 'free' | 'pro';
+  gifted: boolean;
+  license: { state: 'valid' | 'grace' | 'expired' | 'invalid' | 'none'; expiresAt: string | null; graceUntil: string | null } | null;
+  usage: { todayCents: number; monthCents: number; resetAt: string; includedLeftCents: number; creditCents: number; dailyCapCents: number } | null;
+  message: string | null;
+}
+export type AccountAction = 'signup' | 'login' | 'forgot' | 'reset' | 'logout' | 'refresh';
+export const getAccount = () => request<AccountStatus>('account');
+export const accountAction = (body: { action: AccountAction; email?: string; password?: string; code?: string }) =>
+  request<{ ok: true; message: string | null; account: AccountStatus }>('account', body);
 export interface ProjectSummary {
   slug: string;
   name: string;

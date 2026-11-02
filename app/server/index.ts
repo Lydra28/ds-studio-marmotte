@@ -42,6 +42,8 @@ try {
 // desktop/build/ par build-desktop.mjs. Sans elle, aucune licence ne serait
 // vérifiable : refus de démarrer plutôt qu'un palier « Gratuit » à tort.
 async function licensePublicKey() {
+  // Tests navigateur : clé du faux serveur DS-Studio (tests/e2e/fake-api.ts).
+  if (process.env.DS_STUDIO_LICENSE_KEY_FILE) return fs.readFile(process.env.DS_STUDIO_LICENSE_KEY_FILE, 'utf8');
   for (const rel of ['server/license-public.pem', 'desktop/build/license-public.pem']) {
     try {
       return await fs.readFile(path.join(root, rel), 'utf8');

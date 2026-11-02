@@ -1319,6 +1319,37 @@ dialog.diff::backdrop,
 .settings-block .hint {
   margin: 12px 0 0;
 }
+/* Compte DS-Studio : onglets d'action puis formulaire court */
+.account-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
+}
+.account-tabs button[aria-pressed='true'] {
+  color: var(--c-on-accent);
+  background: var(--c-accent);
+}
+.account-form {
+  display: grid;
+  gap: 12px;
+  max-width: 420px;
+}
+.account-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--c-muted);
+}
+.account-form input {
+  width: 100%;
+  color: var(--c-text);
+}
+.account-form .form-actions,
+.account-form .hint,
+.account-form .message {
+  margin: 0;
+}
 
 /* Assistant : panneau ancré à droite, l'atelier reste visible */
 .studio.with-assistant {
