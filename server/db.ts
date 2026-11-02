@@ -100,6 +100,32 @@ export async function memoryDb(): Promise<Db> {
   };
 }
 
+// Au premier déploiement d'un Blueprint Render, la base est créée en même
+// temps que le service et n'écoute pas encore (piège du 2026-11-02) : on
+// attend qu'elle réponde, sur les seules erreurs de connexion ou de
+// démarrage ; toute autre erreur (droits, SQL) sort tout de suite.
+const RETRYABLE = new Set(['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT', '57P03']);
+const errorCode = (e: unknown) => {
+  const err = e as { code?: string; errors?: { code?: string }[] };
+  return err?.code ?? err?.errors?.[0]?.code ?? '';
+};
+export async function waitForDb(
+  db: Pick<Db, 'query'>,
+  { attempts = 20, delayMs = 3000, log = console.error, sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms)) } = {},
+): Promise<number> {
+  for (let n = 1; ; n++) {
+    try {
+      await db.query('SELECT 1');
+      return n;
+    } catch (e) {
+      const code = errorCode(e);
+      if (!RETRYABLE.has(code) || n >= attempts) throw e;
+      log(`Base injoignable (${code}), essai ${n} sur ${attempts} : nouvel essai dans ${delayMs / 1000} s.`);
+      await sleep(delayMs);
+    }
+  }
+}
+
 export async function migrate(db: Db, dir = MIGRATIONS_DIR): Promise<string[]> {
   await db.exec(
     'CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())',

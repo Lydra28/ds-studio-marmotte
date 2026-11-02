@@ -41,6 +41,7 @@ test('comptes : inscription, mail de confirmation, connexion, /me, déconnexion'
     const me = await t.api('/v1/me', { token: session });
     assert.equal(me.status, 200);
     assert.equal(me.body.email, 'romain@example.com');
+    assert.equal(me.body.tier, 'free', 'palier effectif, le même que la licence');
     assert.equal((await t.api('/v1/me')).status, 401, 'sans jeton');
     assert.equal((await t.api('/v1/me', { token: 'faux' })).status, 401, 'jeton inconnu');
 

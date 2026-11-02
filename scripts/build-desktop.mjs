@@ -4,6 +4,8 @@
 // desktop/main.mjs : DS_STUDIO_UPDATE_URL (https, dossier du canal),
 // DS_STUDIO_UPDATE_CHANNEL (stable par défaut), DS_STUDIO_MAC_SIGNED=1 quand
 // l'app Mac est signée. Sans URL : mises à jour désactivées, affiché dans Réglages.
+// Copie aussi server/license-public.pem : la clé publique qui vérifie les
+// licences hors ligne (lot 3), lue par app/server/index.ts depuis desktop/build/.
 import { build } from 'esbuild';
 import { promises as fs } from 'node:fs';
 
@@ -26,4 +28,5 @@ const update = {
   macSigned: process.env.DS_STUDIO_MAC_SIGNED === '1',
 };
 await fs.writeFile('desktop/build/update.json', JSON.stringify(update, null, 2) + '\n');
+await fs.copyFile('server/license-public.pem', 'desktop/build/license-public.pem');
 console.log(`desktop/build/server.mjs prêt · mises à jour : ${update.url ? `${update.url} (${update.channel})` : 'désactivées'}`);

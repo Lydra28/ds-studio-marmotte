@@ -5,7 +5,7 @@
 import { Hono } from 'hono';
 import { authRoutes, requireAccount } from './auth.js';
 import { ApiError, clock, type Deps } from './core.js';
-import { issueLicense } from './license.js';
+import { effectiveTier, issueLicense } from './license.js';
 import { relayRoutes, usageSummary } from './relay.js';
 
 export { ApiError, type Deps } from './core.js';
@@ -36,6 +36,7 @@ export function createApp(deps: Deps) {
     const usage = await usageSummary(deps.db, me, clock(deps)());
     return c.json({
       ...me,
+      tier: effectiveTier(me),
       usage: {
         todayCents: usage.todayCents,
         monthCents: usage.monthCents,

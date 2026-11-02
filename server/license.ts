@@ -60,6 +60,9 @@ export function generateKeys(): LicenseKeys & { privateKeyPem: string } {
 
 const b64 = (buf: Buffer) => buf.toString('base64url');
 
+// Palier effectif : un compte offert est Pro sans paiement (cadrage §13).
+export const effectiveTier = (account: { plan: 'free' | 'pro'; gifted: boolean }) => (account.gifted ? 'pro' : account.plan);
+
 export function issueLicense(
   keys: LicenseKeys,
   account: { id: string; email: string; plan: 'free' | 'pro'; gifted: boolean; dailyCapCents: number },
@@ -70,7 +73,7 @@ export function issueLicense(
     v: 1,
     sub: account.id,
     email: account.email,
-    tier: account.gifted ? 'pro' : account.plan,
+    tier: effectiveTier(account),
     gifted: account.gifted,
     cap: account.dailyCapCents,
     iat,

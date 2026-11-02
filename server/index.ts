@@ -6,7 +6,7 @@ import * as Sentry from '@sentry/node';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createApp } from './app.js';
-import { memoryDb, migrate, pgDb } from './db.js';
+import { memoryDb, migrate, pgDb, waitForDb } from './db.js';
 import { generateKeys, loadKeys, type LicenseKeys } from './license.js';
 import { consoleMailer, resendMailer } from './mail.js';
 
@@ -68,6 +68,7 @@ if (sentryDsn) {
 const url = required('DATABASE_URL');
 const db = url === 'memory' ? await memoryDb() : await pgDb(url);
 if (url === 'memory') console.warn('Base en mémoire : données perdues à l’arrêt (développement seulement).');
+else await waitForDb(db);
 // Dossier des migrations résolu depuis `server/`, pas depuis le bundle.
 const applied = await migrate(db, fileURLToPath(new URL('migrations/', dir)));
 if (applied.length) console.log(`Migrations appliquées : ${applied.join(', ')}`);
