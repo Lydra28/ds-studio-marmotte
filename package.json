@@ -33,7 +33,8 @@
     "dev:server": "tsx server/index.ts",
     "test:server": "tsx --test tests/server/*.test.ts",
     "build:server": "node scripts/build-server.mjs",
-    "admin": "tsx server/admin.ts"
+    "admin": "tsx server/admin.ts",
+    "recette:api": "node scripts/recette-api.mjs"
   },
   "dependencies": {
     "electron-updater": "6.8.12",
