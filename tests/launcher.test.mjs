@@ -145,13 +145,16 @@ test(
     }
     async function action(name, body = {}) {
       assert.equal((await request(name, body)).code, 202);
+      // `prepare` (npm ci et build réels) : 85 s en moyenne sur le runner
+      // Windows, plus de 120 s vu le 2026-11-02 ; les autres actions
+      // tiennent en secondes.
       return until(
         async () => {
           const state = await request('status');
           return !state.busy && state;
         },
         name + ' terminé',
-        120000,
+        name === 'prepare' ? 300000 : 120000,
       );
     }
     async function serverState() {
@@ -231,6 +234,9 @@ test(
         'annulation graphique de l’installation : aucun téléchargement',
         async () => {
           const { chromium } = await import('@playwright/test');
+          // Sous-test précédent en échec : un Chromium orphelin garde le
+          // processus en vie (CI bloquée 18 min le 2026-11-02).
+          await browser?.close();
           browser = await chromium.launch();
           const page = await browser.newPage();
           await page.goto(launcher.url + '/#' + launcher.token);
@@ -253,6 +259,7 @@ test(
       );
       await t.test('panneau graphique, démarrer et ouvrir', async () => {
         const { chromium } = await import('@playwright/test');
+        await browser?.close();
         browser = await chromium.launch();
         const page = await browser.newPage();
         // Un essai séparé exécute aussi le navigateur système et le vrai .desktop.
@@ -354,6 +361,7 @@ test(
         'onglet conservé pendant un vrai redémarrage : session renouvelée, diff sans écriture',
         async () => {
           const { chromium } = await import('@playwright/test');
+          await browser?.close();
           browser = await chromium.launch();
           const page = await browser.newPage();
           await page.goto(`http://127.0.0.1:${port}`);
