@@ -84,9 +84,13 @@ test(
     const root = path.join(temporary, "projet d'étude $local");
     const data = path.join(root, '.ds-studio');
     await fs.mkdir(root);
-    // Aucun fichier privé, compte ou état utilisateur dans la fixture.
+    // Aucun fichier privé, compte ou état utilisateur dans la fixture. Du
+    // paquet serveur, seulement ce que l'app importe : la licence et sa clé
+    // publique (jamais server/ entier : dépendances à part, .env possible).
     for (const name of [
       'app',
+      'server/license.ts',
+      'server/license-public.pem',
       'connectors',
       'scripts',
       'launcher',
