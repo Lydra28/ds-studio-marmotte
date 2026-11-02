@@ -50,6 +50,10 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # Paquet serveur à part : le `tsc` de la racine type-vérifie aussi server/
+      # (importé par app/server/account.ts et les tests), comme dans check.yml.
+      # Sans cette étape, rc.6 est passée au rouge sur les trois OS (2026-11-02).
+      - run: npm --prefix server ci
       - run: npm run build
       - run: node scripts/build-desktop.mjs
       - name: Identité de signature et notarisation Mac (secrets présents seulement)
