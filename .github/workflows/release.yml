@@ -40,8 +40,8 @@ jobs:
       # (étape ci-dessous) : vide, CSC_LINK serait pris pour un chemin de
       # certificat et electron-builder échouerait (« not a file »).
       CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.CSC_LINK != '' }}
-      # Jamais d'appel OpenRouter ni GitHub pendant la fumée.
-      OPENROUTER_API_KEY: ''
+      # Jamais d'appel au serveur DS-Studio ni à GitHub pendant la fumée.
+      DS_STUDIO_API_URL: http://127.0.0.1:9
       GITHUB_TOKEN: ''
     steps:
       - uses: actions/checkout@v4

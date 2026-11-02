@@ -14,8 +14,8 @@ const child = spawn(
   process.execPath,
   ['--import', 'tsx', 'app/server/index.ts', `--projects=${path.join(dir, 'projects')}`],
   {
-    // Jamais d'appel OpenRouter ni GitHub en test, même si un .env local contient une clé.
-    env: { ...process.env, PORT: '4318', OPENROUTER_API_KEY: '', GITHUB_TOKEN: '' },
+    // Jamais d'appel au serveur DS-Studio ni à GitHub en test : adresse inerte, jeton vide.
+    env: { ...process.env, PORT: '4318', DS_STUDIO_API_URL: 'http://127.0.0.1:9', GITHUB_TOKEN: '' },
     stdio: 'inherit',
   },
 );

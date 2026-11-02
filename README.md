@@ -10,8 +10,9 @@
 > Lancer l'atelier : `npm install`, `npm run build`, puis
 > `npx tsx app/server/index.ts --projects=projects` → <http://127.0.0.1:4310>
 > (accueil avec la liste des projets). Une seule instance :
-> `--project=projects/marmotte`. Assistant : copier `.env.example` en `.env`
-> et y mettre `OPENROUTER_API_KEY` (jamais suivi par git). Projets perso
+> `--project=projects/marmotte`. Assistant et Mur des DA : connexion au compte
+> DS-Studio dans Réglages (aucune clé sur le poste ; en développement,
+> `DS_STUDIO_API_URL` dans `.env` vise `npm run dev:server`). Projets perso
 > seulement avec l'assistant : rien d'Enov ni de BRiiK.
 >
 > **En cours (cadrage v2, démo du 2026-10-30)** : liste des projets et

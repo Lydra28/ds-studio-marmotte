@@ -8,8 +8,7 @@ import { normalize } from '../shared/normalize.js';
 import type { Project } from '../shared/project.js';
 import { atomicWrite, readPrivate } from './files.js';
 import { StudioError } from './store.js';
-import { assistantOff } from './hints.js';
-import { callOpenRouter, DEFAULT_MODEL, type AssistantOptions } from './assistant.js';
+import { callRelay, DEFAULT_MODEL, requireAccount, type AssistantOptions } from './assistant.js';
 import { captureInDesktop, inDesktop } from './desktop.js';
 
 // Mur des DA d'un projet : inspirations (images fournies, captures de liens)
@@ -153,7 +152,7 @@ export class Wall {
   }
   directions(request: z.infer<typeof directionsRequestSchema>, context: { project: Project; name: string; set: TokenSet }) {
     return this.serial(async () => {
-      if (!this.options.apiKey) throw new StudioError(assistantOff(), 503);
+      requireAccount(this.options);
       const index = await this.read();
       const images = await Promise.all(
         index.inspirations.map(async (i) => {
@@ -162,7 +161,7 @@ export class Wall {
         }),
       );
       const model = this.options.model ?? DEFAULT_MODEL;
-      const data = await callOpenRouter(this.options, {
+      const data = await callRelay(this.options, {
         model,
         response_format: { type: 'json_object' },
         max_tokens: 32000,
@@ -183,7 +182,7 @@ export class Wall {
             ],
           },
         ],
-      });
+      }, 'wall');
       const raw = data.choices?.[0]?.message?.content ?? '';
       // Dernière réponse brute gardée en privé pour comprendre un rejet.
       await fs.mkdir(this.dir, { recursive: true, mode: 0o700 });

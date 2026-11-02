@@ -9,6 +9,7 @@ import { Registry } from '../app/server/registry.js';
 import { createStudioServer } from '../app/server/http.js';
 import { acceptVersion } from '../app/server/versions.js';
 import { loadPluginCode, PLUGIN_CONTRACT } from '../app/server/plugin.js';
+import { fakeAccount } from './fake-account.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -140,12 +141,12 @@ test('plugin Figma : question à l’assistant, appairage exigé, texte seulemen
   t.after(() => rm(dir, { recursive: true, force: true }));
   for (const f of ['design-system.tokens.json', 'project.config.json']) await cp(path.join(root, 'projects/marmotte', f), path.join(dir, 'marmotte', f));
   const seen: string[] = [];
-  // Réponse simulée d'OpenRouter : jamais d'appel réseau dans les tests.
-  const fetch_ = (async (_url: string, init: RequestInit) => {
-    seen.push(String(init.body));
+  // Réponse simulée du relais DS-Studio : jamais d'appel réseau dans les tests.
+  const reply = (call: { body: unknown }) => {
+    seen.push(JSON.stringify(call.body));
     return new Response(JSON.stringify({ choices: [{ message: { content: 'Gap à 16 px.' } }] }));
-  }) as typeof fetch;
-  const registry = Registry.folder(dir, path.join(root, 'templates/blank/design-system.tokens.json'), 'marmotte', { apiKey: 'k', fetch: fetch_ });
+  };
+  const registry = Registry.folder(dir, path.join(root, 'templates/blank/design-system.tokens.json'), 'marmotte', { account: await fakeAccount(reply, dir) });
   const code = await loadPluginCode(dir);
   const app = await createStudioServer({ root, registry, pluginCode: code });
   await new Promise<void>((r) => app.server.listen(0, '127.0.0.1', r));

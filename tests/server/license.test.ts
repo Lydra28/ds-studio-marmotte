@@ -65,9 +65,11 @@ test('licence : signature ou charge utile altérée refusée, autre clé refusé
     // Charge utile modifiée (palier) avec la signature d'origine.
     const forgedBody = Buffer.from(JSON.stringify({ ...JSON.parse(Buffer.from(body, 'base64url').toString()), tier: 'pro' })).toString('base64url');
     assert.equal(verifyLicense(t.keys.publicKey, `${forgedBody}.${signature}`, t.now()).status, 'invalid');
-    // Signature abîmée.
-    const flipped = signature.slice(0, -2) + (signature.endsWith('A') ? 'BB' : 'AA');
-    assert.equal(verifyLicense(t.keys.publicKey, `${body}.${flipped}`, t.now()).status, 'invalid');
+    // Signature abîmée : un octet du milieu inversé (changer les derniers
+    // caractères base64url ne touchait parfois que les bits de bourrage).
+    const damaged = Buffer.from(signature, 'base64url');
+    damaged[10] ^= 0xff;
+    assert.equal(verifyLicense(t.keys.publicKey, `${body}.${damaged.toString('base64url')}`, t.now()).status, 'invalid');
     // Autre paire de clés.
     assert.equal(verifyLicense(generateKeys().publicKey, license, t.now()).status, 'invalid');
     assert.equal(verifyLicense(t.keys.publicKey, 'n-importe-quoi', t.now()).status, 'invalid');

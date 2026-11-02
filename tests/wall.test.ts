@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { Wall, parseDirections, publicUrl } from '../app/server/wall.js';
 import { applyChanges, tokenSetSchema } from '../app/shared/model.js';
 import { projectSchema } from '../app/shared/project.js';
+import { fakeAccount } from './fake-account.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const set = tokenSetSchema.parse(
@@ -79,18 +80,18 @@ test('mur : inspirations privées, génération avec images, résultat gardé po
   const dir = await mkdtemp(path.join(tmpdir(), 'ds-wall-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const sent: any[] = [];
-  const fetch = (async (_u: string, init: RequestInit) => {
-    sent.push(JSON.parse(String(init.body)));
+  const account = await fakeAccount((call) => {
+    sent.push(call.body);
     return new Response(
       JSON.stringify({
         choices: [{ message: { content: direction([{ key: 'color/brand/600', mode: 'default', value: '#1E6B52' }]) } }],
         usage: { prompt_tokens: 5000, completion_tokens: 800 },
       }),
     );
-  }) as typeof globalThis.fetch;
-  const wall = new Wall(dir, { apiKey: 'k', model: 'test/model', fetch }, async () => Buffer.from('capture'));
+  }, dir);
+  const wall = new Wall(dir, { account, model: 'test/model' }, async () => Buffer.from('capture'));
 
-  await assert.rejects(() => new Wall(dir, {}).directions({ note: '', count: 3 }, context), /OPENROUTER_API_KEY/);
+  await assert.rejects(() => new Wall(dir, {}).directions({ note: '', count: 3 }, context), /connecte-toi/i);
   const image = await wall.addImage({ name: 'mood.png', dataUrl: png });
   const capture = await wall.addLink('https://example.com/inspi');
   await assert.rejects(() => wall.addLink('http://127.0.0.1:4310/api/state'), /Lien refusé/);

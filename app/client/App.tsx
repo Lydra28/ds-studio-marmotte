@@ -742,7 +742,7 @@ function Workspace({
       </main>
       </div>
       {assistantOpen ? (
-        <AssistantPanel color={mascotColor} desktop={desktop} onDraft={draftChanges} onClose={() => toggleAssistant(false)} />
+        <AssistantPanel color={mascotColor} onDraft={draftChanges} onClose={() => toggleAssistant(false)} />
       ) : (
         <MascotDock
           color={mascotColor}

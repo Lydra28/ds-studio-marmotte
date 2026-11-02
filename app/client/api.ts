@@ -156,6 +156,8 @@ export interface AssistantMessage {
 }
 export interface AssistantState {
   enabled: boolean;
+  // Pourquoi l'assistant est grisé : pas de compte connecté, ou serveur injoignable.
+  reason: 'account' | 'offline' | null;
   model: string;
   messages: AssistantMessage[];
 }
@@ -180,6 +182,7 @@ export interface Direction {
 }
 export interface WallState {
   enabled: boolean;
+  reason: 'account' | 'offline' | null;
   inspirations: Inspiration[];
   result?: {
     date: string;

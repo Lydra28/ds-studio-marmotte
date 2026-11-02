@@ -6,13 +6,14 @@ import { checkComponentName, runRules } from '../shared/rules.js';
 import type { Project } from '../shared/project.js';
 import { atomicWrite, readPrivate } from './files.js';
 import { StudioError } from './store.js';
-import { assistantOff } from './hints.js';
+import { NOT_CONNECTED, type AccountClient, type OffReason, type Origin } from './account.js';
 
 // Assistant du projet : il explique et propose, il n'écrit jamais. Une
 // proposition devient un brouillon côté navigateur, puis diff et validation
-// humaine comme toute autre modification. La clé reste sur le serveur.
+// humaine comme toute autre modification. Le modèle est appelé par le
+// serveur DS-Studio (relais, lot 3) avec le compte connecté : aucune clé sur
+// le poste. Le modèle par défaut est annoncé au serveur, qui impose le sien.
 export const DEFAULT_MODEL = 'deepseek/deepseek-v4.1-flash-1017';
-const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 
 export interface AssistantMessage {
   role: 'user' | 'assistant';
@@ -100,14 +101,18 @@ export function selectionFindings(nodes: SelectionNode[]) {
 }
 
 export interface AssistantOptions {
-  apiKey?: string;
+  /** Compte DS-Studio de l'app ; absent : agent et Mur indisponibles. */
+  account?: AccountClient;
   model?: string;
-  fetch?: typeof fetch;
 }
-export const assistantFromEnv = (): AssistantOptions => ({
-  apiKey: process.env.OPENROUTER_API_KEY || undefined,
-  model: process.env.OPENROUTER_MODEL || DEFAULT_MODEL,
-});
+// État des panneaux (agent, Mur, plugin), et compte exigé avant un appel. Hors
+// ligne, l'appel part quand même : c'est lui qui constate le retour du réseau.
+export const assistantStatus = (options: AssistantOptions): { enabled: boolean; reason: OffReason | null } =>
+  options.account?.enabled() ?? { enabled: false, reason: 'account' };
+export function requireAccount(options: AssistantOptions): AccountClient {
+  if (!options.account || assistantStatus(options).reason === 'account') throw new StudioError(NOT_CONNECTED, 503);
+  return options.account;
+}
 
 const proposeTool = {
   type: 'function',
@@ -169,7 +174,7 @@ export class Assistant {
     this.file = path.join(directory, 'assistant.json');
   }
   get status() {
-    return { enabled: !!this.options.apiKey, model: this.options.model ?? DEFAULT_MODEL };
+    return { ...assistantStatus(this.options), model: this.options.model ?? DEFAULT_MODEL };
   }
   async history(): Promise<AssistantMessage[]> {
     try {
@@ -192,7 +197,7 @@ export class Assistant {
   }
   chat(message: string, context: { project: Project; name: string; set: TokenSet }) {
     return this.serial(async () => {
-      if (!this.options.apiKey) throw new StudioError(assistantOff(), 503);
+      requireAccount(this.options);
       const history = await this.history();
       const question: AssistantMessage = { role: 'user', content: message, date: new Date().toISOString() };
       const reply = await this.complete(context, [...history, question]);
@@ -204,7 +209,7 @@ export class Assistant {
   // d'outil, donc pas de proposition), rien d'enregistré ici, la conversation
   // vit dans le plugin.
   async ask(request: AskRequest, context: { project: Project; name: string; set: TokenSet }) {
-    if (!this.options.apiKey) throw new StudioError(assistantOff(), 503);
+    requireAccount(this.options);
     const findings = request.selection ? selectionFindings(request.selection.nodes) : [];
     const figma = [
       'Tu réponds dans le plugin Figma DS-Studio, à côté du fichier ouvert. Tu ne modifies rien et ne proposes aucun changement automatique : dis quoi corriger à la main dans Figma (quel calque, quelle propriété, quel token du projet), et rappelle qu’un changement du DS lui-même passe par l’atelier.',
@@ -225,7 +230,7 @@ export class Assistant {
       // Réflexion du modèle comprise dans la limite : assez de marge pour répondre.
       max_tokens: 8000,
     };
-    const data = await callOpenRouter(this.options, body);
+    const data = await callRelay(this.options, body, 'assistant');
     const reply = (data.choices?.[0]?.message?.content ?? '').trim();
     if (!reply) throw new StudioError('Réponse vide de l’assistant. Réessaie.', 502);
     return {
@@ -250,12 +255,12 @@ export class Assistant {
     };
     // Le modèle rend parfois un tour vide (ni texte ni proposition, vu en
     // recette sur Devonia) : un second essai, puis un message clair.
-    let data = await callOpenRouter(this.options, body);
+    let data = await callRelay(this.options, body, 'assistant');
     const empty = (d: Completion) => {
       const m = d.choices?.[0]?.message;
       return !m?.content?.trim() && !m?.tool_calls?.some((c) => c.function?.name === 'propose_changes');
     };
-    if (empty(data)) data = await callOpenRouter(this.options, body);
+    if (empty(data)) data = await callRelay(this.options, body, 'assistant');
     const choice = data.choices?.[0]?.message;
     if (!choice) throw new StudioError('Réponse vide de l’assistant. Réessaie.', 502);
     const reply: AssistantMessage = {
@@ -307,28 +312,9 @@ interface Completion {
   usage?: { prompt_tokens?: number; completion_tokens?: number };
   error?: { message?: string };
 }
-export async function callOpenRouter(options: AssistantOptions, body: unknown): Promise<Completion> {
-  let response: Response;
-  try {
-    response = await (options.fetch ?? fetch)(ENDPOINT, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${options.apiKey}`,
-        'Content-Type': 'application/json',
-        'X-Title': 'DS-Studio',
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(120_000),
-    });
-  } catch {
-    throw new StudioError('OpenRouter injoignable (réseau ou délai dépassé). Réessaie.', 502);
-  }
-  const data = (await response.json().catch(() => ({}))) as Completion;
-  if (!response.ok)
-    // Message du fournisseur sans jamais renvoyer la clé ni la requête.
-    throw new StudioError(
-      `OpenRouter a refusé la requête (${response.status})${data.error?.message ? ' : ' + data.error.message.slice(0, 200) : ''}.`,
-      502,
-    );
-  return data;
+// Relais du serveur DS-Studio : corps OpenRouter transmis tel quel, réponse
+// telle quelle ; refus (402, 429, 503), panne (502) et réseau coupé remontent
+// avec le message du serveur (account.ts).
+export function callRelay(options: AssistantOptions, body: unknown, origin: Origin): Promise<Completion> {
+  return requireAccount(options).relay<Completion>(body, origin);
 }

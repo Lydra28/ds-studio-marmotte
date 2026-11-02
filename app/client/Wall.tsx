@@ -243,7 +243,7 @@ export default function Wall({
         <button
           className="primary"
           disabled={!!busy || !wall?.enabled}
-          title={wall?.enabled ? '' : 'Assistant désactivé : clé OpenRouter absente'}
+          title={wall?.enabled ? '' : wall?.reason === 'offline' ? 'Serveur DS-Studio injoignable' : 'Connecte-toi à ton compte DS-Studio dans Réglages'}
           onClick={() => run('directions', async () => setWall({ ...wall!, result: await proposeDirections(note, count) }))}
         >
           {busy === 'directions' ? 'L’assistant compose…' : `Proposer ${count} DA`}

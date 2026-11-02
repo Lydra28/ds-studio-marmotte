@@ -16,6 +16,7 @@ import { githubFromEnv, publishVersion, type GithubOptions } from './github.js';
 import { atomicWrite } from './files.js';
 import { figmaStatus } from '../../connectors/figma/contract.js';
 import { inDesktop, requestDesktop, updateState } from './desktop.js';
+import type { AccountClient, AccountStatus } from './account.js';
 import type { RecordInfo } from '../../scripts/runtime.mjs';
 
 // Vue Réglages : ce que l'app sait d'elle-même, sans jamais une valeur de secret.
@@ -24,11 +25,29 @@ export interface SettingsInfo {
   appName: string;
   // Dossier des projets (null pour une instance fixe `--project=`).
   projects: string | null;
-  services: { assistant: boolean };
 }
 const desktopActionSchema = z
   .object({ action: z.enum(['choose-projects', 'check-update', 'install-update']) })
   .strict();
+// Compte DS-Studio depuis Réglages : adresse et mot de passe ne font que passer, jamais gardés ici.
+const accountSchema = z
+  .object({
+    action: z.enum(['signup', 'login', 'forgot', 'reset', 'logout', 'refresh']),
+    email: z.string().trim().max(200).optional(),
+    password: z.string().max(200).optional(),
+    code: z.string().trim().max(200).optional(),
+  })
+  .strict();
+const NO_ACCOUNT: AccountStatus = {
+  status: 'none',
+  online: true,
+  email: null,
+  tier: 'free',
+  gifted: false,
+  license: null,
+  usage: null,
+  message: 'Compte indisponible dans cette instance.',
+};
 
 export async function createStudioServer(
   options: {
@@ -42,6 +61,8 @@ export async function createStudioServer(
     relayPort?: number;
     control?: { record: RecordInfo; stop: () => void };
     settings?: SettingsInfo;
+    // Compte DS-Studio de l'app (session, licence, relais) ; absent : panneaux indisponibles.
+    account?: AccountClient;
   } & (
     | { registry: Registry }
     | { store: Store; projectDir: string; config: Config }
@@ -160,6 +181,7 @@ export async function createStudioServer(
               desktop: inDesktop,
             });
           if (url.pathname === '/api/projects') return send(200, await registry.list());
+          if (url.pathname === '/api/account') return send(200, options.account?.status() ?? NO_ACCOUNT);
           if (url.pathname === '/api/settings')
             return send(200, {
               desktop: inDesktop,
@@ -167,7 +189,7 @@ export async function createStudioServer(
               projects: options.settings?.projects ?? null,
               update: updateState(),
               services: {
-                assistant: options.settings?.services.assistant ?? false,
+                assistant: options.account?.enabled().enabled ?? false,
                 github: !!github.token,
                 relay: !!options.relayPort,
                 plugin: !!options.pluginCode,
@@ -175,7 +197,7 @@ export async function createStudioServer(
             });
           const { store, dir: projectDir, config, brief: project, assistant, wall } = await instance();
           if (url.pathname === '/api/config') return send(200, config);
-          if (url.pathname === '/api/wall') return send(200, { ...(await wall.read()), enabled: assistant.status.enabled });
+          if (url.pathname === '/api/wall') return send(200, { ...(await wall.read()), enabled: assistant.status.enabled, reason: assistant.status.reason });
           if (url.pathname === '/api/wall/file') {
             const file = await wall.file(z.string().uuid().parse(url.searchParams.get('id')));
             res.writeHead(200, { 'Content-Type': file.type, 'Cache-Control': 'private, max-age=3600' });
@@ -231,6 +253,23 @@ export async function createStudioServer(
           if (!inDesktop) throw new StudioError('Disponible dans l’app DS-Studio installée seulement.', 409);
           requestDesktop(desktopActionSchema.parse(body).action);
           return send(200, { ok: true });
+        }
+        if (url.pathname === '/api/account') {
+          const a = options.account;
+          if (!a) throw new StudioError('Compte indisponible dans cette instance.', 409);
+          const b = accountSchema.parse(body);
+          const need = (value: string | undefined, what: string) => {
+            if (!value) throw new StudioError(`${what} manquant.`);
+            return value;
+          };
+          let message: string | null = null;
+          if (b.action === 'signup') message = await a.signup(need(b.email, 'Adresse'), need(b.password, 'Mot de passe'));
+          else if (b.action === 'login') await a.login(need(b.email, 'Adresse'), need(b.password, 'Mot de passe'));
+          else if (b.action === 'forgot') message = await a.forgot(need(b.email, 'Adresse'));
+          else if (b.action === 'reset') message = await a.reset(need(b.code, 'Code'), need(b.password, 'Mot de passe'));
+          else if (b.action === 'logout') await a.logout();
+          else await a.refresh();
+          return send(200, { ok: true, message, account: a.status() });
         }
         const { store, dir: projectDir, config, brief: project, assistant, wall } = await instance();
         if (url.pathname === '/api/wall/image') return send(200, await wall.addImage(imageSchema.parse(body)));

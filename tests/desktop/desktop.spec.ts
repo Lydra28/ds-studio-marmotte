@@ -50,7 +50,7 @@ test('app desktop : ouvre l’atelier, un projet, puis rend le port en quittant'
       DS_STUDIO_PROJECTS: projects,
       DS_STUDIO_USER_DATA: path.join(temp, 'reglages'),
       DS_STUDIO_DESKTOP_PORT: String(PORT),
-      OPENROUTER_API_KEY: '',
+      DS_STUDIO_API_URL: 'http://127.0.0.1:9',
       GITHUB_TOKEN: '',
     },
   });

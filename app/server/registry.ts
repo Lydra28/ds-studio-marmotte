@@ -8,7 +8,7 @@ import { Store, StudioError } from './store.js';
 import { ProjectStore } from './project.js';
 import { atomicWrite } from './files.js';
 import { listVersions } from './versions.js';
-import { Assistant, assistantFromEnv, type AssistantOptions } from './assistant.js';
+import { Assistant, type AssistantOptions } from './assistant.js';
 import { Wall } from './wall.js';
 
 // Une instance = un dossier projet : seed, configuration, versions acceptées,
@@ -91,7 +91,7 @@ export async function openInstance(
   slug: string,
   dir: string,
   dataDir: string,
-  assistant: AssistantOptions = assistantFromEnv(),
+  assistant: AssistantOptions = {},
 ): Promise<Instance> {
   const rawSeed = await readJson(path.join(dir, 'design-system.tokens.json'));
   if (!rawSeed) throw new StudioError('Projet sans design-system.tokens.json.', 500);
@@ -132,7 +132,7 @@ export class Registry {
     private projectsDir: string | null,
     private template: string | null,
     readonly fallback: string,
-    private assistant: AssistantOptions = assistantFromEnv(),
+    private assistant: AssistantOptions = {},
   ) {}
   static single(instance: Instance) {
     const r = new Registry(null, null, instance.slug);

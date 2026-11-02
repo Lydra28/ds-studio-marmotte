@@ -55,11 +55,11 @@ test('accueil : liste des projets, création d’un projet vierge à côté de M
   await expect(page.locator('.bar .project')).toHaveText('Marmotte');
 });
 
-test('assistant : ouvert par la mascotte, désactivé proprement sans clé, mascotte rendue à la fermeture', async ({ page }) => {
+test('assistant : ouvert par la mascotte, désactivé proprement sans compte, mascotte rendue à la fermeture', async ({ page }) => {
   await page.getByRole('button', { name: 'Ouvrir l’assistant' }).click();
   await expect(page.getByRole('button', { name: 'Ouvrir l’assistant' })).toHaveCount(0); // une seule scène 3D
   const panel = page.getByRole('complementary', { name: 'Assistant' });
-  await expect(panel).toContainText('Assistant désactivé');
+  await expect(panel).toContainText('Connecte-toi à ton compte DS-Studio');
   await expect(panel.getByLabel('Message à l’assistant')).toBeDisabled();
   await expect(page.locator('.bar .project')).toHaveText('Marmotte');
   await panel.getByRole('button', { name: 'Fermer l’assistant' }).click();
@@ -99,7 +99,7 @@ test('réglages : version, dossier et services affichés, aucune valeur de secre
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('DS-Studio');
 });
 
-test('mur des DA : image déposée, réduite, retirée ; génération bloquée sans clé', async ({ page }) => {
+test('mur des DA : image déposée, réduite, retirée ; génération bloquée sans compte', async ({ page }) => {
   await page.getByRole('navigation').getByRole('button', { name: 'Mur des DA' }).click();
   await expect(page.getByRole('heading', { name: 'Mur des DA' })).toBeVisible();
   // PNG 2×2 rouge, assez pour createImageBitmap.

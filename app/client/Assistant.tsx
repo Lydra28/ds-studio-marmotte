@@ -64,13 +64,10 @@ const starters = [
 // sur demande. Rien n'est enregistré sans le diff.
 export default function AssistantPanel({
   color,
-  desktop,
   onDraft,
   onClose,
 }: {
   color: string;
-  // App installée : personne n'édite de `.env`, le message renvoie vers Réglages.
-  desktop: boolean;
   onDraft: (changes: Change[]) => void;
   onClose: () => void;
 }) {
@@ -137,15 +134,12 @@ export default function AssistantPanel({
       <div className="assistant-log" ref={log} aria-live="polite">
         {state && !state.enabled && (
           <p className="assistant-off">
-            {desktop ? (
-              <>
-                Assistant indisponible dans cette version : la connexion au compte DS-Studio arrive dans Réglages, sans rien
-                installer. Tout le reste fonctionne sans lui.
-              </>
+            {state.reason === 'offline' ? (
+              <>Serveur DS-Studio injoignable : l’assistant revient avec le réseau. Tout le reste fonctionne sans lui.</>
             ) : (
               <>
-                Assistant désactivé : ajoute <code>OPENROUTER_API_KEY</code> dans le <code>.env</code> de l’atelier, puis
-                relance-le. Tout le reste fonctionne sans lui.
+                Connecte-toi à ton compte DS-Studio dans <a href="#/reglages">Réglages</a> pour utiliser l’assistant. Tout le
+                reste fonctionne sans lui.
               </>
             )}
           </p>

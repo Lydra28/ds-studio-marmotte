@@ -5,7 +5,8 @@
 // port 4311, réglages et dossier de projets à part, pour cohabiter avec l'app
 // installée (le plugin a un champ d'adresse ; son manifeste autorise 4310 à 4312,
 // 4312 restant aux tests). Aucun secret dans l'exe ; le `.env` du dossier des
-// réglages reste lu s'il existe (usage avancé, jamais demandé à l'utilisateur).
+// réglages reste lu s'il existe (jeton GitHub, usage avancé, jamais demandé à
+// l'utilisateur) ; la session du compte DS-Studio vit dans `account.json` du même dossier.
 import { app, BrowserWindow, dialog, Menu, session, shell, utilityProcess } from 'electron';
 import electronUpdater from 'electron-updater';
 import { promises as fs, existsSync, readFileSync } from 'node:fs';
@@ -182,6 +183,7 @@ function startServer(projects) {
         DS_STUDIO_ROOT: root,
         DS_STUDIO_PROJECTS: projects,
         DS_STUDIO_ENV_FILE: envFile(),
+        DS_STUDIO_SETTINGS_DIR: app.getPath('userData'),
         DS_STUDIO_APP_NAME: appName,
         DS_STUDIO_APP_VERSION: app.getVersion(),
         PORT: String(PORT),

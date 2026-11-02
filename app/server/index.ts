@@ -7,7 +7,7 @@ import { loadPluginCode } from './plugin.js';
 import { createSiteRelay } from './site-relay.js';
 import { acquireLease } from '../../scripts/runtime.mjs';
 import { desktopReady, onDesktopStop } from './desktop.js';
-import { assistantFromEnv } from './assistant.js';
+import { AccountClient } from './account.js';
 
 // L'app Electron donne la racine (serveur compilé en un seul fichier) et le
 // chemin du `.env` (dans les réglages de l'utilisateur, jamais dans l'exe).
@@ -32,11 +32,24 @@ const directory = process.env.DS_STUDIO_DATA_DIR
     : projectArg
       ? path.join(projectDir, '.ds-studio')
       : path.join(root, '.ds-studio');
-// Secrets locaux (clé OpenRouter) : `.env` gitignoré, jamais renvoyé au navigateur.
+// Secrets locaux (jeton GitHub de la PR, usage avancé) : `.env` gitignoré, jamais renvoyé au navigateur.
 try {
   process.loadEnvFile(process.env.DS_STUDIO_ENV_FILE || path.join(root, '.env'));
 } catch {
-  /* Pas de .env : assistant désactivé, le reste de l'atelier marche. */
+  /* Pas de .env : rien d'obligatoire dedans. */
+}
+// Clé publique des licences (lot 3) : à côté des sources, ou copiée dans
+// desktop/build/ par build-desktop.mjs. Sans elle, aucune licence ne serait
+// vérifiable : refus de démarrer plutôt qu'un palier « Gratuit » à tort.
+async function licensePublicKey() {
+  for (const rel of ['server/license-public.pem', 'desktop/build/license-public.pem']) {
+    try {
+      return await fs.readFile(path.join(root, rel), 'utf8');
+    } catch {
+      /* pas ici */
+    }
+  }
+  throw new Error('clé publique de licence introuvable (server/license-public.pem) : paquet incomplet.');
 }
 const port = Number(process.env.PORT ?? 4310);
 let lease: Awaited<ReturnType<typeof acquireLease>> | undefined;
@@ -47,14 +60,25 @@ try {
   if ((await fs.lstat(directory)).isSymbolicLink())
     throw new Error('Dossier de données symbolique refusé.');
   lease = await acquireLease(directory, 'server', { root, directory, port });
+  // Compte DS-Studio (lot 3) : session dans le dossier des réglages de l'app
+  // (DS_STUDIO_SETTINGS_DIR), sinon dans les données locales ; serveur de
+  // production, sauf DS_STUDIO_API_URL (développement : `npm run dev:server`).
+  const account = await AccountClient.open({
+    dir: process.env.DS_STUDIO_SETTINGS_DIR ? path.resolve(process.env.DS_STUDIO_SETTINGS_DIR) : directory,
+    apiUrl: process.env.DS_STUDIO_API_URL,
+    publicKey: await licensePublicKey(),
+  });
+  account.start();
+  void account.refresh();
   const registry = projectsDir
-    ? Registry.folder(projectsDir, path.join(root, 'templates/blank/design-system.tokens.json'))
-    : Registry.single(await openInstance(path.basename(projectDir) === 'workspace' ? 'exemple' : path.basename(projectDir).toLowerCase().replace(/[^a-z0-9-]/g, '-'), projectDir, directory));
+    ? Registry.folder(projectsDir, path.join(root, 'templates/blank/design-system.tokens.json'), 'marmotte', { account })
+    : Registry.single(await openInstance(path.basename(projectDir) === 'workspace' ? 'exemple' : path.basename(projectDir).toLowerCase().replace(/[^a-z0-9-]/g, '-'), projectDir, directory, { account }));
   const label = projectsDir ? 'projets' : (await registry.get()).config.name;
   let stopping = false;
   const stop = async () => {
     if (stopping) return;
     stopping = true;
+    account.stop();
     for (const relay of relays) relay.close();
     await app.close();
     await registry.flush();
@@ -84,11 +108,11 @@ try {
     dev: process.argv.includes('--dev'),
     relayPort: relayUp ? relayPort : undefined,
     pluginCode: await loadPluginCode(directory),
+    account,
     settings: {
       version: process.env.DS_STUDIO_APP_VERSION || pkg.version || '0.0.0',
       appName: process.env.DS_STUDIO_APP_NAME || 'DS-Studio',
       projects: projectsDir,
-      services: { assistant: !!assistantFromEnv().apiKey },
     },
     control: {
       record: lease.record,
