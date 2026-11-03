@@ -9,8 +9,8 @@ const near = (a: unknown, b: number, what: string) => assert.ok(Math.abs(Number(
 const chat = (t: TestApp, token: string, body: unknown = { messages: [{ role: 'user', content: 'Bonjour' }] }, headers: Record<string, string> = {}) =>
   t.api('/v1/relay/chat', { json: body, token, headers });
 const events = (t: TestApp) =>
-  t.db.query<{ origin: string; model: string; cost_cents: string | number; cost_source: string; charged_to: string; generation_id: string | null }>(
-    'SELECT origin, model, cost_cents, cost_source, charged_to, generation_id FROM usage_events ORDER BY id',
+  t.db.query<{ origin: string; model: string; cost_cents: string | number; cost_source: string; charged_to: string; generation_id: string | null; charged_cents: number }>(
+    'SELECT origin, model, cost_cents, cost_source, charged_to, generation_id, charged_cents FROM usage_events ORDER BY id',
   );
 
 test('relais : modèle imposé, réponse OpenRouter telle quelle, usage compté et lu dans /me', async () => {
@@ -52,13 +52,14 @@ test('relais : modèle imposé, réponse OpenRouter telle quelle, usage compté 
       ],
     );
     near(rows[0].cost_cents, 0.4, 'coût en centimes');
+    assert.deepEqual(rows.map((r) => r.charged_cents), [0, 0], 'compte offert : rien débité');
 
     const me = await t.api('/v1/me', { token });
     const usage = me.body.usage as { todayCents: number; monthCents: number; resetAt: string; includedLeftCents: number };
     near(usage.todayCents, 0.8, 'usage du jour');
     near(usage.monthCents, 0.8, 'usage du mois');
     assert.equal(usage.resetAt, '2026-11-01T00:00:00.000Z');
-    assert.equal(me.body.creditCents, 0, 'compte offert : crédits intacts');
+    assert.equal(me.body.creditCents, 1, 'compte offert : crédits intacts (la bienvenue reste)');
   } finally {
     await t.close();
   }
@@ -86,27 +87,34 @@ test('relais : plafond journalier → 429 avec l’heure de remise à zéro, lev
   }
 });
 
-test('relais : solde à zéro hors Pro → 402 ; crédits débités ; Pro puise dans l’inclus puis dans les crédits', async () => {
+test('relais : bienvenue d’une génération puis 402 ; débit ceil(coût × 3) en centimes d’euro ; Pro puise dans l’inclus puis dans les crédits', async () => {
   const t = await testApp();
   try {
     const token = await connect(t, user);
+    // Confirmation du mail : 1 centime de bienvenue = une génération, quelle que soit sa taille.
+    assert.equal((await t.api('/v1/me', { token })).body.creditCents, 1);
+    assert.equal((await chat(t, token)).status, 200, 'génération offerte');
+    let me = await t.api('/v1/me', { token });
+    assert.equal(me.body.creditCents, -1, 'coût 0,4 c$ × 3 = 1,2 → 2 centimes d’euro, solde sous zéro');
+    assert.equal(me.body.welcome, false, 'bienvenue consommée');
     const refused = await chat(t, token);
     assert.equal(refused.status, 402, 'gratuit sans crédits');
     assert.match(String(refused.body.error), /Solde de crédits à zéro/);
-    assert.equal(t.openRouter.calls.length, 0);
+    assert.equal(t.openRouter.calls.length, 1);
 
-    await t.db.query('UPDATE accounts SET credit_cents = 1 WHERE email = $1', [user.email]);
+    await t.db.query('UPDATE accounts SET credit_cents = 3 WHERE email = $1', [user.email]);
     assert.equal((await chat(t, token)).status, 200);
-    near((await t.api('/v1/me', { token })).body.creditCents, 0.6, 'crédits débités du coût réel');
-    assert.equal((await chat(t, token)).status, 200);
+    assert.equal((await t.api('/v1/me', { token })).body.creditCents, 1, 'débité de 2');
     assert.equal((await chat(t, token)).status, 200, 'un solde positif suffit à lancer l’appel');
-    near((await t.api('/v1/me', { token })).body.creditCents, -0.2, 'le dernier appel peut passer sous zéro');
+    assert.equal((await t.api('/v1/me', { token })).body.creditCents, -1, 'le dernier appel peut passer sous zéro');
     assert.equal((await chat(t, token)).status, 402, 'puis refus');
-    assert.deepEqual((await events(t)).rows.map((r) => r.charged_to), ['credits', 'credits', 'credits']);
+    const { rows } = await events(t);
+    assert.deepEqual(rows.map((r) => [r.charged_to, r.charged_cents]), [['credits', 2], ['credits', 2], ['credits', 2]]);
 
-    await t.db.query("UPDATE accounts SET plan = 'pro', monthly_included_cents = 1, credit_cents = 0 WHERE email = $1", [user.email]);
+    // Pro : 5 centimes inclus ; l'appel qui dépasse reste inclus (2, 4, 6), puis crédits.
+    await t.db.query("UPDATE accounts SET plan = 'pro', monthly_included_cents = 5, credit_cents = 0 WHERE email = $1", [user.email]);
     for (let i = 0; i < 3; i++) assert.equal((await chat(t, token)).status, 200, `Pro, appel inclus ${i + 1}`);
-    const me = await t.api('/v1/me', { token });
+    me = await t.api('/v1/me', { token });
     assert.equal((me.body.usage as { includedLeftCents: number }).includedLeftCents, 0, 'inclus consommé');
     assert.equal(me.body.creditCents, 0, 'crédits non touchés tant que l’inclus couvre');
     const exhausted = await chat(t, token);
@@ -114,8 +122,8 @@ test('relais : solde à zéro hors Pro → 402 ; crédits débités ; Pro puise 
     assert.match(String(exhausted.body.error), /inclus du mois épuisé/);
     await t.db.query('UPDATE accounts SET credit_cents = 5 WHERE email = $1', [user.email]);
     assert.equal((await chat(t, token)).status, 200, 'Pro au-delà de l’inclus : crédits');
-    assert.deepEqual((await events(t)).rows.slice(3).map((r) => r.charged_to), ['pro', 'pro', 'pro', 'credits']);
-    near((await t.api('/v1/me', { token })).body.creditCents, 4.6, 'crédits débités');
+    assert.deepEqual((await events(t)).rows.slice(3).map((r) => [r.charged_to, r.charged_cents]), [['pro', 2], ['pro', 2], ['pro', 2], ['credits', 2]]);
+    assert.equal((await t.api('/v1/me', { token })).body.creditCents, 3, 'crédits débités');
   } finally {
     await t.close();
   }

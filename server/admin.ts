@@ -3,14 +3,16 @@
 //   npm run admin -- grant <mail>            compte offert (Pro et jamais débité)
 //   npm run admin -- cap <mail> <centimes>   plafond journalier de coût LLM
 //   npm run admin -- usage <mail>            usage du jour, du mois, crédits, derniers appels
+//   npm run admin -- credit <mail> <centimes> ajoute (négatif : retire) des crédits, centimes d'euro (lot 4)
 // Base : `DATABASE_URL` (server/.env en local ; depuis le poste, l'URL
 // externe de la base Render). `keys` n'a pas besoin de base.
 import { pathToFileURL } from 'node:url';
 import { pgDb, type Db } from './db.js';
+import { addCredits } from './credits.js';
 import { generateKeys } from './license.js';
 import { usageSummary } from './relay.js';
 
-const USAGE = 'Usage : npm run admin -- keys | grant <mail> | cap <mail> <centimes> | usage <mail>';
+const USAGE = 'Usage : npm run admin -- keys | grant <mail> | cap <mail> <centimes> | usage <mail> | credit <mail> <centimes>';
 
 interface Row {
   id: string;
@@ -18,10 +20,11 @@ interface Row {
   plan: 'free' | 'pro';
   gifted: boolean;
   daily_cap_cents: number;
-  credit_cents: number | string;
+  credit_cents: number;
   monthly_included_cents: number;
 }
 const cents = (n: number | string) => String(Math.round(Number(n) * 1000) / 1000);
+const euros = (c: number | string) => (Number(c) / 100).toFixed(2).replace('.', ',') + ' €';
 const iso = (d: Date | string) => new Date(d).toISOString().slice(0, 16).replace('T', ' ');
 
 export async function runAdmin(db: Db | null, argv: string[], out: (line: string) => void, now = new Date()): Promise<number> {
@@ -35,7 +38,7 @@ export async function runAdmin(db: Db | null, argv: string[], out: (line: string
     out(keys.publicKeyPem.trimEnd());
     return 0;
   }
-  if (!command || !['grant', 'cap', 'usage'].includes(command) || !email) {
+  if (!command || !['grant', 'cap', 'usage', 'credit'].includes(command) || !email) {
     out(USAGE);
     return 1;
   }
@@ -67,17 +70,32 @@ export async function runAdmin(db: Db | null, argv: string[], out: (line: string
     out(`${account.email} : plafond journalier ${cap} centimes.`);
     return 0;
   }
+  if (command === 'credit') {
+    const delta = Number(value);
+    if (!Number.isInteger(delta) || delta === 0) {
+      out('Crédits : nombre entier de centimes d’euro, non nul, attendu (négatif pour retirer).');
+      return 1;
+    }
+    await addCredits(db, { accountId: account.id, deltaCents: delta, reason: 'admin', now });
+    const after = await db.query<{ credit_cents: number }>('SELECT credit_cents FROM accounts WHERE id = $1', [account.id]);
+    out(`${account.email} : ${delta > 0 ? '+' : ''}${delta} c, crédits ${euros(after.rows[0].credit_cents)}.`);
+    return 0;
+  }
+  // Coûts en centimes de dollar (c), soldes en euros (lot 4).
   const usage = await usageSummary(db, account, now);
   out(
     `${account.email} : ${account.plan}${account.gifted ? ' (offert)' : ''} ; aujourd’hui ${cents(usage.todayCents)} c, mois ${cents(usage.monthCents)} c, ` +
-      `plafond ${account.daily_cap_cents} c, crédits ${cents(account.credit_cents)} c, inclus restant ${cents(Math.max(0, account.monthly_included_cents - usage.monthProCents))} c`,
+      `plafond ${account.daily_cap_cents} c, crédits ${euros(account.credit_cents)}, inclus restant ${euros(Math.max(0, account.monthly_included_cents - usage.monthProChargedCents))}`,
   );
-  const events = await db.query<{ created_at: Date | string; origin: string; model: string; prompt_tokens: number; completion_tokens: number; cost_cents: number | string; charged_to: string }>(
-    'SELECT created_at, origin, model, prompt_tokens, completion_tokens, cost_cents, charged_to FROM usage_events WHERE account_id = $1 ORDER BY id DESC LIMIT 10',
+  const events = await db.query<{ created_at: Date | string; origin: string; model: string; prompt_tokens: number; completion_tokens: number; cost_cents: number | string; charged_to: string; charged_cents: number }>(
+    'SELECT created_at, origin, model, prompt_tokens, completion_tokens, cost_cents, charged_to, charged_cents FROM usage_events WHERE account_id = $1 ORDER BY id DESC LIMIT 10',
     [account.id],
   );
   for (const e of events.rows) {
-    out(`  ${iso(e.created_at)} ${e.origin} ${e.model} ${e.prompt_tokens}+${e.completion_tokens} jetons ${cents(e.cost_cents)} c → ${e.charged_to}`);
+    out(
+      `  ${iso(e.created_at)} ${e.origin} ${e.model} ${e.prompt_tokens}+${e.completion_tokens} jetons ${cents(e.cost_cents)} c → ${e.charged_to}` +
+        (e.charged_cents > 0 ? ` (${e.charged_cents} c€)` : ''),
+    );
   }
   return 0;
 }

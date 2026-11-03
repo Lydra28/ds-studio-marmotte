@@ -30,18 +30,25 @@ export function createApp(deps: Deps) {
   app.route('/v1/auth', authRoutes(deps));
 
   // Le compte de la session et son usage : ce que l'app affiche dans
-  // Réglages (lot 3). Centimes de dollar (crédits OpenRouter).
+  // Réglages (lot 3). Coûts en centimes de dollar ; soldes (creditCents,
+  // includedLeftCents) en centimes d'euro (lot 4).
   app.get('/v1/me', async (c) => {
     const me = await account(c);
     const usage = await usageSummary(deps.db, me, clock(deps)());
+    const { stripeCustomerId: _customer, stripeSubscriptionId: _subscription, ...pub } = me;
     return c.json({
-      ...me,
+      ...pub,
       tier: effectiveTier(me),
+      // Crédit de bienvenue encore entier : l'app affiche « une génération offerte ».
+      welcome: me.welcomeCreditedAt !== null && !usage.usedCredits,
+      subscription: me.subscriptionStatus
+        ? { status: me.subscriptionStatus, currentPeriodEnd: me.currentPeriodEnd, cancelAtPeriodEnd: me.cancelAtPeriodEnd }
+        : null,
       usage: {
         todayCents: usage.todayCents,
         monthCents: usage.monthCents,
         resetAt: usage.resetAt,
-        includedLeftCents: Math.max(0, me.monthlyIncludedCents - usage.monthProCents),
+        includedLeftCents: Math.max(0, me.monthlyIncludedCents - usage.monthProChargedCents),
       },
     });
   });

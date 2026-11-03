@@ -10,6 +10,7 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { z } from 'zod';
 import { ApiError, type Deps } from './core.js';
 import { hashPassword, verifyPassword } from './passwords.js';
+import { addCredits, WELCOME_CENTS } from './credits.js';
 
 export interface Account {
   id: string;
@@ -17,12 +18,21 @@ export interface Account {
   plan: 'free' | 'pro';
   gifted: boolean;
   dailyCapCents: number;
-  /** Crédits prépayés restants, centimes (peut passer sous zéro d'un appel). */
+  /** Crédits prépayés restants, centimes d'euro (lot 4) ; un appel peut les passer sous zéro. */
   creditCents: number;
-  /** Usage inclus Pro par mois, centimes. */
+  /** Crédits inclus chaque mois dans Pro, centimes d'euro. */
   monthlyIncludedCents: number;
   emailVerifiedAt: string | null;
   createdAt: string;
+  /** Stripe (lot 4) : client et abonnement, `null` tant que le compte n'a rien acheté. */
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  /** Statut Stripe de l'abonnement (active, trialing, past_due, canceled…). */
+  subscriptionStatus: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  /** Crédit de bienvenue posé, à la confirmation du mail. */
+  welcomeCreditedAt: string | null;
 }
 export interface Session {
   tokenHash: string;
@@ -67,10 +77,16 @@ type Row = {
   plan: 'free' | 'pro';
   gifted: boolean;
   daily_cap_cents: number;
-  credit_cents: number | string; // numeric : chaîne avec pg
+  credit_cents: number;
   monthly_included_cents: number;
   email_verified_at: Date | string | null;
   created_at: Date | string;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  subscription_status: string | null;
+  current_period_end: Date | string | null;
+  cancel_at_period_end: boolean;
+  welcome_credited_at: Date | string | null;
 };
 const iso = (v: Date | string | null) => (v == null ? null : new Date(v).toISOString());
 const toAccount = (r: Row): Account => ({
@@ -83,9 +99,17 @@ const toAccount = (r: Row): Account => ({
   monthlyIncludedCents: r.monthly_included_cents,
   emailVerifiedAt: iso(r.email_verified_at),
   createdAt: iso(r.created_at) as string,
+  stripeCustomerId: r.stripe_customer_id,
+  stripeSubscriptionId: r.stripe_subscription_id,
+  subscriptionStatus: r.subscription_status,
+  currentPeriodEnd: iso(r.current_period_end),
+  cancelAtPeriodEnd: r.cancel_at_period_end,
+  welcomeCreditedAt: iso(r.welcome_credited_at),
 });
 
-const ACCOUNT_COLUMNS = 'id, email, password_hash, plan, gifted, daily_cap_cents, credit_cents, monthly_included_cents, email_verified_at, created_at';
+const ACCOUNT_COLUMNS =
+  'id, email, password_hash, plan, gifted, daily_cap_cents, credit_cents, monthly_included_cents, email_verified_at, created_at, ' +
+  'stripe_customer_id, stripe_subscription_id, subscription_status, current_period_end, cancel_at_period_end, welcome_credited_at';
 
 export function authRoutes(deps: Deps) {
   const now = () => (deps.now ?? (() => new Date()))();
@@ -164,6 +188,9 @@ export function authRoutes(deps: Deps) {
   const verify = async (token: string) => {
     const accountId = await consumeEmailToken(token, 'verify');
     await db.query('UPDATE accounts SET email_verified_at = COALESCE(email_verified_at, $2) WHERE id = $1', [accountId, now()]);
+    // Crédit de bienvenue (lot 4) : une génération, posée une seule fois par compte.
+    if (await addCredits(db, { accountId, deltaCents: WELCOME_CENTS, reason: 'welcome', ref: `welcome:${accountId}`, now: now() }))
+      await db.query('UPDATE accounts SET welcome_credited_at = $2 WHERE id = $1', [accountId, now()]);
   };
   auth.post('/verify', async (c) => {
     const { token } = await body(c, z.object({ token: z.string().min(10) }));

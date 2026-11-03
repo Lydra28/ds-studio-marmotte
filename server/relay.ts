@@ -2,12 +2,15 @@
 // OpenRouter avec la sienne, impose le modèle, compte l'usage et applique les
 // gardes : plafond journalier (429), solde (402), panne (502). La réponse
 // OpenRouter est renvoyée telle quelle : même contrat que `callOpenRouter`
-// de l'app (plan du lot 2, « relais non streamé en V0 »).
+// de l'app (plan du lot 2, « relais non streamé en V0 »). Lot 4 : le débit
+// est ceil(coût × RATE) en centimes d'euro (credits.ts), le coût reste en
+// centimes de dollar.
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { body, requireAccount, type Account } from './auth.js';
 import { ApiError, clock, type Deps } from './core.js';
+import { chargedCents } from './credits.js';
 import type { Db } from './db.js';
 
 // Modèles que le serveur accepte de relayer ; tout autre est remplacé par le
@@ -29,8 +32,10 @@ export interface UsageSummary {
   todayCents: number;
   /** Coût du mois UTC, en centimes. */
   monthCents: number;
-  /** Part du mois imputée à l'usage inclus Pro. */
-  monthProCents: number;
+  /** Centimes d'euro consommés ce mois sur les crédits inclus Pro. */
+  monthProChargedCents: number;
+  /** Au moins un appel déjà débité des crédits (le crédit de bienvenue n'est plus entier). */
+  usedCredits: boolean;
   /** Prochaine remise à zéro du plafond journalier (minuit UTC). */
   resetAt: string;
 }
@@ -46,11 +51,12 @@ const startOfUtcMonth = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.get
 
 export async function usageSummary(db: Db, account: Pick<Account, 'id'>, now: Date): Promise<UsageSummary> {
   const day = startOfUtcDay(now);
-  const { rows } = await db.query<{ today: number; month: number; month_pro: number }>(
+  const { rows } = await db.query<{ today: number; month: number; month_pro: number; used_credits: boolean }>(
     `SELECT
        COALESCE(SUM(cost_cents) FILTER (WHERE created_at >= $2), 0)::float8 AS today,
        COALESCE(SUM(cost_cents), 0)::float8 AS month,
-       COALESCE(SUM(cost_cents) FILTER (WHERE charged_to = 'pro'), 0)::float8 AS month_pro
+       COALESCE(SUM(charged_cents) FILTER (WHERE charged_to = 'pro'), 0)::int AS month_pro,
+       EXISTS (SELECT 1 FROM usage_events u WHERE u.account_id = $1 AND u.charged_to = 'credits') AS used_credits
      FROM usage_events WHERE account_id = $1 AND created_at >= $3`,
     [account.id, day, startOfUtcMonth(now)],
   );
@@ -58,7 +64,8 @@ export async function usageSummary(db: Db, account: Pick<Account, 'id'>, now: Da
   return {
     todayCents: Number(r?.today ?? 0),
     monthCents: Number(r?.month ?? 0),
-    monthProCents: Number(r?.month_pro ?? 0),
+    monthProChargedCents: Number(r?.month_pro ?? 0),
+    usedCredits: Boolean(r?.used_credits),
     resetAt: new Date(day.getTime() + DAY_MS).toISOString(),
   };
 }
@@ -68,7 +75,7 @@ export async function usageSummary(db: Db, account: Pick<Account, 'id'>, now: Da
 // est encore inclus), puis dans ses crédits ; un compte gratuit, ses crédits.
 export function chargeTo(account: Pick<Account, 'gifted' | 'plan' | 'monthlyIncludedCents'>, usage: UsageSummary): ChargedTo {
   if (account.gifted) return 'gift';
-  if (account.plan === 'pro' && usage.monthProCents < account.monthlyIncludedCents) return 'pro';
+  if (account.plan === 'pro' && usage.monthProChargedCents < account.monthlyIncludedCents) return 'pro';
   return 'credits';
 }
 
@@ -176,16 +183,19 @@ export function relayRoutes(deps: Deps) {
         console.warn(`Coût inconnu pour ${model} (ni usage.cost ni prix public) : événement compté à 0.`);
       }
     }
+    // Débit en centimes d'euro (lot 4) : coût × RATE arrondi au-dessus, rien
+    // pour un compte offert ; imputé aux crédits inclus (Pro) ou prépayés.
+    const debit = charged === 'gift' ? 0 : chargedCents(costCents);
     // Événement et débit des crédits en une seule instruction : atomique
     // sans `db.transaction`, et une seule requête sur le pool.
     await deps.db.query(
       `WITH e AS (
-         INSERT INTO usage_events (account_id, origin, model, prompt_tokens, completion_tokens, cost_cents, cost_source, charged_to, generation_id, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         INSERT INTO usage_events (account_id, origin, model, prompt_tokens, completion_tokens, cost_cents, cost_source, charged_to, generation_id, created_at, charged_cents)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          RETURNING account_id
        )
-       UPDATE accounts a SET credit_cents = a.credit_cents - $11 FROM e WHERE a.id = e.account_id`,
-      [me.id, originOf(c.req.header('x-ds-origin')), model, promptTokens, completionTokens, costCents, source, charged, data.id ?? null, now, charged === 'credits' ? costCents : 0],
+       UPDATE accounts a SET credit_cents = a.credit_cents - $12 FROM e WHERE a.id = e.account_id`,
+      [me.id, originOf(c.req.header('x-ds-origin')), model, promptTokens, completionTokens, costCents, source, charged, data.id ?? null, now, debit, charged === 'credits' ? debit : 0],
     );
     return c.json(data);
   });

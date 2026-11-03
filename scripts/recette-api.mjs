@@ -123,7 +123,7 @@ async function main() {
     const content = relay.body.choices?.[0]?.message?.content ?? '';
     console.log(`  réponse « ${String(content).trim().slice(0, 60)} », coût ${relay.body.usage?.cost ?? '?'} $`);
   } else if (relay.status === 402) {
-    console.log('  Attendu pour un compte gratuit sans crédits. Après « npm run admin -- grant <mail> », relancer : 200.');
+    console.log('  Attendu pour un compte gratuit dont la génération de bienvenue est passée. Après « npm run admin -- grant <mail> » ou « credit <mail> <centimes> », relancer : 200.');
   } else if (relay.status === 503) {
     console.log('  OPENROUTER_API_KEY absente côté serveur (Render → Environment).');
   }

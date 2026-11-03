@@ -8,7 +8,7 @@ test('serveur : /v1/health répond avec la version et le schéma de la base', as
   try {
     const health = await t.api('/v1/health');
     assert.equal(health.status, 200);
-    assert.deepEqual(health.body, { ok: true, version: 'test', schema: '3', at: '2026-10-31T12:00:00.000Z' });
+    assert.deepEqual(health.body, { ok: true, version: 'test', schema: '4', at: '2026-10-31T12:00:00.000Z' });
     const missing = await t.api('/v1/nulle-part');
     assert.equal(missing.status, 404);
     assert.equal(missing.body.error, 'Route inconnue.');
@@ -24,7 +24,7 @@ test('serveur : les migrations ne s’appliquent qu’une fois et s’annulent e
     const { rows } = await db.query<{ name: string }>('SELECT name FROM schema_migrations ORDER BY name');
     assert.deepEqual(
       rows.map((r) => r.name),
-      ['0001_init.sql', '0002_accounts.sql', '0003_usage.sql'],
+      ['0001_init.sql', '0002_accounts.sql', '0003_usage.sql', '0004_billing.sql'],
     );
     // Un dossier de migrations cassé : rien n'est enregistré, rien n'est laissé à moitié.
     const { mkdtemp, writeFile } = await import('node:fs/promises');
@@ -33,7 +33,7 @@ test('serveur : les migrations ne s’appliquent qu’une fois et s’annulent e
     await writeFile(dir + '/0002_casse.sql', 'CREATE TABLE demi (id int); CREATE TABLE demi (id int);');
     await assert.rejects(migrate(db, dir), /Migration 0002_casse\.sql échouée/);
     const after = await db.query<{ name: string }>('SELECT name FROM schema_migrations');
-    assert.equal(after.rows.length, 3);
+    assert.equal(after.rows.length, 4);
     const demi = await db.query("SELECT to_regclass('demi') AS t");
     assert.equal(demi.rows[0].t, null, 'la table de la migration cassée ne doit pas exister');
   } finally {

@@ -136,7 +136,9 @@ test('compte : mot de passe oublié, session perdue détectée, erreurs du serve
   await srv.api('/v1/auth/verify', { json: { token: lastToken(srv.mailer, user.email) } });
   await assert.rejects(account.login(user.email, 'mauvais-mot-de-passe'), /incorrect/);
   await account.login(user.email, user.password);
-  // Compte gratuit sans crédits : le relais répond 402 avec le message du serveur.
+  // Crédit de bienvenue (lot 4) : une génération passe, puis le relais répond 402 avec le message du serveur.
+  const welcome = (await account.relay({ messages: [{ role: 'user', content: 'ok' }] }, 'assistant')) as { choices: { message: { content: string } }[] };
+  assert.equal(welcome.choices[0].message.content, 'Réponse simulée.', 'génération offerte');
   await assert.rejects(account.relay({ messages: [{ role: 'user', content: 'ok' }] }, 'assistant'), (e: Error & { status: number }) => {
     assert.equal(e.status, 402);
     assert.match(e.message, /crédits/);
