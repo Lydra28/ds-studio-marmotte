@@ -4,15 +4,17 @@
 //   npm run admin -- cap <mail> <centimes>   plafond journalier de coût LLM
 //   npm run admin -- usage <mail>            usage du jour, du mois, crédits, derniers appels
 //   npm run admin -- credit <mail> <centimes> ajoute (négatif : retire) des crédits, centimes d'euro (lot 4)
+//   npm run admin -- stripe-setup            produits et prix Stripe par lookup_key (STRIPE_SECRET_KEY : test ou live)
 // Base : `DATABASE_URL` (server/.env en local ; depuis le poste, l'URL
 // externe de la base Render). `keys` n'a pas besoin de base.
 import { pathToFileURL } from 'node:url';
+import { setupCatalog, stripeClient, type BillingClient } from './billing.js';
 import { pgDb, type Db } from './db.js';
 import { addCredits } from './credits.js';
 import { generateKeys } from './license.js';
 import { usageSummary } from './relay.js';
 
-const USAGE = 'Usage : npm run admin -- keys | grant <mail> | cap <mail> <centimes> | usage <mail> | credit <mail> <centimes>';
+const USAGE = 'Usage : npm run admin -- keys | grant <mail> | cap <mail> <centimes> | usage <mail> | credit <mail> <centimes> | stripe-setup';
 
 interface Row {
   id: string;
@@ -22,13 +24,22 @@ interface Row {
   daily_cap_cents: number;
   credit_cents: number;
   monthly_included_cents: number;
+  included_since: Date | string | null;
 }
 const cents = (n: number | string) => String(Math.round(Number(n) * 1000) / 1000);
 const euros = (c: number | string) => (Number(c) / 100).toFixed(2).replace('.', ',') + ' €';
 const iso = (d: Date | string) => new Date(d).toISOString().slice(0, 16).replace('T', ' ');
 
-export async function runAdmin(db: Db | null, argv: string[], out: (line: string) => void, now = new Date()): Promise<number> {
+export async function runAdmin(db: Db | null, argv: string[], out: (line: string) => void, now = new Date(), billing: BillingClient | null = null): Promise<number> {
   const [command, email, value] = argv;
+  if (command === 'stripe-setup') {
+    if (!billing) {
+      out('STRIPE_SECRET_KEY manquante (server/.env ou environnement) : impossible de poser le catalogue.');
+      return 1;
+    }
+    await setupCatalog(billing, out);
+    return 0;
+  }
   if (command === 'keys') {
     const keys = generateKeys();
     out('# Clé privée : variable LICENSE_PRIVATE_KEY du serveur (Render), jamais dans le dépôt.');
@@ -47,7 +58,7 @@ export async function runAdmin(db: Db | null, argv: string[], out: (line: string
     return 1;
   }
   const { rows } = await db.query<Row>(
-    'SELECT id, email, plan, gifted, daily_cap_cents, credit_cents, monthly_included_cents FROM accounts WHERE email = $1',
+    'SELECT id, email, plan, gifted, daily_cap_cents, credit_cents, monthly_included_cents, included_since FROM accounts WHERE email = $1',
     [email.trim().toLowerCase()],
   );
   const account = rows[0];
@@ -82,10 +93,10 @@ export async function runAdmin(db: Db | null, argv: string[], out: (line: string
     return 0;
   }
   // Coûts en centimes de dollar (c), soldes en euros (lot 4).
-  const usage = await usageSummary(db, account, now);
+  const usage = await usageSummary(db, { id: account.id, includedSince: account.included_since ? new Date(account.included_since).toISOString() : null }, now);
   out(
     `${account.email} : ${account.plan}${account.gifted ? ' (offert)' : ''} ; aujourd’hui ${cents(usage.todayCents)} c, mois ${cents(usage.monthCents)} c, ` +
-      `plafond ${account.daily_cap_cents} c, crédits ${euros(account.credit_cents)}, inclus restant ${euros(Math.max(0, account.monthly_included_cents - usage.monthProChargedCents))}`,
+      `plafond ${account.daily_cap_cents} c, crédits ${euros(account.credit_cents)}, inclus restant ${euros(Math.max(0, account.monthly_included_cents - usage.includedUsedCents))}`,
   );
   const events = await db.query<{ created_at: Date | string; origin: string; model: string; prompt_tokens: number; completion_tokens: number; cost_cents: number | string; charged_to: string; charged_cents: number }>(
     'SELECT created_at, origin, model, prompt_tokens, completion_tokens, cost_cents, charged_to, charged_cents FROM usage_events WHERE account_id = $1 ORDER BY id DESC LIMIT 10',
@@ -103,7 +114,22 @@ export async function runAdmin(db: Db | null, argv: string[], out: (line: string
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const argv = process.argv.slice(2);
   let db: Db | null = null;
-  if (argv[0] !== 'keys') {
+  let billing: BillingClient | null = null;
+  if (argv[0] === 'stripe-setup') {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      try {
+        process.loadEnvFile(new URL('.env', import.meta.url));
+      } catch {
+        /* pas de server/.env */
+      }
+    }
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (key) {
+      // Seul le préfixe est affiché : jamais la clé.
+      console.log(`Stripe en mode ${key.startsWith('sk_live_') ? 'LIVE' : 'test'}.`);
+      billing = stripeClient(key);
+    }
+  } else if (argv[0] !== 'keys') {
     if (!process.env.DATABASE_URL) {
       try {
         process.loadEnvFile(new URL('.env', import.meta.url));
@@ -118,7 +144,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     }
     db = url ? await pgDb(url) : null;
   }
-  const code = await runAdmin(db, argv, (line) => console.log(line));
+  const code = await runAdmin(db, argv, (line) => console.log(line), new Date(), billing);
   await db?.close();
   process.exit(code);
 }

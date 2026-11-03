@@ -32,8 +32,8 @@ export interface UsageSummary {
   todayCents: number;
   /** Coût du mois UTC, en centimes. */
   monthCents: number;
-  /** Centimes d'euro consommés ce mois sur les crédits inclus Pro. */
-  monthProChargedCents: number;
+  /** Centimes d'euro consommés sur les crédits inclus Pro depuis le début de la période (facture payée, sinon mois civil). */
+  includedUsedCents: number;
   /** Au moins un appel déjà débité des crédits (le crédit de bienvenue n'est plus entier). */
   usedCredits: boolean;
   /** Prochaine remise à zéro du plafond journalier (minuit UTC). */
@@ -49,22 +49,23 @@ interface Completion {
 const startOfUtcDay = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 const startOfUtcMonth = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
 
-export async function usageSummary(db: Db, account: Pick<Account, 'id'>, now: Date): Promise<UsageSummary> {
+export async function usageSummary(db: Pick<Db, 'query'>, account: Pick<Account, 'id' | 'includedSince'>, now: Date): Promise<UsageSummary> {
   const day = startOfUtcDay(now);
+  const month = startOfUtcMonth(now);
   const { rows } = await db.query<{ today: number; month: number; month_pro: number; used_credits: boolean }>(
     `SELECT
        COALESCE(SUM(cost_cents) FILTER (WHERE created_at >= $2), 0)::float8 AS today,
        COALESCE(SUM(cost_cents), 0)::float8 AS month,
-       COALESCE(SUM(charged_cents) FILTER (WHERE charged_to = 'pro'), 0)::int AS month_pro,
+       (SELECT COALESCE(SUM(charged_cents), 0)::int FROM usage_events u WHERE u.account_id = $1 AND u.charged_to = 'pro' AND u.created_at >= $4) AS month_pro,
        EXISTS (SELECT 1 FROM usage_events u WHERE u.account_id = $1 AND u.charged_to = 'credits') AS used_credits
      FROM usage_events WHERE account_id = $1 AND created_at >= $3`,
-    [account.id, day, startOfUtcMonth(now)],
+    [account.id, day, month, account.includedSince ? new Date(account.includedSince) : month],
   );
   const r = rows[0];
   return {
     todayCents: Number(r?.today ?? 0),
     monthCents: Number(r?.month ?? 0),
-    monthProChargedCents: Number(r?.month_pro ?? 0),
+    includedUsedCents: Number(r?.month_pro ?? 0),
     usedCredits: Boolean(r?.used_credits),
     resetAt: new Date(day.getTime() + DAY_MS).toISOString(),
   };
@@ -75,7 +76,7 @@ export async function usageSummary(db: Db, account: Pick<Account, 'id'>, now: Da
 // est encore inclus), puis dans ses crédits ; un compte gratuit, ses crédits.
 export function chargeTo(account: Pick<Account, 'gifted' | 'plan' | 'monthlyIncludedCents'>, usage: UsageSummary): ChargedTo {
   if (account.gifted) return 'gift';
-  if (account.plan === 'pro' && usage.monthProChargedCents < account.monthlyIncludedCents) return 'pro';
+  if (account.plan === 'pro' && usage.includedUsedCents < account.monthlyIncludedCents) return 'pro';
   return 'credits';
 }
 

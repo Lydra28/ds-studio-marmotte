@@ -14,6 +14,7 @@ ALTER TABLE accounts
   ADD COLUMN subscription_status text,              -- statut Stripe : active, trialing, past_due, canceled…
   ADD COLUMN current_period_end timestamptz,
   ADD COLUMN cancel_at_period_end boolean NOT NULL DEFAULT false,
+  ADD COLUMN included_since timestamptz,            -- début de la période des crédits inclus Pro (chaque facture payée)
   ADD COLUMN welcome_credited_at timestamptz;       -- crédit de bienvenue posé à la confirmation du mail
 
 CREATE TABLE credit_events (

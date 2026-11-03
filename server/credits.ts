@@ -22,7 +22,7 @@ export type CreditReason = 'welcome' | 'topup' | 'admin';
 // appliqué deux fois (webhook Stripe relancé, bienvenue rejouée). Vrai si
 // appliqué, faux si la référence était déjà passée.
 export async function addCredits(
-  db: Db,
+  db: Pick<Db, 'query'>,
   m: { accountId: string; deltaCents: number; reason: CreditReason; ref?: string | null; now: Date },
 ): Promise<boolean> {
   if (!Number.isInteger(m.deltaCents) || m.deltaCents === 0) throw new Error('addCredits : entier de centimes non nul attendu.');

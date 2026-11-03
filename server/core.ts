@@ -1,5 +1,6 @@
 // Types et erreurs partagés par les modules du serveur (évite les imports
 // circulaires entre app.ts et les routes).
+import type { Billing } from './billing.js';
 import type { Db } from './db.js';
 import type { LicenseKeys } from './license.js';
 import type { Mailer } from './mail.js';
@@ -11,6 +12,8 @@ export interface Deps {
   keys: LicenseKeys;
   /** Clé OpenRouter du serveur (vide : relais désactivé) ; `fetch` remplaçable par les tests. */
   openRouter: { apiKey: string; fetch?: typeof fetch };
+  /** Stripe (lot 4) : client et secret du webhook ; absent, les routes de paiement répondent 503. */
+  billing?: Billing;
   /** Remontée des erreurs inattendues (Sentry en production). */
   report?: (err: unknown) => void;
   /** URL publique du serveur, pour les liens des mails (https://api.design-system-studio.fr). */

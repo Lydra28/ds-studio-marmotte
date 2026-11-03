@@ -31,6 +31,8 @@ export interface Account {
   subscriptionStatus: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
+  /** Début de la période des crédits inclus Pro (remis à chaque facture payée) ; `null` : mois civil UTC. */
+  includedSince: string | null;
   /** Crédit de bienvenue posé, à la confirmation du mail. */
   welcomeCreditedAt: string | null;
 }
@@ -86,6 +88,7 @@ type Row = {
   subscription_status: string | null;
   current_period_end: Date | string | null;
   cancel_at_period_end: boolean;
+  included_since: Date | string | null;
   welcome_credited_at: Date | string | null;
 };
 const iso = (v: Date | string | null) => (v == null ? null : new Date(v).toISOString());
@@ -104,12 +107,13 @@ const toAccount = (r: Row): Account => ({
   subscriptionStatus: r.subscription_status,
   currentPeriodEnd: iso(r.current_period_end),
   cancelAtPeriodEnd: r.cancel_at_period_end,
+  includedSince: iso(r.included_since),
   welcomeCreditedAt: iso(r.welcome_credited_at),
 });
 
 const ACCOUNT_COLUMNS =
   'id, email, password_hash, plan, gifted, daily_cap_cents, credit_cents, monthly_included_cents, email_verified_at, created_at, ' +
-  'stripe_customer_id, stripe_subscription_id, subscription_status, current_period_end, cancel_at_period_end, welcome_credited_at';
+  'stripe_customer_id, stripe_subscription_id, subscription_status, current_period_end, cancel_at_period_end, included_since, welcome_credited_at';
 
 export function authRoutes(deps: Deps) {
   const now = () => (deps.now ?? (() => new Date()))();
@@ -202,10 +206,10 @@ export function authRoutes(deps: Deps) {
     const token = c.req.query('token') ?? '';
     try {
       await verify(token);
-      return c.html(page('Adresse confirmée', 'Ton compte DS-Studio est actif. Retourne dans l’application pour te connecter.'));
+      return c.html(htmlPage('Adresse confirmée', 'Ton compte DS-Studio est actif. Retourne dans l’application pour te connecter.'));
     } catch (e) {
       const message = e instanceof ApiError ? e.message : 'Erreur inattendue.';
-      return c.html(page('Lien refusé', message), e instanceof ApiError ? (e.status as 400) : 500);
+      return c.html(htmlPage('Lien refusé', message), e instanceof ApiError ? (e.status as 400) : 500);
     }
   });
 
@@ -296,7 +300,7 @@ export function requireAccount(deps: Deps) {
   };
 }
 
-const page = (title: string, text: string) =>
+export const htmlPage = (title: string, text: string) =>
   `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>DS-Studio · ${title}</title>
 <style>body{font:16px/1.5 system-ui,sans-serif;background:#0b0b0c;color:#f2f1ec;display:grid;place-items:center;min-height:100vh;margin:0}main{max-width:28rem;padding:2rem}h1{color:#e8ff3a;font-size:1.4rem}</style></head>
 <body><main><h1>${title}</h1><p>${text}</p></main></body></html>`;

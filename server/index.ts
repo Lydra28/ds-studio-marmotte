@@ -6,6 +6,7 @@ import * as Sentry from '@sentry/node';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createApp } from './app.js';
+import { stripeClient } from './billing.js';
 import { memoryDb, migrate, pgDb, waitForDb } from './db.js';
 import { generateKeys, loadKeys, type LicenseKeys } from './license.js';
 import { consoleMailer, resendMailer } from './mail.js';
@@ -101,11 +102,18 @@ if (env.LICENSE_PRIVATE_KEY) {
 // le relais répond 503 et le reste fonctionne.
 const openRouterKey = env.OPENROUTER_API_KEY ?? '';
 if (!openRouterKey) console.warn('OPENROUTER_API_KEY absente : relais OpenRouter désactivé (503).');
+// Stripe (lot 4) : clé secrète et secret de signature du webhook, test ou
+// live ensemble ; sans eux, les routes de paiement répondent 503.
+const stripeKey = env.STRIPE_SECRET_KEY ?? '';
+const stripeWebhookSecret = env.STRIPE_WEBHOOK_SECRET ?? '';
+if (!stripeKey || !stripeWebhookSecret) console.warn('STRIPE_SECRET_KEY ou STRIPE_WEBHOOK_SECRET absente : paiement désactivé (503).');
+else console.log(`Stripe en mode ${stripeKey.startsWith('sk_live_') ? 'LIVE' : 'test'}.`);
 const app = createApp({
   db,
   mailer,
   keys,
   openRouter: { apiKey: openRouterKey },
+  billing: stripeKey && stripeWebhookSecret ? { client: stripeClient(stripeKey), webhookSecret: stripeWebhookSecret } : undefined,
   publicUrl: (env.API_PUBLIC_URL ?? `http://127.0.0.1:${port}`).replace(/\/+$/, ''),
   cookieDomain: env.COOKIE_DOMAIN || undefined,
   version,

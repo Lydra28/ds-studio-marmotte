@@ -4,6 +4,7 @@
 // §3 O2-O3, plan du lot 2). `index.ts` l'alimente et la sert.
 import { Hono } from 'hono';
 import { authRoutes, requireAccount } from './auth.js';
+import { billingRoutes } from './billing.js';
 import { ApiError, clock, type Deps } from './core.js';
 import { effectiveTier, issueLicense } from './license.js';
 import { relayRoutes, usageSummary } from './relay.js';
@@ -48,12 +49,13 @@ export function createApp(deps: Deps) {
         todayCents: usage.todayCents,
         monthCents: usage.monthCents,
         resetAt: usage.resetAt,
-        includedLeftCents: Math.max(0, me.monthlyIncludedCents - usage.monthProChargedCents),
+        includedLeftCents: Math.max(0, me.monthlyIncludedCents - usage.includedUsedCents),
       },
     });
   });
 
   app.route('/v1/relay', relayRoutes(deps));
+  app.route('/v1/billing', billingRoutes(deps));
 
   // Licence signée, renouvelée par l'app à chaque lancement connecté ; la clé
   // publique est aussi servie pour vérification croisée.
