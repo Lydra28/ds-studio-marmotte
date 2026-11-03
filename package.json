@@ -1,6 +1,6 @@
 {
   "name": "ds-studio",
-  "version": "2.1.0-rc.7",
+  "version": "2.1.0-rc.8",
   "private": true,
   "type": "module",
   "description": "Starter pédagogique local pour explorer et faire évoluer un Design System.",
