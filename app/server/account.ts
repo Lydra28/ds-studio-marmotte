@@ -14,6 +14,12 @@ export const DEFAULT_API_URL = 'https://api.design-system-studio.fr';
 export type Origin = 'assistant' | 'wall';
 export type Tier = 'free' | 'pro';
 export type OffReason = 'account' | 'offline';
+export type Pack = '5' | '10' | '20';
+export interface Subscription {
+  status: string;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+}
 
 export const NOT_CONNECTED = 'Assistant indisponible : connecte-toi à ton compte DS-Studio dans Réglages. Tout le reste fonctionne.';
 export const OFFLINE = 'Serveur DS-Studio injoignable (réseau ou délai dépassé) : l’atelier continue sans l’assistant.';
@@ -42,7 +48,10 @@ interface Me {
   tier?: Tier;
   gifted: boolean;
   dailyCapCents: number;
+  /** Centimes d'euro (lot 4). */
   creditCents: number;
+  welcome?: boolean;
+  subscription?: Subscription | null;
   usage?: { todayCents: number; monthCents: number; resetAt: string; includedLeftCents: number };
 }
 
@@ -53,8 +62,14 @@ export interface AccountStatus {
   email: string | null;
   /** Palier effectif : celui d'une licence valide ou en grâce, sinon gratuit. */
   tier: Tier;
+  /** Palier du compte côté serveur (abonnement), que la licence peut suivre avec retard. */
+  plan: Tier;
   gifted: boolean;
+  /** Crédit de bienvenue encore entier : « une génération offerte ». */
+  welcome: boolean;
+  subscription: Subscription | null;
   license: { state: LicenseCheck['status'] | 'none'; expiresAt: string | null; graceUntil: string | null } | null;
+  /** `todayCents`, `monthCents`, `dailyCapCents` : coût du modèle en centimes de dollar ; `includedLeftCents`, `creditCents` : centimes d'euro. */
   usage: { todayCents: number; monthCents: number; resetAt: string; includedLeftCents: number; creditCents: number; dailyCapCents: number } | null;
   /** Dernier échec (réseau, session perdue), pour Réglages. */
   message: string | null;
@@ -188,7 +203,10 @@ export class AccountClient {
       this.refreshedAt = this.now().getTime();
       const check = this.license();
       const age = this.stored.licenseAt ? this.now().getTime() - new Date(this.stored.licenseAt).getTime() : Infinity;
-      if (!check || check.status !== 'valid' || age >= LICENSE_RENEW_MS) {
+      // Palier changé côté serveur (abonnement pris ou résilié, compte offert) : licence renouvelée sans attendre.
+      const effective: Tier = this.me.gifted ? 'pro' : this.me.plan;
+      const stale = check?.status === 'valid' && (check.payload.tier !== effective || check.payload.gifted !== this.me.gifted);
+      if (!check || check.status !== 'valid' || age >= LICENSE_RENEW_MS || stale) {
         const issued = await this.api<{ license: string }>('/v1/license', { method: 'POST' });
         this.stored.license = issued.license;
         this.stored.licenseAt = this.now().toISOString();
@@ -208,6 +226,16 @@ export class AccountClient {
     return this.api<T>('/v1/relay/chat', { json: body, origin, timeoutMs: 120_000 });
   }
 
+  // Achats (lot 4) : le serveur rend l'adresse d'une page Stripe (Checkout ou
+  // portail), que Réglages ouvre dans le navigateur ; le compte change ensuite
+  // par webhook, visible au rafraîchissement suivant.
+  checkout(kind: 'pro' | 'credits', pack?: Pack) {
+    return this.api<{ url: string }>('/v1/billing/checkout', { json: { kind, pack } });
+  }
+  portal() {
+    return this.api<{ url: string }>('/v1/billing/portal', { json: {} });
+  }
+
   // La licence gardée, vérifiée avec la clé publique à l'instant présent.
   license(): LicenseCheck | null {
     if (!this.stored?.license) return null;
@@ -225,7 +253,10 @@ export class AccountClient {
       online: this.online,
       email: this.stored?.email ?? null,
       tier: live && payload ? payload.tier : 'free',
+      plan: this.me?.plan ?? 'free',
       gifted: live && payload ? payload.gifted : false,
+      welcome: this.me?.welcome ?? false,
+      subscription: this.me?.subscription ?? null,
       license: this.stored
         ? {
             state: check?.status ?? 'none',

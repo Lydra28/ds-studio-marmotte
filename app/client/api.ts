@@ -41,15 +41,23 @@ export interface AccountStatus {
   email: string | null;
   // Palier effectif : celui d'une licence valide ou en grâce, sinon gratuit.
   tier: 'free' | 'pro';
+  // Palier côté serveur (abonnement Stripe), que la licence suit au rafraîchissement.
+  plan: 'free' | 'pro';
   gifted: boolean;
+  // Crédit de bienvenue encore entier : une génération offerte.
+  welcome: boolean;
+  subscription: { status: string; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean } | null;
   license: { state: 'valid' | 'grace' | 'expired' | 'invalid' | 'none'; expiresAt: string | null; graceUntil: string | null } | null;
+  // Coût du modèle en centimes de dollar (today, month, cap) ; crédits et inclus en centimes d'euro (lot 4).
   usage: { todayCents: number; monthCents: number; resetAt: string; includedLeftCents: number; creditCents: number; dailyCapCents: number } | null;
   message: string | null;
 }
-export type AccountAction = 'signup' | 'login' | 'forgot' | 'reset' | 'logout' | 'refresh';
+export type AccountAction = 'signup' | 'login' | 'forgot' | 'reset' | 'logout' | 'refresh' | 'checkout' | 'portal';
+export type Pack = '5' | '10' | '20';
 export const getAccount = () => request<AccountStatus>('account');
-export const accountAction = (body: { action: AccountAction; email?: string; password?: string; code?: string }) =>
-  request<{ ok: true; message: string | null; account: AccountStatus }>('account', body);
+// `checkout` et `portal` rendent `url` : page Stripe à ouvrir dans le navigateur.
+export const accountAction = (body: { action: AccountAction; email?: string; password?: string; code?: string; kind?: 'pro' | 'credits'; pack?: Pack }) =>
+  request<{ ok: true; message: string | null; url?: string | null; account: AccountStatus }>('account', body);
 export interface ProjectSummary {
   slug: string;
   name: string;

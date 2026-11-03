@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { AccountClient } from '../app/server/account.js';
+import type { BillingClient } from '../server/billing.js';
 import { lastToken, testApp } from './server/helpers.js';
 
 // Le compte de l'app contre le vrai serveur DS-Studio, en mémoire (Hono +
@@ -120,8 +121,25 @@ test('compte : inscription, confirmation, connexion, licence pro offerte, relais
   assert.equal((await open()).status().status, 'none');
 });
 
-test('compte : mot de passe oublié, session perdue détectée, erreurs du serveur transmises', async (t) => {
-  const srv = await testApp();
+// Faux Stripe minimal : le serveur rend l'URL, l'app ne fait que la transmettre.
+const fakeBilling: BillingClient = {
+  customers: { create: async () => ({ id: 'cus_app' }) },
+  products: { create: async () => ({ id: 'prod_app' }) },
+  prices: {
+    list: async (p) => ({ data: [{ id: `price_${p.lookup_keys?.[0]}`, lookup_key: p.lookup_keys?.[0] ?? null, unit_amount: 500, active: true, product: 'prod_app' }] }),
+    create: async () => ({ id: 'price_x' }),
+  },
+  checkout: { sessions: { create: async (p) => ({ id: 'cs_app', url: `https://checkout.stripe.test/${p.mode}` }) } },
+  billingPortal: { sessions: { create: async () => ({ url: 'https://portal.stripe.test/' }) } },
+  webhooks: {
+    constructEvent: () => {
+      throw new Error('non utilisé');
+    },
+  },
+};
+
+test('compte : bienvenue, achats (URL Stripe transmise), passage Pro vu sans attendre, mot de passe oublié, session perdue, erreurs transmises', async (t) => {
+  const srv = await testApp({ billing: { client: fakeBilling, webhookSecret: 'whsec_app' } });
   const dir = await mkdtemp(path.join(tmpdir(), 'ds-account-'));
   t.after(async () => {
     await srv.close();
@@ -136,15 +154,38 @@ test('compte : mot de passe oublié, session perdue détectée, erreurs du serve
   await srv.api('/v1/auth/verify', { json: { token: lastToken(srv.mailer, user.email) } });
   await assert.rejects(account.login(user.email, 'mauvais-mot-de-passe'), /incorrect/);
   await account.login(user.email, user.password);
+  assert.equal(account.status().plan, 'free');
+  assert.equal(account.status().welcome, true, 'une génération offerte');
+  assert.equal(account.status().subscription, null);
+  assert.equal(account.status().usage?.creditCents, 1);
   // Crédit de bienvenue (lot 4) : une génération passe, puis le relais répond 402 avec le message du serveur.
   const welcome = (await account.relay({ messages: [{ role: 'user', content: 'ok' }] }, 'assistant')) as { choices: { message: { content: string } }[] };
   assert.equal(welcome.choices[0].message.content, 'Réponse simulée.', 'génération offerte');
   await assert.rejects(account.relay({ messages: [{ role: 'user', content: 'ok' }] }, 'assistant'), (e: Error & { status: number }) => {
     assert.equal(e.status, 402);
-    assert.match(e.message, /crédits/);
+    assert.match(e.message, /Réglages → Compte/);
     return true;
   });
   assert.equal(account.status().tier, 'free');
+  assert.equal((await account.refresh()).welcome, false, 'bienvenue consommée');
+
+  // Achats : portail refusé avant le premier achat ; Checkout rend l'URL de Stripe, telle quelle.
+  await assert.rejects(account.portal(), /rien à gérer/);
+  assert.equal((await account.checkout('credits', '10')).url, 'https://checkout.stripe.test/payment');
+  assert.equal((await account.checkout('pro')).url, 'https://checkout.stripe.test/subscription');
+  assert.match((await account.portal()).url, /portal\.stripe\.test/);
+  assert.ok(!JSON.stringify(account.status()).includes('cus_app'), 'client Stripe jamais rendu');
+
+  // Passage Pro côté serveur (webhook Stripe) : la licence suit au rafraîchissement suivant, sans attendre 6 h.
+  await srv.db.query("UPDATE accounts SET plan = 'pro', monthly_included_cents = 300, subscription_status = 'active' WHERE email = $1", [user.email]);
+  const pro = await account.refresh();
+  assert.equal(pro.plan, 'pro');
+  assert.equal(pro.tier, 'pro', 'licence renouvelée au changement de palier');
+  assert.equal(pro.subscription?.status, 'active');
+  assert.equal(pro.usage?.includedLeftCents, 300);
+  await assert.rejects(account.checkout('pro'), /Déjà abonné/);
+  await srv.db.query("UPDATE accounts SET plan = 'free', monthly_included_cents = 0, subscription_status = 'canceled' WHERE email = $1", [user.email]);
+  assert.equal((await account.refresh()).tier, 'free', 'retour au gratuit vu aussitôt');
 
   // Mot de passe oublié : code par mail, nouveau mot de passe ; l'ancienne session tombe,
   // ce que l'app constate au rafraîchissement suivant.

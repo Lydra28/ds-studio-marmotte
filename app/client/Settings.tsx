@@ -7,6 +7,7 @@ import {
   type AccountAction,
   type AccountStatus,
   type DesktopAction,
+  type Pack,
   type Settings,
   type UpdateState,
 } from './api.js';
@@ -17,8 +18,15 @@ import {
 // c'est la page qui remplace le `.env` pour l'utilisateur.
 const time = (iso: string) => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 const day = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-// Coûts du relais comptés en centimes de dollar (1 crédit OpenRouter = 1 $) ; prix en euros au lot 4.
-const dollars = (cents: number) => `${(cents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`;
+// Coût du modèle compté en centimes de dollar (1 crédit OpenRouter = 1 $) ; crédits et inclus Pro vendus en centimes d'euro (lot 4).
+const amount = (cents: number) => (cents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const dollars = (cents: number) => `${amount(cents)} $`;
+const euros = (cents: number) => `${amount(cents)} €`;
+// Débit d'une génération du Mur, centimes d'euro : mesure du 2026-11-02 (0,02 $ pour six appels, Mur ≈ 0,5 c $, × 3 arrondi) ; revoir au lot 7.
+const WALL_GENERATION_CENTS = 2;
+// Prix de test, provisoires : miroir de `CATALOG` dans server/billing.ts (revoir au lot 7).
+const PACKS: Pack[] = ['5', '10', '20'];
+const PRO_LABEL = 'Passer Pro (9 €/mois, test)';
 
 function updateLabel(u: UpdateState | null) {
   if (!u) return 'Mises à jour gérées hors de l’app (atelier lancé depuis les sources).';
@@ -49,6 +57,13 @@ function licenseLabel(a: AccountStatus) {
   if (l.state === 'expired') return 'Expirée : palier Gratuit jusqu’au prochain contact avec le serveur.';
   return 'Illisible : actualise, ou déconnecte-toi puis reconnecte-toi.';
 }
+function subscriptionLabel(a: AccountStatus) {
+  const s = a.subscription;
+  if (!s || a.plan !== 'pro') return '';
+  if (s.status === 'past_due') return 'Paiement en attente : mets ta carte à jour (Gérer mon abonnement).';
+  const end = s.currentPeriodEnd ? `Pro jusqu’au ${day(s.currentPeriodEnd)}` : 'Pro';
+  return s.cancelAtPeriodEnd ? `${end}, résiliation programmée à cette date.` : `${end}, renouvelé automatiquement.`;
+}
 
 // Formulaire hors connexion : connexion, création, mot de passe oublié (code
 // par mail puis nouveau mot de passe). Adresse et mot de passe ne font que
@@ -74,15 +89,27 @@ function AccountSection({ account, onChange }: { account: AccountStatus | undefi
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const run = async (action: AccountAction, fields = false) => {
+  // Dernière page Stripe demandée : lien de secours si le navigateur n'a rien ouvert.
+  const [payUrl, setPayUrl] = useState('');
+  const run = async (action: AccountAction, fields = false, buy?: { kind: 'pro' | 'credits'; pack?: Pack }) => {
     setBusy(true);
     setError('');
     setNotice('');
     try {
-      const r = await accountAction(fields ? { action, email: email || undefined, password: password || undefined, code: code || undefined } : { action });
+      const r = await accountAction(fields ? { action, email: email || undefined, password: password || undefined, code: code || undefined } : { action, ...buy });
       onChange(r.account);
       setNotice(r.message ?? '');
       setPassword('');
+      if (r.url) {
+        // Page Stripe dans le navigateur : l'app installée ouvre les liens externes dehors (desktop/main.mjs).
+        setPayUrl(r.url);
+        window.open(r.url, '_blank', 'noopener');
+        setNotice(
+          action === 'portal'
+            ? 'Portail d’abonnement ouvert dans ton navigateur. Après un changement, reviens ici et clique Actualiser.'
+            : 'Page de paiement ouverte dans ton navigateur. Après le paiement, reviens ici et clique Actualiser.',
+        );
+      } else setPayUrl('');
       if (action === 'signup') setMode('login');
       if (action === 'forgot') setMode('reset');
       if (action === 'reset') {
@@ -116,6 +143,7 @@ function AccountSection({ account, onChange }: { account: AccountStatus | undefi
           <dt>Palier</dt>
           <dd>
             <span className={a.tier === 'pro' ? 'count ok' : 'count'}>{tierLabel(a)}</span>
+            {subscriptionLabel(a) ? ` ${subscriptionLabel(a)}` : ''}
           </dd>
           <dt>Licence</dt>
           <dd>{licenseLabel(a)}</dd>
@@ -123,20 +151,61 @@ function AccountSection({ account, onChange }: { account: AccountStatus | undefi
           <dd>{a.online ? 'En ligne.' : 'Injoignable : l’assistant et le Mur des DA reviennent avec le réseau.'}</dd>
           {u && (
             <>
+              <dt>Crédits</dt>
+              <dd>{a.gifted ? 'Compte offert : jamais débité.' : `${euros(u.creditCents)}${a.welcome ? ' : une génération offerte' : ''}`}</dd>
+              {a.plan === 'pro' && !a.gifted && (
+                <>
+                  <dt>Inclus Pro</dt>
+                  <dd>
+                    {euros(u.includedLeftCents)} encore inclus ce mois (≈ {Math.floor(u.includedLeftCents / WALL_GENERATION_CENTS)} générations du Mur).
+                  </dd>
+                </>
+              )}
               <dt>Aujourd’hui</dt>
               <dd>
-                {dollars(u.todayCents)} sur {dollars(u.dailyCapCents)} de plafond journalier (remis à zéro à minuit UTC).
+                {dollars(u.todayCents)} sur {dollars(u.dailyCapCents)} de plafond journalier (coût du modèle, remis à zéro à minuit UTC).
               </dd>
               <dt>Ce mois</dt>
-              <dd>
-                {dollars(u.monthCents)}
-                {a.tier === 'pro' && !a.gifted ? `, ${dollars(u.includedLeftCents)} encore inclus dans l’abonnement` : ''}.
-              </dd>
-              <dt>Crédits</dt>
-              <dd>{a.gifted ? 'Compte offert : jamais débité.' : dollars(u.creditCents)}</dd>
+              <dd>{dollars(u.monthCents)} de coût du modèle.</dd>
             </>
           )}
         </dl>
+        {!a.gifted && (
+          <div className="billing">
+            <p className="hint">Le paiement se fait sur une page Stripe dans ton navigateur. Après le paiement, reviens ici et clique Actualiser.</p>
+            <div className="form-actions">
+              {PACKS.map((p) => (
+                <button key={p} disabled={busy} onClick={() => void run('checkout', false, { kind: 'credits', pack: p })}>
+                  Recharger {p} €
+                </button>
+              ))}
+              {a.plan === 'pro' ? (
+                <button disabled={busy} onClick={() => void run('portal')}>
+                  Gérer mon abonnement
+                </button>
+              ) : (
+                <button className="primary" disabled={busy} onClick={() => void run('checkout', false, { kind: 'pro' })}>
+                  {PRO_LABEL}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        {notice && (
+          <p className="message ok" role="status">
+            {notice}
+            {payUrl && (
+              <>
+                {' '}
+                Rien ne s’est ouvert ?{' '}
+                <a href={payUrl} target="_blank" rel="noopener noreferrer">
+                  Ouvrir la page
+                </a>
+                .
+              </>
+            )}
+          </p>
+        )}
         {a.message && (
           <p className="message error" role="alert">
             {a.message}

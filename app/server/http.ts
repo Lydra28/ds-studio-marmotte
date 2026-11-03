@@ -32,10 +32,12 @@ const desktopActionSchema = z
 // Compte DS-Studio depuis Réglages : adresse et mot de passe ne font que passer, jamais gardés ici.
 const accountSchema = z
   .object({
-    action: z.enum(['signup', 'login', 'forgot', 'reset', 'logout', 'refresh']),
+    action: z.enum(['signup', 'login', 'forgot', 'reset', 'logout', 'refresh', 'checkout', 'portal']),
     email: z.string().trim().max(200).optional(),
     password: z.string().max(200).optional(),
     code: z.string().trim().max(200).optional(),
+    kind: z.enum(['pro', 'credits']).optional(),
+    pack: z.enum(['5', '10', '20']).optional(),
   })
   .strict();
 const NO_ACCOUNT: AccountStatus = {
@@ -43,7 +45,10 @@ const NO_ACCOUNT: AccountStatus = {
   online: true,
   email: null,
   tier: 'free',
+  plan: 'free',
   gifted: false,
+  welcome: false,
+  subscription: null,
   license: null,
   usage: null,
   message: 'Compte indisponible dans cette instance.',
@@ -263,13 +268,16 @@ export async function createStudioServer(
             return value;
           };
           let message: string | null = null;
+          let url: string | null = null;
           if (b.action === 'signup') message = await a.signup(need(b.email, 'Adresse'), need(b.password, 'Mot de passe'));
           else if (b.action === 'login') await a.login(need(b.email, 'Adresse'), need(b.password, 'Mot de passe'));
           else if (b.action === 'forgot') message = await a.forgot(need(b.email, 'Adresse'));
           else if (b.action === 'reset') message = await a.reset(need(b.code, 'Code'), need(b.password, 'Mot de passe'));
           else if (b.action === 'logout') await a.logout();
+          else if (b.action === 'checkout') url = (await a.checkout(b.kind ?? 'credits', b.pack)).url;
+          else if (b.action === 'portal') url = (await a.portal()).url;
           else await a.refresh();
-          return send(200, { ok: true, message, account: a.status() });
+          return send(200, { ok: true, message, url, account: a.status() });
         }
         const { store, dir: projectDir, config, brief: project, assistant, wall } = await instance();
         if (url.pathname === '/api/wall/image') return send(200, await wall.addImage(imageSchema.parse(body)));

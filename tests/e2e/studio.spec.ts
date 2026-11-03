@@ -146,6 +146,66 @@ test('compte : connexion dans Réglages, Pro (offert) et usage affichés, assist
   await expect(page.locator('.bar .project')).toHaveText('Marmotte');
 });
 
+test('facturation : compte gratuit, génération offerte puis 402, recharge, Pro, portail (faux Stripe, URL dans un nouvel onglet)', async ({ page }) => {
+  await page.getByRole('button', { name: 'Réglages' }).click();
+  const form = page.getByRole('form', { name: 'Compte DS-Studio' });
+  await form.getByLabel('Adresse mail').fill('libre@example.com');
+  await form.getByLabel('Mot de passe').fill('mot-de-passe-de-test');
+  await form.getByRole('button', { name: 'Se connecter' }).click();
+  const account = page.getByRole('region', { name: 'Compte' });
+  await expect(account).toContainText('Gratuit');
+  await expect(account).toContainText('0,01 € : une génération offerte');
+  await expect(account.getByRole('button', { name: 'Recharger 5 €' })).toBeVisible();
+  await expect(account.getByRole('button', { name: 'Recharger 20 €' })).toBeVisible();
+  await expect(account.getByRole('button', { name: /Passer Pro/ })).toBeVisible();
+  await expect(account.getByRole('button', { name: 'Gérer mon abonnement' })).toHaveCount(0);
+  await expect(account).not.toContainText('jamais débité');
+  await page.screenshot({ path: 'test-results/reglages-facturation-gratuit.png', fullPage: true });
+  // Une génération offerte, puis 402 qui renvoie vers Réglages → Compte.
+  await page.getByRole('button', { name: '← Retour' }).click();
+  await expect(page.locator('.bar .project')).toHaveText('Marmotte');
+  await page.getByRole('button', { name: 'Ouvrir l’assistant' }).click();
+  const panel = page.getByRole('complementary', { name: 'Assistant' });
+  await panel.getByLabel('Message à l’assistant').fill('Bonjour');
+  await panel.getByRole('button', { name: 'Envoyer' }).click();
+  await expect(panel).toContainText('Réponse simulée 1 (assistant)');
+  await panel.getByLabel('Message à l’assistant').fill('Encore');
+  await panel.getByRole('button', { name: 'Envoyer' }).click();
+  await expect(panel.getByRole('alert')).toContainText('Réglages → Compte');
+  await panel.getByRole('button', { name: 'Effacer' }).click();
+  await panel.getByRole('button', { name: 'Fermer l’assistant' }).click();
+  // Recharge : la page de paiement s'ouvre dans un nouvel onglet ; le solde apparaît après Actualiser.
+  await page.getByRole('button', { name: 'Réglages' }).click();
+  const [topup] = await Promise.all([page.waitForEvent('popup'), account.getByRole('button', { name: 'Recharger 5 €' }).click()]);
+  expect(topup.url()).toContain('/v1/billing/done?s=ok');
+  await topup.close();
+  await expect(account.getByRole('status')).toContainText('reviens ici et clique Actualiser');
+  await account.getByRole('button', { name: 'Actualiser' }).click();
+  await expect(account).toContainText('5,00 €');
+  await expect(account).not.toContainText('génération offerte');
+  // Pro : palier et inclus affichés après Actualiser, bouton remplacé par le portail.
+  const [pro] = await Promise.all([page.waitForEvent('popup'), account.getByRole('button', { name: /Passer Pro/ }).click()]);
+  await pro.close();
+  await account.getByRole('button', { name: 'Actualiser' }).click();
+  await expect(account).toContainText('Pro jusqu’au');
+  await expect(account).toContainText('renouvelé automatiquement');
+  await expect(account).toContainText('3,00 € encore inclus ce mois (≈ 150 générations du Mur)');
+  await expect(account.getByRole('button', { name: /Passer Pro/ })).toHaveCount(0);
+  await page.screenshot({ path: 'test-results/reglages-facturation-pro.png', fullPage: true });
+  // Portail : résiliation programmée, affichée après Actualiser.
+  const [portal] = await Promise.all([page.waitForEvent('popup'), account.getByRole('button', { name: 'Gérer mon abonnement' }).click()]);
+  expect(portal.url()).toContain('s=portal');
+  await portal.close();
+  await account.getByRole('button', { name: 'Actualiser' }).click();
+  await expect(account).toContainText('résiliation programmée');
+  const status = await (await page.request.get('/api/account')).json();
+  expect(status.plan).toBe('pro');
+  expect(status.tier).toBe('pro');
+  expect(JSON.stringify(status)).not.toMatch(/jeton-e2e|cus_/);
+  await page.getByRole('button', { name: 'Se déconnecter' }).click();
+  await expect(form).toBeVisible();
+});
+
 test('mur des DA : image déposée, réduite, retirée ; génération bloquée sans compte', async ({ page }) => {
   await page.getByRole('navigation').getByRole('button', { name: 'Mur des DA' }).click();
   await expect(page.getByRole('heading', { name: 'Mur des DA' })).toBeVisible();
