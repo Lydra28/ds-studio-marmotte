@@ -35,6 +35,8 @@ const child = spawn(
       DS_STUDIO_API_URL: `http://127.0.0.1:${fakePort}`,
       DS_STUDIO_LICENSE_KEY_FILE: keyFile,
       GITHUB_TOKEN: '',
+      // Lot 5 : extraction d'un site lue dans un inventaire de fixture (aucun réseau).
+      DS_STUDIO_EXTRACT_FIXTURE: path.resolve('tests/fixtures/site/inventory.json'),
     },
     stdio: 'inherit',
   },

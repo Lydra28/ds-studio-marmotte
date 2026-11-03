@@ -518,3 +518,45 @@ test('planche : sections repliables, gardées au rechargement, rouvertes par la 
   await expect(page.locator('.fold[aria-expanded="false"]')).toHaveCount(0);
   await page.getByRole('button', { name: 'Abandonner' }).click();
 });
+
+test('extraction : nouveau projet depuis un site, inventaire, brouillons, diff et validation', async ({ page }) => {
+  // Inventaire de fixture (DS_STUDIO_EXTRACT_FIXTURE, scripts/e2e-server.mjs) : aucun réseau.
+  // Parcours long (création, panneau, diff, validation) : 30 s, runners Windows lents.
+  test.setTimeout(30_000);
+  await page.goto('/');
+  await page.getByRole('button', { name: /Nouveau projet/ }).click();
+  const form = page.getByRole('form', { name: 'Nouveau projet' });
+  await form.getByLabel('Nom').fill('Depuis un site');
+  await form.getByLabel('Adresse du site (facultatif)').fill('atelier-fixture');
+  await form.getByRole('button', { name: 'Créer le projet' }).click();
+  await expect(form.getByRole('alert')).toContainText('Adresse du site attendue');
+  await form.getByLabel('Adresse du site (facultatif)').fill('https://atelier-fixture.example/');
+  await form.getByRole('button', { name: 'Créer le projet' }).click();
+  await expect(page).toHaveURL(/#\/p\/depuis-un-site$/);
+
+  const panel = page.getByRole('region', { name: 'Extraction du site' });
+  await expect(panel.getByRole('heading', { name: 'Styles lus sur atelier-fixture.example' })).toBeVisible();
+  const colours = panel.getByRole('list', { name: 'Couleurs du site' });
+  await expect(colours).toContainText('#2563EB');
+  await expect(colours.locator('li', { hasText: '#2563EB' })).toContainText('marque');
+  await expect(panel).toContainText('Inter');
+  await expect(panel).toContainText('Ombres : 1 relevée(s)');
+  await expect(panel.getByText(/\d+ changement\(s\) proposé\(s\)/)).toBeVisible();
+  await page.screenshot({ path: 'test-results/extraction-panneau.png', fullPage: false });
+
+  await panel.getByRole('button', { name: 'Mettre en brouillon' }).click();
+  await expect(panel).toBeHidden();
+  await expect(page.getByRole('status').filter({ hasText: 'lus sur le site mis en brouillon' })).toBeVisible();
+  await expect.poll(() => previewVar(page, '--color-brand-600')).toBe('#2563EB');
+  await validate(page);
+
+  const headers = { 'X-DS-Project': 'depuis-un-site' };
+  const state = await (await page.request.get('/api/state', { headers })).json();
+  expect(state.revision).toBe(1);
+  expect(state.set.tokens['color/brand/600'].$values.default).toBe('#2563EB');
+  expect(state.set.tokens['font/family/sans'].$values.default).toBe('Inter');
+  const config = await (await page.request.get('/api/config', { headers })).json();
+  expect(config.site).toEqual({ url: 'https://atelier-fixture.example/', pages: ['/'] });
+  await page.getByRole('button', { name: 'Tout déplier' }).click();
+  await page.screenshot({ path: 'test-results/extraction-valide.png', fullPage: false });
+});

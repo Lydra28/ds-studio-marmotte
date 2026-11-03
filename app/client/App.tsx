@@ -41,6 +41,7 @@ import { SettingsPage } from './Settings.js';
 import AssistantPanel from './Assistant.js';
 import { brandColor, MascotDock } from './Mascot.js';
 import Wall from './Wall.js';
+import ExtractPanel from './Extract.js';
 import { SiteFrame, SiteFullscreen, SiteView, type Device } from './Site.js';
 import { fontFamilies, loadFonts } from './fonts.js';
 import { previewSrc, ScreenPicker, type Screen } from './DesignSystem.js';
@@ -180,9 +181,19 @@ function Workspace({
       return 'board';
     }
   });
+  // Lot 5 : lecture des styles d'un site demandée à la création ou depuis le
+  // Site en direct ; le panneau s'affiche au-dessus de la planche.
+  const [extractUrl, setExtractUrl] = useState<string | null>(() => {
+    try {
+      return sessionStorage.getItem(k('ds-extract'));
+    } catch {
+      return null;
+    }
+  });
   useEffect(() => {
     try {
       sessionStorage.removeItem(k('ds-start'));
+      sessionStorage.removeItem(k('ds-extract'));
     } catch {
       /* Facultatif. */
     }
@@ -398,14 +409,14 @@ function Workspace({
     });
   };
   // Proposition de l'assistant : chaque changement rejoint le brouillon.
-  const draftChanges = (list: Change[]) => {
+  const draftChanges = (list: Change[], from = 'de l’assistant') => {
     for (const c of list) {
       if (!('op' in c)) edit(c.key, c.mode, c.value);
       else if (c.op === 'add') add(c.key, c.token);
       else if (c.op === 'remove') remove(c.key);
       else saveComponent(c.name, c.component);
     }
-    setNotice(`${list.length} changement(s) de l’assistant mis en brouillon : relis le diff avant de valider.`);
+    setNotice(`${list.length} changement(s) ${from} mis en brouillon : relis le diff avant de valider.`);
   };
   const reviewDrafts = () =>
     run(async () => setProposal(await propose(state!.revision, changes)));
@@ -614,7 +625,18 @@ function Workspace({
         />
       )}
       {view === 'site' && relay && config?.site && draftSet && (
-        <SiteView slug={slug} relay={relay} config={config} set={draftSet} draft={draftCount > 0} onBack={() => setView('board')} />
+        <SiteView
+          slug={slug}
+          relay={relay}
+          config={config}
+          set={draftSet}
+          draft={draftCount > 0}
+          onBack={() => setView('board')}
+          onExtract={() => {
+            setExtractUrl(config.site!.url);
+            setView('board');
+          }}
+        />
       )}
       {view === 'versions' && config && (
         <div className="versions-view">
@@ -677,6 +699,17 @@ function Workspace({
             />
           )}
         </div>
+      )}
+      {view === 'board' && extractUrl && (
+        <ExtractPanel
+          key={extractUrl}
+          url={extractUrl}
+          onClose={() => setExtractUrl(null)}
+          onDraft={(list) => {
+            draftChanges(list, 'lus sur le site');
+            setExtractUrl(null);
+          }}
+        />
       )}
       <main className="layout" hidden={view !== 'board'}>
         <Board

@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { siteInventorySchema, VIEWPORTS, type SiteInventory } from '../shared/extract.js';
 import { PAGE_SCRIPT } from './extract-page.js';
 import { extractInDesktop, inDesktop } from './desktop.js';
@@ -10,7 +11,15 @@ import { publicUrl } from './wall.js';
 // l'inventaire validé part vers la proposition de tokens.
 export type ReadSite = (url: string) => Promise<unknown>;
 
-export async function readSite(raw: string, read: ReadSite = inDesktop ? (url) => extractInDesktop(url, PAGE_SCRIPT) : extractWithPlaywright): Promise<SiteInventory> {
+// Lecteur par défaut. `DS_STUDIO_EXTRACT_FIXTURE` (chemin d'un inventaire
+// JSON) est réservé aux tests navigateur : aucun Chromium lancé, aucun réseau.
+export function defaultReader(): ReadSite {
+  const fixture = process.env.DS_STUDIO_EXTRACT_FIXTURE;
+  if (fixture) return async () => JSON.parse(await readFile(fixture, 'utf8'));
+  return inDesktop ? (url) => extractInDesktop(url, PAGE_SCRIPT) : extractWithPlaywright;
+}
+
+export async function readSite(raw: string, read: ReadSite = defaultReader()): Promise<SiteInventory> {
   const url = publicUrl(raw);
   let data: unknown;
   try {

@@ -10,6 +10,8 @@ import { projectSchema, type Config } from '../shared/project.js';
 import { Registry, newProjectSchema } from './registry.js';
 import { Assistant, chatSchema } from './assistant.js';
 import { Wall, directionsRequestSchema, imageSchema, linkSchema } from './wall.js';
+import { readSite, type ReadSite } from './extract.js';
+import { proposeFromInventory } from '../shared/extract.js';
 import { acceptVersion, listVersions, readVersion } from './versions.js';
 import { clearInbox, handlePlugin, readInbox } from './plugin.js';
 import { githubFromEnv, publishVersion, type GithubOptions } from './github.js';
@@ -68,6 +70,8 @@ export async function createStudioServer(
     settings?: SettingsInfo;
     // Compte DS-Studio de l'app (session, licence, relais) ; absent : panneaux indisponibles.
     account?: AccountClient;
+    // Lecture des styles d'un site (lot 5) ; absent : Chromium local (extract.ts).
+    extract?: ReadSite;
   } & (
     | { registry: Registry }
     | { store: Store; projectDir: string; config: Config }
@@ -314,6 +318,12 @@ export async function createStudioServer(
             .strict()
             .parse(body);
           return send(200, await project.save(b.base, b.project));
+        }
+        if (url.pathname === '/api/extract') {
+          // Lot 5 : styles du site lus sur le poste, proposition sur le jeu
+          // enregistré ; rien n'est écrit, le client met en brouillon.
+          const inventory = await readSite(linkSchema.parse(body).url, options.extract);
+          return send(200, { inventory, ...proposeFromInventory(inventory, store.snapshot().set) });
         }
         if (url.pathname === '/api/proposals') {
           const b = proposeSchema.parse(body);

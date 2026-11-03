@@ -2259,3 +2259,96 @@ dialog.diff .diff-summary {
   border: 1px solid var(--c-line);
   border-radius: 10px;
 }
+
+/* Lot 5 : panneau Extraction (styles lus sur un site), au-dessus de la planche */
+.extract {
+  margin: 16px 20px 0;
+  display: grid;
+  gap: 14px;
+  background: var(--c-panel);
+  border: 1px solid var(--c-line);
+  border-radius: 10px;
+  padding: 16px 20px;
+}
+.extract-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 16px;
+}
+.extract-head h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+.extract-head .hint {
+  margin: 0;
+}
+.extract-wait,
+.extract-error p {
+  margin: 0;
+}
+.extract-error {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.extract-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 2fr;
+  gap: 20px;
+}
+.extract-grid h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--c-muted);
+}
+.extract-colours {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+.extract-colours li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.extract-colours .chip {
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--c-line);
+  border-radius: 4px;
+  flex: none;
+}
+.extract-grid dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 14px;
+  font-size: 13px;
+}
+.extract-grid dt {
+  color: var(--c-muted);
+}
+.extract-grid dd {
+  margin: 0;
+}
+.extract-notes {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--c-muted);
+}
+.extract-changes summary {
+  cursor: pointer;
+  font-size: 13px;
+}
+.extract-changes ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  max-height: 220px;
+  overflow: auto;
+}

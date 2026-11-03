@@ -326,18 +326,32 @@ function NewProject({ onCreated, onCancel }: { onCreated: (slug: string) => void
   const [doctrine, setDoctrine] = useState('');
   const [ideas, setIdeas] = useState('');
   const [figmaUrl, setFigmaUrl] = useState('');
+  const [siteUrl, setSiteUrl] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return setError('Donne un nom au projet.');
+    const site = siteUrl.trim();
+    if (site) {
+      let parsed: URL | null = null;
+      try {
+        parsed = new URL(site);
+      } catch {
+        /* Message ci-dessous. */
+      }
+      if (!parsed || !/^https?:$/.test(parsed.protocol))
+        return setError('Adresse du site attendue : https://… (page publique).');
+    }
     setBusy(true);
     setError('');
     try {
-      const { slug } = await createProject({ name, doctrine, ideas, figmaUrl });
-      // Projet neuf : il s'ouvre sur le Mur des DA, première étape du parcours.
+      const { slug } = await createProject({ name, doctrine, ideas, figmaUrl, siteUrl: site });
+      // Projet neuf : il s'ouvre sur le Mur des DA, première étape du parcours ;
+      // depuis un site (lot 5), sur la planche avec la lecture des styles lancée.
       try {
-        sessionStorage.setItem(`ds-start:${slug}`, 'wall');
+        sessionStorage.setItem(`ds-start:${slug}`, site ? 'board' : 'wall');
+        if (site) sessionStorage.setItem(`ds-extract:${slug}`, site);
       } catch {
         /* Facultatif : sinon la planche s'ouvre. */
       }
@@ -372,6 +386,14 @@ function NewProject({ onCreated, onCancel }: { onCreated: (slug: string) => void
         Fichier Figma cible (facultatif)
         <input value={figmaUrl} onChange={(e) => setFigmaUrl(e.target.value)} placeholder="https://www.figma.com/design/…" />
       </label>
+      <label>
+        Adresse du site (facultatif)
+        <input value={siteUrl} onChange={(e) => setSiteUrl(e.target.value)} placeholder="https://exemple.fr" inputMode="url" />
+      </label>
+      <p className="hint">
+        Avec une adresse, DS-Studio lit les styles de la page sur ton poste et propose un premier jeu de tokens, à valider par le
+        diff. Jamais un site client ou d’Enov.
+      </p>
       <p className="hint">
         Projets perso seulement : l'assistant envoie la doctrine et les images à OpenRouter. Rien d'Enov ni de BRiiK.
       </p>

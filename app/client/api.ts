@@ -1,5 +1,6 @@
 import type { Change, Proposal, State, TokenSet } from '../shared/model.js';
 import type { Config } from '../shared/project.js';
+import type { ExtractProposal, SiteInventory } from '../shared/extract.js';
 export interface Bootstrap {
   csrf: string;
   figma: { label: string; connected: boolean };
@@ -135,8 +136,11 @@ export const desktopAction = (action: DesktopAction) => request<{ ok: true }>('d
 export const getState = () => request<State>('state');
 export const getConfig = () => request<Config>('config');
 export const listProjects = () => request<ProjectSummary[]>('projects');
-export const createProject = (p: { name: string; doctrine: string; ideas: string; figmaUrl: string }) =>
+export const createProject = (p: { name: string; doctrine: string; ideas: string; figmaUrl: string; siteUrl: string }) =>
   request<{ slug: string }>('projects', p);
+// Lot 5 : styles d'un site lus sur le poste et proposition sur le jeu enregistré.
+export type ExtractResult = ExtractProposal & { inventory: SiteInventory };
+export const extractSite = (url: string) => request<ExtractResult>('extract', { url });
 export const propose = (revision: number, changes: Change[]) =>
   request<Proposal>('proposals', { revision, changes });
 export const proposeImport = (revision: number, tokens: unknown) =>

@@ -9,7 +9,7 @@ import { ProjectStore } from './project.js';
 import { atomicWrite } from './files.js';
 import { listVersions } from './versions.js';
 import { Assistant, type AssistantOptions } from './assistant.js';
-import { Wall } from './wall.js';
+import { Wall, publicUrl } from './wall.js';
 
 // Une instance = un dossier projet : seed, configuration, versions acceptées,
 // et ses données privées dans `.ds-studio/` (état, journal, brief).
@@ -75,6 +75,10 @@ export const newProjectSchema = z
     doctrine: z.string().trim().max(8000).default(''),
     ideas: z.string().trim().max(4000).default(''),
     figmaUrl: z.string().trim().max(500).default(''),
+    // Lot 5 : « Nouveau projet depuis un site ». L'origine https devient le
+    // Site en direct du projet ; la lecture des styles est lancée ensuite par
+    // le client (`POST /api/extract`).
+    siteUrl: z.string().trim().max(500).default(''),
   })
   .strict();
 
@@ -200,6 +204,14 @@ export class Registry {
     const fileKey = p.figmaUrl ? figmaFileKey(p.figmaUrl) : null;
     if (p.figmaUrl && !fileKey)
       throw new StudioError('Lien Figma attendu : https://www.figma.com/design/<fichier>/…');
+    let site: URL | null = null;
+    if (p.siteUrl) {
+      try {
+        site = new URL(publicUrl(p.siteUrl));
+      } catch (e) {
+        throw e instanceof StudioError ? e : new StudioError('Adresse du site attendue : https://… (page publique).');
+      }
+    }
     const taken = new Set(await this.slugs());
     const base = slugify(p.name);
     let slug = base;
@@ -210,8 +222,9 @@ export class Registry {
       name: p.name,
       figma: fileKey ? { fileKey, page: 'DS-Studio · Foundations', protectedPages: [] } : null,
       github: null,
-      site: null,
+      site: site?.protocol === 'https:' ? { url: site.origin + '/', pages: ['/'] } : null,
     };
+    configSchema.parse(config);
     await atomicWrite(path.join(dir, 'project.config.json'), JSON.stringify(config, null, 2) + '\n');
     await fs.copyFile(this.template, path.join(dir, 'design-system.tokens.json'));
     const instance = await this.get(slug);

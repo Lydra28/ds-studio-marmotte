@@ -162,6 +162,7 @@ export function SiteView({
   set,
   draft,
   onBack,
+  onExtract,
 }: {
   slug: string;
   relay: number;
@@ -169,6 +170,8 @@ export function SiteView({
   set: TokenSet;
   draft: boolean;
   onBack: () => void;
+  // Lot 5 : relire les styles du site et proposer des tokens.
+  onExtract?: () => void;
 }) {
   const site = config.site!;
   const [page, setPage] = useState(site.pages[0]);
@@ -203,6 +206,7 @@ export function SiteView({
             ))}
           </select>
         </label>
+        {onExtract && <button onClick={onExtract}>Relire les styles du site</button>}
         <span className={`site-view__state ${draft ? 'is-draft' : ''}`}>{draft ? 'Tokens du brouillon' : 'Tokens enregistrés'}</span>
       </div>
       <p className="hint">
