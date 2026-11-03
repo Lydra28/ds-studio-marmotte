@@ -166,6 +166,34 @@ async function capture(url) {
   }
 }
 
+// Lecture des styles d'un site (lot 5) : même fenêtre cachée que les captures,
+// script fourni par le serveur (PAGE_SCRIPT), lu à 1280 px puis à 390 px.
+// Le résultat est revalidé côté serveur (la page peut le trafiquer).
+async function extract(url, script) {
+  if (!/^https?:\/\//.test(url)) throw new Error('Lien http(s) attendu.');
+  if (typeof script !== 'string' || !script) throw new Error('Script de lecture absent.');
+  const page = new BrowserWindow({
+    show: false,
+    width: 1280,
+    height: 800,
+    useContentSize: true,
+    webPreferences: { partition: 'ds-capture', sandbox: true, contextIsolation: true, nodeIntegration: false, offscreen: true },
+  });
+  const late = (ms, message) => new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms));
+  const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  try {
+    await Promise.race([page.loadURL(url), late(20_000, 'Site trop lent.')]);
+    await pause(1200);
+    const desktop = await Promise.race([page.webContents.executeJavaScript(script), late(10_000, 'Lecture trop longue.')]);
+    page.setContentSize(390, 844);
+    await pause(800);
+    const mobile = await Promise.race([page.webContents.executeJavaScript(script), late(10_000, 'Lecture trop longue.')]);
+    return { desktop, mobile };
+  } finally {
+    page.destroy();
+  }
+}
+
 // Actions demandées depuis la vue Réglages de l'atelier.
 const desktopActions = {
   'choose-projects': () => changeProjects(),
@@ -201,6 +229,11 @@ function startServer(projects) {
         capture(message.url).then(
           (data) => child.postMessage({ type: 'capture-result', id: message.id, data: new Uint8Array(data) }),
           (e) => child.postMessage({ type: 'capture-result', id: message.id, error: e.message }),
+        );
+      if (message?.type === 'extract')
+        extract(message.url, message.script).then(
+          (inventory) => child.postMessage({ type: 'extract-result', id: message.id, inventory }),
+          (e) => child.postMessage({ type: 'extract-result', id: message.id, error: e.message }),
         );
       if (message?.type === 'desktop' && desktopActions[message.action]) void desktopActions[message.action]();
     });

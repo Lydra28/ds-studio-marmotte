@@ -4,7 +4,8 @@ import { randomUUID } from 'node:crypto';
 // Arrêt propre demandé par l'app, captures de liens du Mur des DA faites par
 // le Chromium d'Electron (aucun téléchargement de Playwright sur le poste),
 // état des mises à jour reçu de l'app et actions de la vue Réglages renvoyées
-// vers elle. Hors de l'app, `parentPort` est absent et rien ne change.
+// vers elle. Lecture des styles d'un site (lot 5) par le même Chromium :
+// message `extract`, script fourni par le serveur. Hors de l'app, `parentPort` est absent et rien ne change.
 export type UpdateState = {
   status: 'disabled' | 'idle' | 'checking' | 'up-to-date' | 'downloading' | 'ready' | 'error';
   version: string;
@@ -21,6 +22,8 @@ type Message = {
   id?: string;
   url?: string;
   data?: Uint8Array;
+  script?: string;
+  inventory?: unknown;
   error?: string;
   port?: number;
   action?: DesktopAction;
@@ -33,34 +36,47 @@ type ParentPort = {
 const parent = (process as unknown as { parentPort?: ParentPort }).parentPort;
 export const inDesktop = !!parent;
 
-const waiting = new Map<string, { resolve: (data: Buffer) => void; reject: (e: Error) => void }>();
+const waiting = new Map<string, { resolve: (data: Message) => void; reject: (e: Error) => void }>();
 let update: UpdateState | null = null;
 parent?.on('message', ({ data }) => {
   if (data?.type === 'desktop-state') {
     update = data.update ?? null;
     return;
   }
-  if (data?.type !== 'capture-result' || !data.id) return;
+  if ((data?.type !== 'capture-result' && data?.type !== 'extract-result') || !data.id) return;
   const job = waiting.get(data.id);
   waiting.delete(data.id);
   if (!job) return;
-  if (data.data) job.resolve(Buffer.from(data.data));
-  else job.reject(new Error(data.error || 'Capture impossible.'));
+  if (data.error) job.reject(new Error(data.error));
+  else job.resolve(data);
 });
 
-export function captureInDesktop(url: string): Promise<Buffer> {
+// Travail confié à l'app, réponse attendue par son id.
+function askDesktop(message: Message, timeoutMs: number, slow: string): Promise<Message> {
   const id = randomUUID();
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       waiting.delete(id);
-      reject(new Error('Capture trop longue.'));
-    }, 30_000);
+      reject(new Error(slow));
+    }, timeoutMs);
     waiting.set(id, {
       resolve: (data) => (clearTimeout(timer), resolve(data)),
       reject: (e) => (clearTimeout(timer), reject(e)),
     });
-    parent!.postMessage({ type: 'capture', id, url });
+    parent!.postMessage({ ...message, id });
   });
+}
+
+export async function captureInDesktop(url: string): Promise<Buffer> {
+  const reply = await askDesktop({ type: 'capture', url }, 30_000, 'Capture trop longue.');
+  if (!reply.data) throw new Error('Capture impossible.');
+  return Buffer.from(reply.data);
+}
+
+// Lecture des styles en deux largeurs ; `script` = PAGE_SCRIPT (extract-page.ts).
+export async function extractInDesktop(url: string, script: string): Promise<unknown> {
+  const reply = await askDesktop({ type: 'extract', url, script }, 45_000, 'Lecture trop longue (45 s).');
+  return reply.inventory;
 }
 
 // Dernier état des mises à jour envoyé par l'app (null hors de l'app).

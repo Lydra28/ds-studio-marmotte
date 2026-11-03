@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Atelier Fixture</title>
+<style>
+  /* Page aux styles connus pour tests/e2e/extract-page.spec.ts (lot 5). */
+  html { background: #F7F7F5; }
+  body { margin: 0; font-family: "Inter", Arial, sans-serif; font-size: 16px; line-height: 24px; color: #1F2937; }
+  header { padding: 24px 32px; display: flex; gap: 16px; }
+  h1 { font-size: 40px; line-height: 48px; font-weight: 700; margin: 0 0 16px; }
+  h2 { font-size: 24px; line-height: 32px; font-weight: 600; margin: 0 0 12px; }
+  p { margin: 0 0 16px; }
+  small { font-size: 13px; color: #6B7280; }
+  .cta { display: inline-block; background: #2563EB; color: #FFFFFF; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; }
+  main { padding: 32px; display: grid; gap: 24px; }
+  .card { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; padding: 24px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
+  .pill { display: inline-block; border-radius: 999px; background: #DBEAFE; color: #2563EB; padding: 4px 12px; font-size: 13px; }
+  .hidden { display: none; color: #FF00FF; }
+  .cookie { position: fixed; inset: 0; background: #111111; color: #DC2626; font-size: 30px; }
+  .modern { color: oklch(0.6 0.2 30); }
+  @media (max-width: 600px) { h1 { font-size: 28px; line-height: 36px; } h2 { font-size: 20px; line-height: 28px; } }
+</style>
+</head>
+<body>
+  <header><a class="cta" href="#">Commencer</a><a class="cta" href="#">Essayer</a></header>
+  <main>
+    <h1>Un atelier de design system</h1>
+    <section class="card">
+      <h2>Tokens lus depuis le site</h2>
+      <p>Le texte courant de la page est long pour peser le plus dans l'inventaire des tailles et des couleurs de texte. Il revient plusieurs fois.</p>
+      <p>Deuxième paragraphe du texte courant, toujours en seize pixels, couleur principale, hauteur de ligne de vingt-quatre pixels.</p>
+      <small>Note en petit, couleur atténuée.</small>
+      <span class="pill">Nouveau</span>
+    </section>
+    <section class="card">
+      <h2>Deuxième carte</h2>
+      <p>Encore du texte courant pour la deuxième carte, afin que le corps de texte domine nettement les titres.</p>
+      <span class="modern">Couleur moderne</span>
+    </section>
+    <div class="hidden">Texte caché, jamais compté.</div>
+  </main>
+  <div class="cookie">Bandeau de consentement en plein écran, exclu de l'inventaire.</div>
+</body>
+</html>

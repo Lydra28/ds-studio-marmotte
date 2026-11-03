@@ -1,0 +1,326 @@
+{
+  "desktop": {
+    "url": "https://atelier-fixture.example/",
+    "title": "Atelier Fixture",
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    },
+    "elements": 15,
+    "overlays": 1,
+    "unread": 1,
+    "truncated": false,
+    "colors": [
+      {
+        "hex": "#F7F7F5",
+        "text": 0,
+        "area": 1024000,
+        "card": 0,
+        "border": 0,
+        "interactive": 0,
+        "canvas": true
+      },
+      {
+        "hex": "#FFFFFF",
+        "text": 16,
+        "area": 442624,
+        "card": 442624,
+        "border": 0,
+        "interactive": 0,
+        "canvas": false
+      },
+      {
+        "hex": "#1F2937",
+        "text": 431,
+        "area": 0,
+        "card": 0,
+        "border": 0,
+        "interactive": 0,
+        "canvas": false
+      },
+      {
+        "hex": "#6B7280",
+        "text": 32,
+        "area": 0,
+        "card": 0,
+        "border": 0,
+        "interactive": 0,
+        "canvas": false
+      },
+      {
+        "hex": "#2563EB",
+        "text": 7,
+        "area": 11994,
+        "card": 11994,
+        "border": 0,
+        "interactive": 2,
+        "canvas": false
+      },
+      {
+        "hex": "#DBEAFE",
+        "text": 0,
+        "area": 2434,
+        "card": 2434,
+        "border": 0,
+        "interactive": 0,
+        "canvas": false
+      },
+      {
+        "hex": "#E5E7EB",
+        "text": 0,
+        "area": 0,
+        "card": 0,
+        "border": 2,
+        "interactive": 0,
+        "canvas": false
+      }
+    ],
+    "texts": [
+      {
+        "size": 16,
+        "weight": 400,
+        "family": "Inter",
+        "lineHeight": 150,
+        "chars": 380
+      },
+      {
+        "size": 24,
+        "weight": 600,
+        "family": "Inter",
+        "lineHeight": 133,
+        "chars": 39
+      },
+      {
+        "size": 13,
+        "weight": 400,
+        "family": "Inter",
+        "lineHeight": 185,
+        "chars": 39
+      },
+      {
+        "size": 40,
+        "weight": 700,
+        "family": "Inter",
+        "lineHeight": 120,
+        "chars": 27
+      },
+      {
+        "size": 16,
+        "weight": 600,
+        "family": "Inter",
+        "lineHeight": 150,
+        "chars": 16
+      }
+    ],
+    "spacings": [
+      {
+        "value": 24,
+        "count": 16
+      },
+      {
+        "value": 12,
+        "count": 8
+      },
+      {
+        "value": 32,
+        "count": 6
+      },
+      {
+        "value": 16,
+        "count": 6
+      },
+      {
+        "value": 4,
+        "count": 2
+      }
+    ],
+    "radii": [
+      {
+        "value": 8,
+        "count": 2
+      },
+      {
+        "value": 12,
+        "count": 2
+      },
+      {
+        "value": 999,
+        "count": 1
+      }
+    ],
+    "borderWidths": [
+      {
+        "value": 1,
+        "count": 2
+      }
+    ],
+    "shadows": [
+      {
+        "value": "rgba(0, 0, 0, 0.08) 0px 1px 2px 0px",
+        "count": 2
+      }
+    ]
+  },
+  "mobile": {
+    "url": "https://atelier-fixture.example/",
+    "title": "Atelier Fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "elements": 15,
+    "overlays": 1,
+    "unread": 1,
+    "truncated": false,
+    "colors": [
+      {
+        "hex": "#1F2937",
+        "text": 431,
+        "area": 0,
+        "card": 0,
+        "border": 0,
+        "interactive": 0,
+        "canvas": false
+      },
+      {
+        "hex": "#F7F7F5",
+        "text": 0,
+        "area": 329160,
+        "card": 0,
+        "border": 0,
+        "interactive": 0,
+        "canvas": true
+      },
+      {
+        "hex": "#FFFFFF",
+        "text": 16,
+        "area": 178648,
+        "card": 178648,
+        "border": 0,
+        "interactive": 0,
+        "canvas": false
+      },
+      {
+        "hex": "#6B7280",
+        "text": 32,
+        "area": 0,
+        "card": 0,
+        "border": 0,
+        "interactive": 0,
+        "canvas": false
+      },
+      {
+        "hex": "#2563EB",
+        "text": 7,
+        "area": 11994,
+        "card": 11994,
+        "border": 0,
+        "interactive": 2,
+        "canvas": false
+      },
+      {
+        "hex": "#DBEAFE",
+        "text": 0,
+        "area": 2434,
+        "card": 2434,
+        "border": 0,
+        "interactive": 0,
+        "canvas": false
+      },
+      {
+        "hex": "#E5E7EB",
+        "text": 0,
+        "area": 0,
+        "card": 0,
+        "border": 2,
+        "interactive": 0,
+        "canvas": false
+      }
+    ],
+    "texts": [
+      {
+        "size": 16,
+        "weight": 400,
+        "family": "Inter",
+        "lineHeight": 150,
+        "chars": 380
+      },
+      {
+        "size": 20,
+        "weight": 600,
+        "family": "Inter",
+        "lineHeight": 140,
+        "chars": 39
+      },
+      {
+        "size": 13,
+        "weight": 400,
+        "family": "Inter",
+        "lineHeight": 185,
+        "chars": 39
+      },
+      {
+        "size": 28,
+        "weight": 700,
+        "family": "Inter",
+        "lineHeight": 129,
+        "chars": 27
+      },
+      {
+        "size": 16,
+        "weight": 600,
+        "family": "Inter",
+        "lineHeight": 150,
+        "chars": 16
+      }
+    ],
+    "spacings": [
+      {
+        "value": 24,
+        "count": 16
+      },
+      {
+        "value": 12,
+        "count": 8
+      },
+      {
+        "value": 32,
+        "count": 6
+      },
+      {
+        "value": 16,
+        "count": 6
+      },
+      {
+        "value": 4,
+        "count": 2
+      }
+    ],
+    "radii": [
+      {
+        "value": 8,
+        "count": 2
+      },
+      {
+        "value": 12,
+        "count": 2
+      },
+      {
+        "value": 999,
+        "count": 1
+      }
+    ],
+    "borderWidths": [
+      {
+        "value": 1,
+        "count": 2
+      }
+    ],
+    "shadows": [
+      {
+        "value": "rgba(0, 0, 0, 0.08) 0px 1px 2px 0px",
+        "count": 2
+      }
+    ]
+  }
+}
