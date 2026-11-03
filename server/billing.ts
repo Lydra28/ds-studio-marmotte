@@ -187,6 +187,7 @@ export async function handleEvent(db: Db, event: WebhookEvent, now: Date): Promi
         customer: Ref;
         status: string;
         cancel_at_period_end?: boolean;
+        cancel_at?: number | null;
         current_period_end?: number;
         items?: { data?: { current_period_end?: number }[] };
       };
@@ -203,12 +204,15 @@ export async function handleEvent(db: Db, event: WebhookEvent, now: Date): Promi
         return 'new';
       }
       const ended = SUBSCRIPTION_ENDED.has(sub.status);
+      // Résiliation programmée : le portail (API 2025+) pose une date `cancel_at` (fin de période)
+      // et laisse `cancel_at_period_end` à false ; vu en production le 2026-11-03. Les deux formes valent.
+      const scheduled = Boolean(sub.cancel_at_period_end) || typeof sub.cancel_at === 'number';
       await tx.query(
         `UPDATE accounts SET stripe_subscription_id = $2, subscription_status = $3, cancel_at_period_end = $4, current_period_end = $5,
            plan = CASE WHEN $6::boolean THEN 'free' WHEN $7::boolean THEN 'pro' ELSE plan END,
            monthly_included_cents = CASE WHEN $6::boolean THEN 0 ELSE monthly_included_cents END
          WHERE id = $1`,
-        [accountId, sub.id, sub.status, Boolean(sub.cancel_at_period_end), periodEnd, ended, SUBSCRIPTION_LIVE.has(sub.status)],
+        [accountId, sub.id, sub.status, scheduled, periodEnd, ended, SUBSCRIPTION_LIVE.has(sub.status)],
       );
       return 'new';
     }

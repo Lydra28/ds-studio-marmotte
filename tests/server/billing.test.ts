@@ -282,6 +282,13 @@ test('webhook customer.subscription.updated : fin de période et résiliation pr
     assert.deepEqual(m.subscription, { status: 'active', currentPeriodEnd: '2026-12-03T12:00:00.000Z', cancelAtPeriodEnd: true });
     assert.equal(m.plan, 'pro');
 
+    // Forme du portail Stripe (API 2025+, vue en production le 2026-11-03) : `cancel_at` posé, drapeau à false.
+    assert.equal((await webhook(t, event('customer.subscription.updated', { id: 'sub_u', customer: 'cus_u', status: 'active', cancel_at_period_end: false, cancel_at: end, items: { data: [{ current_period_end: end }] } }))).body.handled, 'new');
+    m = await me(t, token);
+    assert.deepEqual(m.subscription, { status: 'active', currentPeriodEnd: '2026-12-03T12:00:00.000Z', cancelAtPeriodEnd: true }, 'cancel_at vaut résiliation programmée');
+    // Renouvellement depuis le portail : `cancel_at` retiré.
+    assert.equal((await webhook(t, event('customer.subscription.updated', { id: 'sub_u', customer: 'cus_u', status: 'active', cancel_at_period_end: false, cancel_at: null, items: { data: [{ current_period_end: end }] } }))).body.handled, 'new');
+    assert.equal((await me(t, token)).subscription?.cancelAtPeriodEnd, false);
     // Ancien format (champ au niveau de l'abonnement) accepté aussi.
     assert.equal((await webhook(t, event('customer.subscription.updated', { id: 'sub_u', customer: 'cus_u', status: 'active', cancel_at_period_end: false, current_period_end: end + 86400 }))).body.handled, 'new');
     m = await me(t, token);
