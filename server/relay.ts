@@ -42,6 +42,7 @@ export interface UsageSummary {
 
 interface Completion {
   id?: string;
+  choices?: unknown[];
   usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
   error?: { message?: string };
 }
@@ -107,6 +108,12 @@ const relaySchema = z.looseObject({
   messages: z.array(z.unknown()).min(1, 'messages : au moins un message').max(500),
 });
 
+// Délai vers OpenRouter : 120 s en réponse simple (sous la coupure de
+// l'app), 290 s avec maintien (app : 300 s pour le Mur).
+const UPSTREAM_MS = 120_000;
+export const KEEPALIVE_UPSTREAM_MS = 290_000;
+export const KEEPALIVE_BEAT_MS = 15_000;
+
 export function relayRoutes(deps: Deps) {
   const app = new Hono();
   const account = requireAccount(deps);
@@ -144,61 +151,120 @@ export function relayRoutes(deps: Deps) {
     const { stream_options: _streamOptions, ...rest } = input as Record<string, unknown>;
     const payload = { ...rest, model, stream: false };
 
-    let res: Response;
-    try {
-      res = await fetchImpl(ENDPOINT, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${deps.openRouter.apiKey}`,
-          'Content-Type': 'application/json',
-          'X-Title': 'DS-Studio',
-          'HTTP-Referer': 'https://design-system-studio.fr',
-        },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(120_000),
-      });
-    } catch {
-      throw new ApiError('OpenRouter injoignable (réseau ou délai dépassé). Réessaie.', 502);
-    }
-    const data = (await res.json().catch(() => ({}))) as Completion;
-    if (!res.ok) {
-      // Message du fournisseur, jamais la clé ni la requête.
-      throw new ApiError(`OpenRouter a refusé la requête (${res.status})${data.error?.message ? ' : ' + data.error.message.slice(0, 200) : ''}.`, 502);
-    }
-
-    // Comptage : coût lu dans la réponse (crédits OpenRouter = dollars), sinon
-    // estimé par les prix publics, sinon inconnu (0, signalé).
-    const promptTokens = data.usage?.prompt_tokens ?? 0;
-    const completionTokens = data.usage?.completion_tokens ?? 0;
-    let costCents = 0;
-    let source: 'openrouter' | 'estimate' | 'unknown' = 'unknown';
-    if (typeof data.usage?.cost === 'number') {
-      costCents = data.usage.cost * 100;
-      source = 'openrouter';
-    } else {
-      const price = await prices(model, now);
-      if (price) {
-        costCents = (promptTokens * price.prompt + completionTokens * price.completion) * 100;
-        source = 'estimate';
-      } else {
-        console.warn(`Coût inconnu pour ${model} (ni usage.cost ni prix public) : événement compté à 0.`);
+    const origin = originOf(c.req.header('x-ds-origin'));
+    // Appel, comptage et débit ; rien n'est compté si l'appel échoue.
+    const call = async (signal: AbortSignal) => {
+      let res: Response;
+      try {
+        res = await fetchImpl(ENDPOINT, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${deps.openRouter.apiKey}`,
+            'Content-Type': 'application/json',
+            'X-Title': 'DS-Studio',
+            'HTTP-Referer': 'https://design-system-studio.fr',
+          },
+          body: JSON.stringify(payload),
+          signal,
+        });
+      } catch {
+        throw new ApiError('OpenRouter injoignable (réseau ou délai dépassé). Réessaie.', 502);
       }
-    }
-    // Débit en centimes d'euro (lot 4) : coût × RATE arrondi au-dessus, rien
-    // pour un compte offert ; imputé aux crédits inclus (Pro) ou prépayés.
-    const debit = charged === 'gift' ? 0 : chargedCents(costCents);
-    // Événement et débit des crédits en une seule instruction : atomique
-    // sans `db.transaction`, et une seule requête sur le pool.
-    await deps.db.query(
-      `WITH e AS (
-         INSERT INTO usage_events (account_id, origin, model, prompt_tokens, completion_tokens, cost_cents, cost_source, charged_to, generation_id, created_at, charged_cents)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-         RETURNING account_id
-       )
-       UPDATE accounts a SET credit_cents = a.credit_cents - $12 FROM e WHERE a.id = e.account_id`,
-      [me.id, originOf(c.req.header('x-ds-origin')), model, promptTokens, completionTokens, costCents, source, charged, data.id ?? null, now, debit, charged === 'credits' ? debit : 0],
-    );
-    return c.json(data);
+      const data = (await res.json().catch(() => ({}))) as Completion;
+      if (!res.ok) {
+        // Message du fournisseur, jamais la clé ni la requête.
+        throw new ApiError(`OpenRouter a refusé la requête (${res.status})${data.error?.message ? ' : ' + data.error.message.slice(0, 200) : ''}.`, 502);
+      }
+      // 200 sans réponse ni usage (fournisseur tombé en cours d'appel, vu le
+      // 2026-11-04) : échec, rien compté, au lieu d'un événement à 0.
+      if (!data.choices?.length && !data.usage)
+        throw new ApiError(`OpenRouter n’a rendu aucune réponse${data.error?.message ? ' : ' + data.error.message.slice(0, 200) : ''}. Réessaie.`, 502);
+
+      // Comptage : coût lu dans la réponse (crédits OpenRouter = dollars), sinon
+      // estimé par les prix publics, sinon inconnu (0, signalé).
+      const promptTokens = data.usage?.prompt_tokens ?? 0;
+      const completionTokens = data.usage?.completion_tokens ?? 0;
+      let costCents = 0;
+      let source: 'openrouter' | 'estimate' | 'unknown' = 'unknown';
+      if (typeof data.usage?.cost === 'number') {
+        costCents = data.usage.cost * 100;
+        source = 'openrouter';
+      } else {
+        const price = await prices(model, now);
+        if (price) {
+          costCents = (promptTokens * price.prompt + completionTokens * price.completion) * 100;
+          source = 'estimate';
+        } else {
+          console.warn(`Coût inconnu pour ${model} (ni usage.cost ni prix public) : événement compté à 0.`);
+        }
+      }
+      // Débit en centimes d'euro (lot 4) : coût × RATE arrondi au-dessus, rien
+      // pour un compte offert ; imputé aux crédits inclus (Pro) ou prépayés.
+      const debit = charged === 'gift' ? 0 : chargedCents(costCents);
+      // Événement et débit des crédits en une seule instruction : atomique
+      // sans `db.transaction`, et une seule requête sur le pool.
+      await deps.db.query(
+        `WITH e AS (
+           INSERT INTO usage_events (account_id, origin, model, prompt_tokens, completion_tokens, cost_cents, cost_source, charged_to, generation_id, created_at, charged_cents)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           RETURNING account_id
+         )
+         UPDATE accounts a SET credit_cents = a.credit_cents - $12 FROM e WHERE a.id = e.account_id`,
+        [me.id, origin, model, promptTokens, completionTokens, costCents, source, charged, data.id ?? null, now, debit, charged === 'credits' ? debit : 0],
+      );
+      return data;
+    };
+
+    if (c.req.header('x-ds-keepalive') !== '1') return c.json(await call(AbortSignal.timeout(UPSTREAM_MS)));
+    // Maintien (2026-11-04) : Cloudflare coupe une réponse qui n'a pas
+    // commencé après 100 s, et une génération du Mur dépasse souvent 2 min.
+    // Réponse 200 tout de suite, une espace toutes les 15 s (JSON.parse les
+    // ignore), puis la réponse d'OpenRouter, ou `{ error, status }` en cas
+    // d'échec. Client parti : appel arrêté, rien compté.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), KEEPALIVE_UPSTREAM_MS);
+    const encoder = new TextEncoder();
+    let beat: ReturnType<typeof setInterval> | undefined;
+    const stream = new ReadableStream<Uint8Array>({
+      start(out) {
+        const send = (text: string) => {
+          try {
+            out.enqueue(encoder.encode(text));
+          } catch {
+            // Flux déjà fermé (client parti).
+          }
+        };
+        send(' ');
+        beat = setInterval(() => send(' '), KEEPALIVE_BEAT_MS);
+        call(controller.signal)
+          .then(
+            (data) => send(JSON.stringify(data)),
+            (err: unknown) => {
+              if (!(err instanceof ApiError)) {
+                console.error(err);
+                deps.report?.(err);
+              }
+              const e = err instanceof ApiError ? err : new ApiError('Erreur interne du serveur DS-Studio.', 500);
+              send(JSON.stringify({ error: e.message, status: e.status }));
+            },
+          )
+          .finally(() => {
+            clearInterval(beat);
+            clearTimeout(timer);
+            try {
+              out.close();
+            } catch {
+              // Déjà fermé.
+            }
+          });
+      },
+      cancel() {
+        clearInterval(beat);
+        clearTimeout(timer);
+        controller.abort();
+      },
+    });
+    return c.body(stream, 200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
   });
 
   return app;

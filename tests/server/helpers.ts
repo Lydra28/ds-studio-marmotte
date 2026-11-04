@@ -120,7 +120,14 @@ export function fakeOpenRouter() {
       body: JSON.parse(String(init?.body)) as Record<string, unknown>,
     };
     calls.push(call);
-    return state.reply(call);
+    // Comme fetch : un appel arrêté (signal) rejette, même si la réponse tarde.
+    const signal = init?.signal;
+    if (!signal) return state.reply(call);
+    if (signal.aborted) throw signal.reason;
+    return Promise.race([
+      Promise.resolve(state.reply(call)),
+      new Promise<never>((_, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true })),
+    ]);
   }) as typeof fetch;
   return { fetch: fetchImpl, calls, state };
 }

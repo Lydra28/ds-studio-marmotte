@@ -105,6 +105,9 @@ test('mur : inspirations privées, génération avec images, résultat gardé po
   assert.match(content[0].text, /Pas de violet/);
   assert.equal(content.filter((p: any) => p.type === 'image_url').length, 2);
   assert.match(sent[0].messages[0].content, /Calme\./);
+  // Couleurs tirées des images, pas « nettement différentes » (recette du 2026-11-04).
+  assert.match(sent[0].messages[0].content, /couleurs dominantes des inspirations/);
+  assert.doesNotMatch(sent[0].messages[0].content, /nettement différente/);
   assert.equal(sent[0].response_format.type, 'json_object');
   assert.equal((await wall.read()).result?.directions[0].name, 'Terrier calme');
 

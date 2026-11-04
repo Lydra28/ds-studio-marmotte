@@ -127,10 +127,15 @@ const server = http.createServer(async (req, res) => {
       }
     }
     a.relayCalls += 1;
-    return send(200, {
+    const reply = {
       choices: [{ message: { content: `Réponse simulée ${a.relayCalls} (${String(req.headers['x-ds-origin'])}).` } }],
       usage: { prompt_tokens: 10, completion_tokens: 3, cost: 0.00001 },
-    });
+    };
+    if (req.headers['x-ds-keepalive'] !== '1') return send(200, reply);
+    // Maintien de server/relay.ts : espaces d'attente, puis la réponse.
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+    res.write('   ');
+    return void setTimeout(() => res.end(JSON.stringify(reply)), 50);
   }
   if (route === 'POST /v1/billing/checkout') {
     if (body.kind === 'pro' && (a.gifted || a.plan === 'pro')) return send(409, { error: 'Déjà abonné à Pro : gère ton abonnement depuis le portail.' });

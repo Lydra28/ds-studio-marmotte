@@ -166,7 +166,7 @@ export class Wall {
         response_format: { type: 'json_object' },
         max_tokens: 32000,
         messages: [
-          { role: 'system', content: directionsPrompt(context, request.count) },
+          { role: 'system', content: directionsPrompt(context, request.count, images.length > 0) },
           {
             role: 'user',
             content: [
@@ -202,13 +202,18 @@ export class Wall {
   }
 }
 
-function directionsPrompt(context: { project: Project; name: string; set: TokenSet }, count: number) {
+function directionsPrompt(context: { project: Project; name: string; set: TokenSet }, count: number, withImages: boolean) {
   const tokens = Object.entries(context.set.tokens)
     .map(([k, t]) => `${k} [${t.$type}, ${t.$collection}] ${Object.entries(t.$values).map(([m, v]) => `${m}=${v}`).join(' ')}`)
     .join('\n');
   return [
     `Tu es directeur artistique et expert en design systems. Projet : « ${context.name} ».`,
-    `Propose ${count} direction(s) artistique(s) nettement différente(s), tirées des inspirations, de la doctrine et des idées.`,
+    `Propose ${count} direction(s) artistique(s) tirées des inspirations, de la doctrine et des idées. Les précisions de Romain priment sur tout le reste.`,
+    // Recette du 2026-11-04 : « nettement différentes » faisait remplacer
+    // l'orange d'une inspiration par du bleu et du vert dans les DA 2 et 3.
+    withImages &&
+      'Couleurs : regarde les images. La marque (color/brand/*) et les fonds de chaque DA reprennent les couleurs dominantes des inspirations (exemple : fond blanc et boutons orange → fonds clairs, marque orange). Le jeu actuel ne fournit que les clés et les modes, pas des couleurs à garder. Une teinte absente des inspirations n’apparaît que si les précisions de Romain la demandent.',
+    `Les DA se distinguent par la typographie, les formes (rayons), l’usage de la couleur (aplats ou accents, neutres chauds ou froids) et le contraste${withImages ? ', jamais en remplaçant la couleur de marque des inspirations par une autre' : ''}.`,
     context.project.doctrine && `Doctrine :\n${context.project.doctrine}`,
     context.project.ideas && `Premières idées :\n${context.project.ideas}`,
     'Chaque DA s’exprime en modifiant le jeu de tokens ci-dessous (mêmes clés, mêmes modes) :',

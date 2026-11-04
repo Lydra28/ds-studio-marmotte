@@ -142,7 +142,7 @@ export class AccountClient {
   // leur statut, réseau coupé → hors ligne, session refusée → déconnexion.
   private async api<T = Record<string, unknown>>(
     route: string,
-    init: { json?: unknown; method?: string; auth?: boolean; origin?: Origin; timeoutMs?: number } = {},
+    init: { json?: unknown; method?: string; auth?: boolean; origin?: Origin; timeoutMs?: number; keepalive?: boolean } = {},
   ): Promise<T> {
     const headers: Record<string, string> = {};
     if (init.json !== undefined) headers['content-type'] = 'application/json';
@@ -151,6 +151,7 @@ export class AccountClient {
       headers.authorization = `Bearer ${this.stored.token}`;
     }
     if (init.origin) headers['x-ds-origin'] = init.origin;
+    if (init.keepalive) headers['x-ds-keepalive'] = '1';
     let response: Response;
     try {
       response = await (this.options.fetch ?? fetch)(this.apiUrl + route, {
@@ -179,6 +180,8 @@ export class AccountClient {
     }
     if (!response.ok)
       throw new StudioError(typeof body.error === 'string' ? body.error : `Serveur DS-Studio : erreur ${response.status}.`, response.status);
+    // Réponse avec maintien : 200 envoyé avant la fin, échec dans le corps.
+    if (init.keepalive && typeof body.error === 'string' && typeof body.status === 'number') throw new StudioError(body.error, body.status);
     return body as T;
   }
 
@@ -236,8 +239,11 @@ export class AccountClient {
   // Appel du relais (agent, Mur) : corps OpenRouter transmis tel quel,
   // réponse OpenRouter telle quelle ; 402, 429, 502, 503 du serveur remontent
   // avec leur message.
+  // Maintien (2026-11-04) : le serveur répond tout de suite et garde la
+  // connexion ouverte (coupure de Cloudflare à 100 s) ; une génération du Mur
+  // dépasse souvent 2 min, d'où 5 min pour le Mur, 2 min pour l'agent.
   relay<T = Record<string, unknown>>(body: unknown, origin: Origin) {
-    return this.api<T>('/v1/relay/chat', { json: body, origin, timeoutMs: 120_000 });
+    return this.api<T>('/v1/relay/chat', { json: body, origin, keepalive: true, timeoutMs: origin === 'wall' ? 300_000 : 120_000 });
   }
 
   // Achats (lot 4) : le serveur rend l'adresse d'une page Stripe (Checkout ou

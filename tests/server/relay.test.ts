@@ -199,3 +199,67 @@ test('relais : coût absent de la réponse → estimé par les prix publics, sin
     await t.close();
   }
 });
+
+// Maintien (2026-11-04) : réponse 200 tout de suite, espaces d'attente, puis
+// la réponse OpenRouter ou `{ error, status }` ; client parti → rien compté.
+test('relais avec maintien : attente envoyée avant la réponse, échec dans le corps, client parti sans rien compter', async () => {
+  const t = await testApp();
+  try {
+    const token = await connect(t, user);
+    await t.db.query('UPDATE accounts SET gifted = true WHERE email = $1', [user.email]);
+    const post = (signal?: AbortSignal) =>
+      t.app.request('http://server.test/v1/relay/chat', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', 'x-ds-keepalive': '1', 'x-ds-origin': 'wall' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: 'Trois DA' }] }),
+        signal,
+      });
+    const later = () => {
+      let resolve!: (r: Response) => void;
+      const promise = new Promise<Response>((r) => (resolve = r));
+      return { promise, resolve };
+    };
+
+    // Réponse lente : l'en-tête et la première espace partent avant la réponse.
+    const slow = later();
+    t.openRouter.state.reply = () => slow.promise;
+    const res = await post();
+    assert.equal(res.status, 200);
+    const reader = res.body!.getReader();
+    const first = await reader.read();
+    assert.equal(new TextDecoder().decode(first.value), ' ', 'attente envoyée sans attendre OpenRouter');
+    slow.resolve(completion());
+    let text = ' ';
+    for (let r = await reader.read(); !r.done; r = await reader.read()) text += new TextDecoder().decode(r.value);
+    const parsed = JSON.parse(text) as { choices: { message: { content: string } }[] };
+    assert.equal(parsed.choices[0].message.content, 'Réponse simulée.');
+    assert.equal((await events(t)).rows.length, 1, 'réponse comptée une fois');
+
+    // OpenRouter en refus : 200 déjà parti, échec et statut dans le corps, rien compté.
+    t.openRouter.state.reply = () => Response.json({ error: { message: 'Rate limited upstream' } }, { status: 429 });
+    const failed = JSON.parse(await (await post()).text()) as { error: string; status: number };
+    assert.equal(failed.status, 502);
+    assert.match(failed.error, /OpenRouter a refusé la requête \(429\)/);
+    // 200 vide (fournisseur tombé en cours d'appel) : échec, plus d'événement à 0.
+    t.openRouter.state.reply = () => Response.json({});
+    assert.equal((JSON.parse(await (await post()).text()) as { status: number }).status, 502);
+    assert.equal((await events(t)).rows.length, 1, 'échecs non comptés');
+
+    // Client parti avant la réponse : appel arrêté, rien compté.
+    const hang = later();
+    t.openRouter.state.reply = () => hang.promise;
+    const gone = await post();
+    const goneReader = gone.body!.getReader();
+    await goneReader.read();
+    await goneReader.cancel();
+    hang.resolve(completion());
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal((await events(t)).rows.length, 1, 'génération abandonnée non comptée');
+
+    // Sans l'en-tête (app rc.9 et avant) : réponse simple, statuts inchangés.
+    t.openRouter.state.reply = () => Response.json({ error: { message: 'down' } }, { status: 500 });
+    assert.equal((await chat(t, token)).status, 502);
+  } finally {
+    await t.close();
+  }
+});
