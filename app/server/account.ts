@@ -41,6 +41,17 @@ const storedSchema = z
   .strict();
 type Stored = z.infer<typeof storedSchema>;
 
+// Catalogue du serveur (lot 7, `catalog` de server/billing.ts) : prix en
+// centimes d'euro, seule source des montants affichés par l'app.
+export interface Catalog {
+  currency: 'eur';
+  mode: 'live' | 'test' | 'off';
+  pro: { amountCents: number; interval: 'month'; includedCents: number };
+  packs: { pack: '5' | '10' | '20'; amountCents: number }[];
+  welcomeCents: number;
+  generationCents: { wall: number; assistant: number };
+}
+
 // Ce que `/v1/me` rend (server/app.ts) ; l'app n'en lit que ces champs.
 interface Me {
   email: string;
@@ -53,6 +64,7 @@ interface Me {
   welcome?: boolean;
   subscription?: Subscription | null;
   usage?: { todayCents: number; monthCents: number; resetAt: string; includedLeftCents: number };
+  catalog?: Catalog;
 }
 
 export interface AccountStatus {
@@ -71,6 +83,8 @@ export interface AccountStatus {
   license: { state: LicenseCheck['status'] | 'none'; expiresAt: string | null; graceUntil: string | null } | null;
   /** `todayCents`, `monthCents`, `dailyCapCents` : coût du modèle en centimes de dollar ; `includedLeftCents`, `creditCents` : centimes d'euro. */
   usage: { todayCents: number; monthCents: number; resetAt: string; includedLeftCents: number; creditCents: number; dailyCapCents: number } | null;
+  /** Prix du serveur, connus après le premier `/v1/me` ; null avant (rien d'affiché en dur). */
+  catalog: Catalog | null;
   /** Dernier échec (réseau, session perdue), pour Réglages. */
   message: string | null;
 }
@@ -275,6 +289,7 @@ export class AccountClient {
               dailyCapCents: this.me.dailyCapCents,
             }
           : null,
+      catalog: this.me?.catalog ?? null,
       message: this.message,
     };
   }

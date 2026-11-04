@@ -51,6 +51,14 @@ export interface AccountStatus {
   license: { state: 'valid' | 'grace' | 'expired' | 'invalid' | 'none'; expiresAt: string | null; graceUntil: string | null } | null;
   // Coût du modèle en centimes de dollar (today, month, cap) ; crédits et inclus en centimes d'euro (lot 4).
   usage: { todayCents: number; monthCents: number; resetAt: string; includedLeftCents: number; creditCents: number; dailyCapCents: number } | null;
+  // Prix du serveur DS-Studio (lot 7), centimes d'euro ; null tant que /v1/me n'a pas répondu.
+  catalog: {
+    mode: 'live' | 'test' | 'off';
+    pro: { amountCents: number; interval: 'month'; includedCents: number };
+    packs: { pack: Pack; amountCents: number }[];
+    welcomeCents: number;
+    generationCents: { wall: number; assistant: number };
+  } | null;
   message: string | null;
 }
 export type AccountAction = 'signup' | 'login' | 'forgot' | 'reset' | 'logout' | 'refresh' | 'checkout' | 'portal';

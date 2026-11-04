@@ -331,3 +331,35 @@ test('webhook customer.subscription.deleted : gratuit ; un ancien abonnement sup
     await t.close();
   }
 });
+
+test('catalogue (lot 7) : public, mêmes prix que CATALOG, mode off, test ou live, repris dans /v1/me', async () => {
+  const off = await testApp();
+  try {
+    const res = await off.api('/v1/billing/catalog');
+    assert.equal(res.status, 200);
+    const body = res.body as { mode: string; pro: { amountCents: number; includedCents: number }; packs: { pack: string; amountCents: number }[] };
+    assert.equal(body.mode, 'off');
+    assert.equal(body.pro.amountCents, CATALOG.find((i) => i.key === 'pro_monthly')!.unitAmount);
+    assert.equal(body.pro.includedCents, PRO_INCLUDED_CENTS);
+    assert.deepEqual(
+      body.packs.map((p) => p.amountCents),
+      ['credits_5', 'credits_10', 'credits_20'].map((k) => CATALOG.find((i) => i.key === k)!.unitAmount),
+    );
+    const token = await connect(off, user);
+    assert.deepEqual((await me(off, token)).catalog, body);
+  } finally {
+    await off.close();
+  }
+  const { t } = await billingApp();
+  try {
+    assert.equal(((await t.api('/v1/billing/catalog')).body as { mode: string }).mode, 'test');
+  } finally {
+    await t.close();
+  }
+  const live = await testApp({ billing: { client: fakeStripe().client, webhookSecret: SECRET, live: true } });
+  try {
+    assert.equal(((await live.api('/v1/billing/catalog')).body as { mode: string }).mode, 'live');
+  } finally {
+    await live.close();
+  }
+});

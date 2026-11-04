@@ -9,7 +9,7 @@ import Stripe from 'stripe';
 import { z } from 'zod';
 import { body, htmlPage, requireAccount, type Account } from './auth.js';
 import { ApiError, clock, type Deps } from './core.js';
-import { addCredits, PRO_INCLUDED_CENTS } from './credits.js';
+import { addCredits, PRO_INCLUDED_CENTS, WELCOME_CENTS } from './credits.js';
 import type { Db, Tx } from './db.js';
 
 export type Pack = '5' | '10' | '20';
@@ -21,6 +21,32 @@ export const CATALOG = [
   { key: 'credits_20', name: 'Crédits DS-Studio · 20 €', unitAmount: 2000, recurring: false },
 ] as const;
 export const PACKS: Record<Pack, string> = { '5': 'credits_5', '10': 'credits_10', '20': 'credits_20' };
+/**
+ * Débit moyen d'une génération, centimes d'euro, par origine : sert aux
+ * « ≈ N générations » de l'app et du site. Mesure du 2026-11-02 (0,02 $ pour
+ * six appels, × RATE arrondi) ; provisoire (revoir quand les dix générations
+ * du lot 7 sont mesurées).
+ */
+export const GENERATION_CENTS = { wall: 2, assistant: 1 } as const;
+/** Mode de paiement du serveur : clé live, clé de test, ou pas de Stripe. */
+export type BillingMode = 'live' | 'test' | 'off';
+/**
+ * Catalogue public (lot 7) : seule source des prix pour l'app (Réglages,
+ * via /v1/me) et le site vitrine (GET /v1/billing/catalog). Montants en
+ * centimes d'euro.
+ */
+export function catalog(mode: BillingMode) {
+  const amount = (key: string) => CATALOG.find((i) => i.key === key)?.unitAmount ?? 0;
+  return {
+    currency: 'eur' as const,
+    mode,
+    pro: { amountCents: amount('pro_monthly'), interval: 'month' as const, includedCents: PRO_INCLUDED_CENTS },
+    packs: (Object.entries(PACKS) as [Pack, string][]).map(([pack, key]) => ({ pack, amountCents: amount(key) })),
+    welcomeCents: WELCOME_CENTS,
+    generationCents: GENERATION_CENTS,
+  };
+}
+export const billingMode = (billing: Billing | undefined): BillingMode => (!billing ? 'off' : billing.live ? 'live' : 'test');
 /** Événements à cocher sur l'endpoint webhook du Dashboard (runbook server.md). */
 export const WEBHOOK_EVENTS = [
   'checkout.session.completed',
@@ -58,6 +84,8 @@ export interface Billing {
   client: BillingClient;
   /** Secret de signature de l'endpoint webhook (`whsec_…`), différent en test et en live. */
   webhookSecret: string;
+  /** Clé `sk_live_` : vrais paiements (lot 7). Absent : mode test. */
+  live?: boolean;
 }
 
 export function stripeClient(secretKey: string): BillingClient {
@@ -283,6 +311,12 @@ export function billingRoutes(deps: Deps) {
     if (!me.stripeCustomerId) throw new ApiError('Aucun achat encore : rien à gérer.', 409);
     const session = await client.billingPortal.sessions.create({ customer: me.stripeCustomerId, return_url: `${done()}?s=portal` });
     return c.json({ url: session.url });
+  });
+
+  // Catalogue public : aucun compte demandé, même réponse pour tous.
+  app.get('/catalog', (c) => {
+    c.header('Cache-Control', 'public, max-age=300');
+    return c.json(catalog(billingMode(deps.billing)));
   });
 
   // Pages de retour minimales (le site du lot 7 les remplacera).

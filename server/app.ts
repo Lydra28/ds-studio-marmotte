@@ -4,7 +4,7 @@
 // §3 O2-O3, plan du lot 2). `index.ts` l'alimente et la sert.
 import { Hono } from 'hono';
 import { authRoutes, requireAccount } from './auth.js';
-import { billingRoutes } from './billing.js';
+import { billingMode, billingRoutes, catalog } from './billing.js';
 import { ApiError, clock, type Deps } from './core.js';
 import { effectiveTier, issueLicense } from './license.js';
 import { relayRoutes, usageSummary } from './relay.js';
@@ -51,6 +51,8 @@ export function createApp(deps: Deps) {
         resetAt: usage.resetAt,
         includedLeftCents: Math.max(0, me.monthlyIncludedCents - usage.includedUsedCents),
       },
+      // Prix et repères du moment (lot 7) : l'app n'en garde aucune copie.
+      catalog: catalog(billingMode(deps.billing)),
     });
   });
 

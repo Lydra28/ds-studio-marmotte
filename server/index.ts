@@ -113,7 +113,10 @@ const app = createApp({
   mailer,
   keys,
   openRouter: { apiKey: openRouterKey },
-  billing: stripeKey && stripeWebhookSecret ? { client: stripeClient(stripeKey), webhookSecret: stripeWebhookSecret } : undefined,
+  billing:
+    stripeKey && stripeWebhookSecret
+      ? { client: stripeClient(stripeKey), webhookSecret: stripeWebhookSecret, live: stripeKey.startsWith('sk_live_') }
+      : undefined,
   publicUrl: (env.API_PUBLIC_URL ?? `http://127.0.0.1:${port}`).replace(/\/+$/, ''),
   cookieDomain: env.COOKIE_DOMAIN || undefined,
   version,

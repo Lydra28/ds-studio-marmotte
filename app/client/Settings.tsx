@@ -22,11 +22,9 @@ const day = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: 'n
 const amount = (cents: number) => (cents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dollars = (cents: number) => `${amount(cents)} $`;
 const euros = (cents: number) => `${amount(cents)} €`;
-// Débit d'une génération du Mur, centimes d'euro : mesure du 2026-11-02 (0,02 $ pour six appels, Mur ≈ 0,5 c $, × 3 arrondi) ; revoir au lot 7.
-const WALL_GENERATION_CENTS = 2;
-// Prix de test, provisoires : miroir de `CATALOG` dans server/billing.ts (revoir au lot 7).
-const PACKS: Pack[] = ['5', '10', '20'];
-const PRO_LABEL = 'Passer Pro (9 €/mois, test)';
+// Prix et débit moyen d'une génération : catalogue du serveur (lot 7,
+// `catalog` de server/billing.ts), jamais recopiés ici.
+const euroLabel = (cents: number) => (cents % 100 === 0 ? `${cents / 100} €` : euros(cents));
 
 function updateLabel(u: UpdateState | null) {
   if (!u) return 'Mises à jour gérées hors de l’app (atelier lancé depuis les sources).';
@@ -157,7 +155,11 @@ function AccountSection({ account, onChange }: { account: AccountStatus | undefi
                 <>
                   <dt>Inclus Pro</dt>
                   <dd>
-                    {euros(u.includedLeftCents)} encore inclus ce mois (≈ {Math.floor(u.includedLeftCents / WALL_GENERATION_CENTS)} générations du Mur).
+                    {euros(u.includedLeftCents)} encore inclus ce mois
+                    {a.catalog && a.catalog.generationCents.wall > 0
+                      ? ` (≈ ${Math.floor(u.includedLeftCents / a.catalog.generationCents.wall)} générations du Mur)`
+                      : ''}
+                    .
                   </dd>
                 </>
               )}
@@ -170,13 +172,19 @@ function AccountSection({ account, onChange }: { account: AccountStatus | undefi
             </>
           )}
         </dl>
-        {!a.gifted && (
+        {!a.gifted && !a.catalog && (
+          <p className="hint">Prix indisponibles : clique Actualiser une fois en ligne.</p>
+        )}
+        {!a.gifted && a.catalog && (
           <div className="billing">
-            <p className="hint">Le paiement se fait sur une page Stripe dans ton navigateur. Après le paiement, reviens ici et clique Actualiser.</p>
+            <p className="hint">
+              Le paiement se fait sur une page Stripe dans ton navigateur. Après le paiement, reviens ici et clique Actualiser.
+              {a.catalog.mode === 'test' ? ' Paiements de test : aucune carte réelle débitée.' : ''}
+            </p>
             <div className="form-actions">
-              {PACKS.map((p) => (
-                <button key={p} disabled={busy} onClick={() => void run('checkout', false, { kind: 'credits', pack: p })}>
-                  Recharger {p} €
+              {a.catalog.packs.map((p) => (
+                <button key={p.pack} disabled={busy} onClick={() => void run('checkout', false, { kind: 'credits', pack: p.pack })}>
+                  Recharger {euroLabel(p.amountCents)}
                 </button>
               ))}
               {a.plan === 'pro' ? (
@@ -185,7 +193,7 @@ function AccountSection({ account, onChange }: { account: AccountStatus | undefi
                 </button>
               ) : (
                 <button className="primary" disabled={busy} onClick={() => void run('checkout', false, { kind: 'pro' })}>
-                  {PRO_LABEL}
+                  Passer Pro ({euroLabel(a.catalog.pro.amountCents)}/mois{a.catalog.mode === 'test' ? ', test' : ''})
                 </button>
               )}
             </div>

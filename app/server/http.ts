@@ -53,6 +53,7 @@ const NO_ACCOUNT: AccountStatus = {
   subscription: null,
   license: null,
   usage: null,
+  catalog: null,
   message: 'Compte indisponible dans cette instance.',
 };
 

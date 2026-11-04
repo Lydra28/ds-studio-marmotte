@@ -51,7 +51,21 @@ const me = (a: Fake) => ({
   welcome: a.welcome,
   subscription: a.subscription,
   usage: { todayCents: a.todayCents, monthCents: a.monthCents, resetAt: new Date(Date.now() + 3600_000).toISOString(), includedLeftCents: a.includedLeftCents },
+  catalog: CATALOG,
 });
+// Même forme que `catalog` de server/billing.ts (lot 7) ; montants du faux serveur.
+const CATALOG = {
+  currency: 'eur',
+  mode: 'test',
+  pro: { amountCents: 900, interval: 'month', includedCents: 300 },
+  packs: [
+    { pack: '5', amountCents: 500 },
+    { pack: '10', amountCents: 1000 },
+    { pack: '20', amountCents: 2000 },
+  ],
+  welcomeCents: 1,
+  generationCents: { wall: 2, assistant: 1 },
+};
 const readJson = (req: http.IncomingMessage) =>
   new Promise<Record<string, unknown>>((resolve) => {
     let text = '';
