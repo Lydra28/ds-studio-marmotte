@@ -3,7 +3,8 @@
 // processus. Routes sous `/v1`, réponses JSON, erreurs `{ error }` (cadrage
 // §3 O2-O3, plan du lot 2). `index.ts` l'alimente et la sert.
 import { Hono } from 'hono';
-import { authRoutes, requireAccount } from './auth.js';
+import { getCookie } from 'hono/cookie';
+import { authRoutes, COOKIE, requireAccount } from './auth.js';
 import { billingMode, billingRoutes, catalog } from './billing.js';
 import { ApiError, clock, type Deps } from './core.js';
 import { effectiveTier, issueLicense } from './license.js';
@@ -22,6 +23,37 @@ export function createApp(deps: Deps) {
     return c.json({ error: 'Erreur interne du serveur DS-Studio.' }, 500);
   });
   app.notFound((c) => c.json({ error: 'Route inconnue.' }, 404));
+
+  // Site vitrine (lot 7) : seule origine admise par CORS, avec cookie, et
+  // seulement sur les routes du compte. Écriture portée par le cookie
+  // (sans en-tête Authorization) : refusée si l'origine n'est pas le site,
+  // en plus de SameSite=Lax (sous-domaines voisins compris).
+  const siteOrigin = deps.siteUrl ? new URL(deps.siteUrl).origin : null;
+  const SITE_ROUTES = /^\/v1\/(auth\/[a-z]+|me|billing\/(checkout|portal))$/;
+  app.use('/v1/*', async (c, next) => {
+    const origin = c.req.header('origin');
+    const allowed = siteOrigin !== null && origin === siteOrigin && SITE_ROUTES.test(c.req.path);
+    if (c.req.method === 'OPTIONS') {
+      if (!allowed) return c.json({ error: 'Origine refusée.' }, 403);
+      return c.body(null, 204, {
+        'access-control-allow-origin': siteOrigin,
+        'access-control-allow-credentials': 'true',
+        'access-control-allow-methods': 'GET, POST',
+        'access-control-allow-headers': 'content-type',
+        'access-control-max-age': '600',
+        vary: 'Origin',
+      });
+    }
+    const write = c.req.method !== 'GET' && c.req.method !== 'HEAD';
+    if (write && !c.req.header('authorization') && getCookie(c, COOKIE) && !allowed)
+      return c.json({ error: 'Origine refusée.' }, 403);
+    await next();
+    if (allowed) {
+      c.header('access-control-allow-origin', siteOrigin);
+      c.header('access-control-allow-credentials', 'true');
+      c.header('vary', 'Origin');
+    }
+  });
 
   app.get('/v1/health', async (c) => {
     const { rows } = await deps.db.query<{ value: string }>("SELECT value FROM app_meta WHERE key = 'schema'");

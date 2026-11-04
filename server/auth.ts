@@ -45,7 +45,7 @@ export interface Session {
 export const SESSION_DAYS = 30;
 export const VERIFY_HOURS = 24;
 export const RESET_HOURS = 1;
-const COOKIE = 'ds_session';
+export const COOKIE = 'ds_session';
 
 const emailSchema = z
   .string()
@@ -151,7 +151,8 @@ export function authRoutes(deps: Deps) {
 
   async function sendVerification(account: { id: string; email: string }) {
     const token = await issueEmailToken(account.id, 'verify');
-    const link = `${deps.publicUrl}/v1/auth/verify?token=${token}`;
+    // Site en ligne : page de confirmation du site (POST /verify) ; sinon la page minimale de l'API.
+    const link = deps.siteUrl ? `${deps.siteUrl}/compte/verifier/?token=${token}` : `${deps.publicUrl}/v1/auth/verify?token=${token}`;
     await deps.mailer.send({
       to: account.email,
       subject: 'DS-Studio : confirme ton adresse',
@@ -228,6 +229,8 @@ export function authRoutes(deps: Deps) {
         expires: session.expiresAt,
         ...(deps.cookieDomain ? { domain: deps.cookieDomain } : {}),
       });
+      // Le site ne voit jamais le jeton : il vit dans le cookie httpOnly seul.
+      return c.json({ expiresAt: session.expiresAt.toISOString(), account: toAccount(account) });
     }
     return c.json({ token: session.token, expiresAt: session.expiresAt.toISOString(), account: toAccount(account) });
   });
@@ -262,7 +265,7 @@ export function authRoutes(deps: Deps) {
   auth.post('/logout', async (c) => {
     const token = bearer(c);
     if (token) await db.query('DELETE FROM sessions WHERE token_hash = $1', [sha256(token)]);
-    deleteCookie(c, COOKIE, { path: '/' });
+    deleteCookie(c, COOKIE, { path: '/', ...(deps.cookieDomain ? { domain: deps.cookieDomain } : {}) });
     return c.body(null, 204);
   });
 

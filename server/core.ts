@@ -20,6 +20,12 @@ export interface Deps {
   publicUrl: string;
   /** Domaine du cookie de session du site (.design-system-studio.fr) ; absent en local. */
   cookieDomain?: string;
+  /**
+   * Site vitrine (lot 7, https://design-system-studio.fr) : seule origine admise
+   * par CORS avec cookie, cible du lien de confirmation et des retours Stripe.
+   * Absent : pages minimales de l'API, aucune origine admise.
+   */
+  siteUrl?: string;
   /** Version affichée par /v1/health (paquet + commit déployé). */
   version: string;
   now?: () => Date;

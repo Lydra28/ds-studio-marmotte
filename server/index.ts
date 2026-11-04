@@ -115,10 +115,16 @@ const app = createApp({
   openRouter: { apiKey: openRouterKey },
   billing:
     stripeKey && stripeWebhookSecret
-      ? { client: stripeClient(stripeKey), webhookSecret: stripeWebhookSecret, live: stripeKey.startsWith('sk_live_') }
+      ? {
+          client: stripeClient(stripeKey),
+          webhookSecret: stripeWebhookSecret,
+          live: stripeKey.startsWith('sk_live_'),
+          termsConsent: env.STRIPE_TERMS_CONSENT === '1',
+        }
       : undefined,
   publicUrl: (env.API_PUBLIC_URL ?? `http://127.0.0.1:${port}`).replace(/\/+$/, ''),
   cookieDomain: env.COOKIE_DOMAIN || undefined,
+  siteUrl: env.SITE_URL ? env.SITE_URL.replace(/\/+$/, '') : undefined,
   version,
   report: sentryDsn ? (err) => Sentry.captureException(err) : undefined,
 });

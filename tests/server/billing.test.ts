@@ -50,11 +50,14 @@ const webhook = (t: TestApp, event: object, header?: string) => {
 const chat = (t: TestApp, token: string) => t.api('/v1/relay/chat', { json: { messages: [{ role: 'user', content: 'x' }] }, token });
 const me = async (t: TestApp, token: string) => (await t.api('/v1/me', { token })).body as Record<string, unknown> & { usage: { includedLeftCents: number }; subscription: Record<string, unknown> | null };
 
-async function billingApp() {
+async function billingApp(extra: { siteUrl?: string; termsConsent?: boolean } = {}) {
   const stripe = fakeStripe();
   await setupCatalog(stripe.client, () => {});
   stripe.calls.length = 0;
-  const t = await testApp({ billing: { client: stripe.client, webhookSecret: SECRET } });
+  const t = await testApp({
+    billing: { client: stripe.client, webhookSecret: SECRET, termsConsent: extra.termsConsent },
+    siteUrl: extra.siteUrl,
+  });
   return { t, stripe };
 }
 
@@ -361,5 +364,33 @@ test('catalogue (lot 7) : public, mêmes prix que CATALOG, mode off, test ou liv
     assert.equal(((await live.api('/v1/billing/catalog')).body as { mode: string }).mode, 'live');
   } finally {
     await live.close();
+  }
+});
+
+test('site (lot 7) : retours Stripe vers les pages du site ; case des CGV seulement si activée', async () => {
+  const { t, stripe } = await billingApp({ siteUrl: 'https://site.test' });
+  try {
+    const token = await connect(t, user);
+    assert.equal((await t.api('/v1/billing/checkout', { json: { kind: 'credits', pack: '5' }, token })).status, 200);
+    const [session] = stripe.only('checkout.sessions.create');
+    assert.equal(session.params.success_url, 'https://site.test/merci/');
+    assert.equal(session.params.cancel_url, 'https://site.test/paiement-annule/');
+    assert.equal('consent_collection' in session.params, false, 'sans URL des CGV chez Stripe, la session serait refusée');
+    assert.equal((await t.api('/v1/billing/portal', { json: {}, token })).status, 200);
+    assert.equal(stripe.only('billingPortal.sessions.create')[0].params.return_url, 'https://site.test/compte/');
+  } finally {
+    await t.close();
+  }
+  const consent = await billingApp({ siteUrl: 'https://site.test', termsConsent: true });
+  try {
+    const token = await connect(consent.t, user);
+    await consent.t.api('/v1/billing/checkout', { json: { kind: 'pro' }, token });
+    const [session] = consent.stripe.only('checkout.sessions.create');
+    assert.deepEqual(session.params.consent_collection, { terms_of_service: 'required' });
+    const text = (session.params.custom_text as { terms_of_service_acceptance: { message: string } }).terms_of_service_acceptance.message;
+    assert.match(text, /\(https:\/\/site\.test\/cgv\/\)/);
+    assert.match(text, /renonce à mon droit de rétractation/);
+  } finally {
+    await consent.t.close();
   }
 });

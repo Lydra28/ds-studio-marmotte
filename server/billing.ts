@@ -86,6 +86,12 @@ export interface Billing {
   webhookSecret: string;
   /** Clé `sk_live_` : vrais paiements (lot 7). Absent : mode test. */
   live?: boolean;
+  /**
+   * Case « J'accepte les conditions de vente » sur la page Stripe (lot 7).
+   * Stripe refuse la session tant que l'URL des CGV manque dans ses Public
+   * details : n'activer (`STRIPE_TERMS_CONSENT=1`) qu'après l'avoir posée.
+   */
+  termsConsent?: boolean;
 }
 
 export function stripeClient(secretKey: string): BillingClient {
@@ -260,6 +266,13 @@ export function billingRoutes(deps: Deps) {
     return deps.billing;
   };
   const done = () => `${deps.publicUrl}/v1/billing/done`;
+  // Retours de Stripe : pages du site en ligne, sinon pages minimales de l'API.
+  const site = deps.siteUrl;
+  const back = {
+    ok: site ? `${site}/merci/` : `${done()}?s=ok`,
+    cancel: site ? `${site}/paiement-annule/` : `${done()}?s=cancel`,
+    portal: site ? `${site}/compte/` : `${done()}?s=portal`,
+  };
 
   // Prix par clé, retenus dix minutes.
   const prices = new Map<string, { id: string; at: number }>();
@@ -284,7 +297,7 @@ export function billingRoutes(deps: Deps) {
 
   app.post('/checkout', async (c) => {
     const me = await account(c);
-    const { client } = billing();
+    const { client, termsConsent } = billing();
     const input = await body(c, checkoutSchema);
     if (input.kind === 'pro' && me.gifted) throw new ApiError('Compte offert : Pro est déjà inclus.', 409);
     if (input.kind === 'pro' && me.plan === 'pro') throw new ApiError('Déjà abonné à Pro : gère ton abonnement depuis le portail.', 409);
@@ -295,9 +308,21 @@ export function billingRoutes(deps: Deps) {
       customer,
       client_reference_id: me.id,
       line_items: [{ price: await priceId(client, key), quantity: 1 }],
-      success_url: `${done()}?s=ok`,
-      cancel_url: `${done()}?s=cancel`,
+      success_url: back.ok,
+      cancel_url: back.cancel,
       locale: 'fr',
+      // Contenu numérique fourni tout de suite : accord exprès et renonciation
+      // au droit de rétractation (art. L221-28 13° du Code de la consommation).
+      ...(termsConsent && site
+        ? {
+            consent_collection: { terms_of_service: 'required' as const },
+            custom_text: {
+              terms_of_service_acceptance: {
+                message: `J’accepte les [conditions de vente](${site}/cgv/) et demande l’accès immédiat à mon achat : je renonce à mon droit de rétractation pour ce contenu numérique.`,
+              },
+            },
+          }
+        : {}),
       metadata: { account_id: me.id, kind: input.kind },
       ...(input.kind === 'pro' ? { subscription_data: { metadata: { account_id: me.id } } } : {}),
     });
@@ -309,7 +334,7 @@ export function billingRoutes(deps: Deps) {
     const me = await account(c);
     const { client } = billing();
     if (!me.stripeCustomerId) throw new ApiError('Aucun achat encore : rien à gérer.', 409);
-    const session = await client.billingPortal.sessions.create({ customer: me.stripeCustomerId, return_url: `${done()}?s=portal` });
+    const session = await client.billingPortal.sessions.create({ customer: me.stripeCustomerId, return_url: back.portal });
     return c.json({ url: session.url });
   });
 
