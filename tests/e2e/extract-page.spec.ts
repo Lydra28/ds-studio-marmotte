@@ -22,7 +22,13 @@ test('extraction : styles calculés d’une page connue, en deux largeurs', asyn
   // Fond de page, texte principal, marque (fond des boutons), cartes, bordure.
   expect(color('#F7F7F5')).toMatchObject({ canvas: true });
   expect(desktop.colors.filter((c) => c.text > 0).sort((a, b) => b.text - a.text)[0].hex).toBe('#1F2937');
-  expect(color('#2563EB')!.interactive).toBe(2);
+  // Boutons remplis : une fois par lien ; dégradé d'un ::before partagé entre
+  // ses arrêts ; logo SVG compté en surface de forme.
+  expect(color('#2563EB')!.button).toBe(2);
+  expect(color('#EA580C')).toMatchObject({ button: 0.5 });
+  expect(color('#F97316')).toMatchObject({ button: 0.5 });
+  expect(color('#EA580C')!.area).toBeGreaterThan(0);
+  expect(color('#0D9488')!.graphic).toBeGreaterThan(1000);
   expect(color('#2563EB')!.text).toBeGreaterThan(0);
   expect(color('#FFFFFF')!.card).toBeGreaterThan(0);
   expect(color('#E5E7EB')!.border).toBe(2);
@@ -33,8 +39,10 @@ test('extraction : styles calculés d’une page connue, en deux largeurs', asyn
   expect(color('#FF00FF')).toBeUndefined();
 
   // Typographie : famille de tête de pile, corps dominant, titres.
-  const body = [...desktop.texts].sort((a, b) => b.chars - a.chars)[0];
-  expect(body).toMatchObject({ size: 16, weight: 400, family: 'Inter', lineHeight: 150 });
+  // Le widget tiers a le plus de texte ; la police du site reste celle de body.
+  expect([...desktop.texts].sort((a, b) => b.chars - a.chars)[0].family).toBe('Widget Sans');
+  expect(desktop.fonts).toEqual({ body: 'Inter', heading: 'Inter' });
+  expect(desktop.texts.find((t) => t.family === 'Inter' && t.size === 16)).toMatchObject({ weight: 400, lineHeight: 150 });
   expect(desktop.texts.find((t) => t.size === 40)).toMatchObject({ weight: 700, lineHeight: 120 });
   expect(desktop.texts.find((t) => t.size === 24)).toMatchObject({ weight: 600 });
   expect(desktop.texts.some((t) => t.size === 13)).toBe(true);

@@ -17,7 +17,7 @@ const marmotte = await load('projects/marmotte/design-system.tokens.json');
 const fixture = siteInventorySchema.parse(JSON.parse(await readFile('tests/fixtures/site/inventory.json', 'utf8')));
 
 type C = PageInventory['colors'][number];
-const colour = (hex: string, w: Partial<C>): C => ({ hex, text: 0, area: 0, card: 0, border: 0, interactive: 0, canvas: false, ...w });
+const colour = (hex: string, w: Partial<C>): C => ({ hex, text: 0, area: 0, card: 0, border: 0, interactive: 0, button: 0, graphic: 0, canvas: false, ...w });
 const page = (w: Partial<PageInventory>): PageInventory => ({
   url: 'https://exemple.test/',
   title: 'Exemple',
@@ -26,6 +26,7 @@ const page = (w: Partial<PageInventory>): PageInventory => ({
   overlays: 0,
   unread: 0,
   truncated: false,
+  fonts: { body: 'Inter', heading: '' },
   colors: [colour('#FFFFFF', { area: 1_000_000, canvas: true }), colour('#222222', { text: 5000 })],
   texts: [{ size: 16, weight: 400, family: 'Inter', lineHeight: 150, chars: 5000 }],
   spacings: [],
@@ -121,6 +122,7 @@ test('proposition : police générique ignorée, échelles recalées par fenêtr
   const { changes, report } = proposeFromInventory(
     site(
       page({
+        fonts: { body: 'sans-serif', heading: '' },
         texts: [{ size: 16, weight: 400, family: 'sans-serif', lineHeight: 0, chars: 5000 }],
         spacings: [
           { value: 4, count: 1000 },
@@ -170,7 +172,7 @@ test('proposition : site non adaptatif, mobile = desktop ; tailles manquantes ga
 });
 
 test('proposition : inventaire vide ou jeu d’un vrai projet, jamais de jeu invalide', () => {
-  const empty = proposeFromInventory(site(page({ colors: [], texts: [] })), blank);
+  const empty = proposeFromInventory(site(page({ colors: [], texts: [], fonts: { body: '', heading: '' } })), blank);
   assert.deepEqual(empty.changes, []);
   assert.ok(empty.report.notes.some((n) => /Aucune couleur de marque/.test(n)));
 
@@ -180,12 +182,58 @@ test('proposition : inventaire vide ou jeu d’un vrai projet, jamais de jeu inv
   assert.deepEqual(onMarmotte.rejected, []);
   applied(marmotte, onMarmotte.changes);
 
-  // Jeu sans typographie ni gamme neutre : rien d'inventé.
+  // Jeu sans typographie ni gamme neutre : rien d'inventé ; seule la seconde
+  // teinte lue (logo SVG de la fixture) arrive en gamme ajoutée.
   const bare = tokenSetSchema.parse({
     modes: blank.modes,
     tokens: { 'color/brand/600': blank.tokens['color/brand/600'] },
   });
   const onBare = proposeFromInventory(fixture, bare);
   assert.deepEqual(onBare.rejected, []);
-  assert.deepEqual(Object.keys(applied(bare, onBare.changes).tokens), ['color/brand/600']);
+  assert.deepEqual(Object.keys(applied(bare, onBare.changes).tokens), ['color/brand/600', 'color/accent/600']);
+  assert.equal(onBare.report.accent, '#0D9488');
+});
+
+test('proposition : bouton rempli plus fort qu’un lien ou une grande surface, marque choisie, police de body', () => {
+  // Cas de la recette du 2026-11-04 : liens bleus, grande surface
+  // turquoise, boutons orange peints par un dégradé, logo SVG ; widget d'avis
+  // avec plus de texte que le site.
+  const desktop = page({
+    fonts: { body: 'Manrope', heading: 'Manrope' },
+    colors: [
+      colour('#FFFFFF', { area: 9_000_000, canvas: true }),
+      colour('#000000', { text: 10_000, interactive: 25 }),
+      colour('#0F9D9A', { text: 500, area: 380_000, interactive: 3, graphic: 36_000 }),
+      colour('#3355AA', { text: 100, interactive: 5 }),
+      colour('#F29A1E', { area: 110_000, button: 4 }),
+      colour('#D9800A', { area: 100_000, button: 3 }),
+    ],
+    texts: [
+      { size: 16, weight: 400, family: 'Reviews Widget Sans', lineHeight: 150, chars: 7000 },
+      { size: 16, weight: 400, family: 'Manrope', lineHeight: 170, chars: 5000 },
+    ],
+  });
+  const { changes, report, rejected } = proposeFromInventory(site(desktop), blank);
+  assert.deepEqual(rejected, []);
+  assert.equal(report.brand, '#F29A1E');
+  assert.equal(report.accent, '#0F9D9A');
+  assert.equal(report.family, 'Manrope');
+  assert.deepEqual(report.candidates.map((c) => c.hex).slice(0, 2), ['#F29A1E', '#D9800A']);
+  assert.equal(applied(blank, changes).tokens['font/family/sans'].$values.default, 'Manrope');
+
+  // Choix de Romain dans le panneau : la marque imposée, la gamme suit.
+  const chosen = proposeFromInventory(site(desktop), blank, { brand: '#0F9D9A' });
+  assert.equal(chosen.report.brand, '#0F9D9A');
+  assert.notEqual(chosen.report.accent, '#0F9D9A');
+  const next = applied(blank, chosen.changes);
+  assert.equal(next.tokens['color/brand/600'].$values.default, '#0F9D9A');
+  assert.equal(resolve(next, 'bg/brand', { tokens: 'light' }), '#0F9D9A');
+  // Teinte absente du site : ignorée, choix automatique gardé.
+  assert.equal(proposeFromInventory(site(desktop), blank, { brand: '#123456' }).report.brand, '#F29A1E');
+
+  // Police des titres différente : ajoutée en font/family/display + heading.
+  const titled = proposeFromInventory(site(page({ ...desktop, fonts: { body: 'Manrope', heading: 'Fraunces' } })), blank);
+  const t = applied(blank, titled.changes);
+  assert.equal(t.tokens['font/family/display'].$values.default, 'Fraunces');
+  assert.equal(resolve(t, 'font/family/heading', { typography: 'desktop' }), 'Fraunces');
 });

@@ -20,6 +20,8 @@ export const pageInventorySchema = z
     overlays: count,
     unread: count,
     truncated: z.boolean(),
+    // Police de `body` et police dominante des titres h1 à h3 (première de la pile).
+    fonts: z.object({ body: z.string().max(80), heading: z.string().max(80) }).strict(),
     colors: z
       .array(
         z
@@ -30,6 +32,10 @@ export const pageInventorySchema = z
             card: big,
             border: count,
             interactive: count,
+            // Liens et boutons remplis de cette couleur (partagés entre arrêts d'un dégradé).
+            button: z.number().min(0).max(1_000_000),
+            // Surface des formes SVG (logos, pictos) peintes de cette couleur.
+            graphic: big,
             canvas: z.boolean(),
           })
           .strict(),
@@ -80,10 +86,12 @@ export const EXTRACT_THRESHOLDS = {
   tintLightness: 0.85,
   tintHue: 20,
   // Part minimale des poids pour une seconde teinte (accent) ou le danger.
-  accentShare: 0.05,
+  // 0,05 écartait une seconde teinte nette à 2,6 % (recette du 2026-11-04).
+  accentShare: 0.02,
   dangerShare: 0.005,
-  // Teinte OKLCH du rouge (danger), en degrés (atan2 : -180 à 180).
-  dangerHue: [10, 45] as [number, number],
+  // Teinte OKLCH du rouge (danger), en degrés (atan2 : -180 à 180). Rouges
+  // courants de 17 à 30° ; 45 prenait l'orange #EA580C (41°) pour un danger.
+  dangerHue: [10, 35] as [number, number],
   // Fenêtre autour d'un cran d'espacement ou de rayon.
   window: 0.25,
   // Taille de texte écartée sous cette part des caractères (bruit).
@@ -96,7 +104,14 @@ export interface ExtractReport {
   danger: string | null;
   accent: string | null;
   family: string | null;
+  // Teintes du site (chroma ≥ seuil), de la plus pesante à la moins pesante :
+  // choix offerts pour la marque dans le panneau.
+  candidates: { hex: string; share: number }[];
   notes: string[];
+}
+// Choix de Romain dans le panneau : la marque imposée parmi les teintes lues.
+export interface ExtractOptions {
+  brand?: string;
 }
 export interface ExtractProposal {
   changes: Change[];
@@ -141,7 +156,7 @@ function charsBy(texts: Text[], field: (t: Text) => string | number) {
   return [...m].sort((a, b) => b[1] - a[1]);
 }
 
-export function proposeFromInventory(inventory: SiteInventory, set: TokenSet): ExtractProposal {
+export function proposeFromInventory(inventory: SiteInventory, set: TokenSet, options: ExtractOptions = {}): ExtractProposal {
   const T = EXTRACT_THRESHOLDS;
   const { desktop, mobile } = inventory;
   const notes: string[] = [];
@@ -157,25 +172,38 @@ export function proposeFromInventory(inventory: SiteInventory, set: TokenSet): E
     if (current !== undefined && current !== value) wanted.push({ key, mode, value });
   };
 
-  // --- Couleurs : poids relatifs (caractères, surface, bordures, usages).
+  // --- Couleurs : poids relatifs (caractères, surface, bordures, liens,
+  // boutons remplis, formes SVG). Un bouton rempli d'une teinte est le signe
+  // le plus net de la marque (recette du 2026-11-04 : CTA orange peints
+  // par un dégradé de ::before, logo en SVG).
   const sum = (f: (c: PageInventory['colors'][number]) => number) => desktop.colors.reduce((n, c) => n + f(c), 0) || 1;
   const totals = {
     text: sum((c) => c.text),
     area: sum((c) => c.area),
     border: sum((c) => c.border),
     interactive: sum((c) => c.interactive),
+    button: sum((c) => c.button),
+    graphic: sum((c) => c.graphic),
   };
   const colours: Colour[] = desktop.colors.map((c) => {
     const [L, C, h] = hexToOklch(c.hex);
     const score =
-      c.text / totals.text + (0.5 * c.area) / totals.area + (0.5 * c.border) / totals.border + (2 * c.interactive) / totals.interactive;
+      c.text / totals.text +
+      (0.5 * c.area) / totals.area +
+      (0.5 * c.border) / totals.border +
+      (2 * c.interactive) / totals.interactive +
+      (3 * c.button) / totals.button +
+      c.graphic / totals.graphic;
     return { ...c, L, C, h, score };
   });
   const totalScore = colours.reduce((n, c) => n + c.score, 0) || 1;
   const chromatic = colours.filter((c) => c.C >= T.neutralChroma).sort((a, b) => b.score - a.score);
   const isRed = (c: Colour) => c.h >= T.dangerHue[0] && c.h <= T.dangerHue[1];
-  // Marque : teinte la plus pesante ; un rouge ne l'est que s'il sert aux liens ou boutons.
-  const brand = chromatic.find((c) => !isRed(c) || c.interactive > 0) ?? null;
+  // Marque : choix de Romain s'il est parmi les teintes lues, sinon la teinte
+  // la plus pesante ; un rouge ne l'est que s'il sert aux liens ou boutons.
+  const want = options.brand?.toUpperCase();
+  const chosen = want ? chromatic.find((c) => c.hex === want) : undefined;
+  const brand = chosen ?? chromatic.find((c) => !isRed(c) || c.interactive > 0 || c.button > 0) ?? null;
   const danger = chromatic.find((c) => c !== brand && isRed(c) && c.score / totalScore >= T.dangerShare) ?? null;
   const accent =
     chromatic.find(
@@ -275,13 +303,25 @@ export function proposeFromInventory(inventory: SiteInventory, set: TokenSet): E
   alias('border/default', border?.hex);
 
   // --- Typographie.
-  const family = charsBy(desktop.texts, (t) => t.family).find(([f]) => !GENERIC_FAMILIES.has(String(f).toLowerCase()))?.[0] as
-    | string
-    | undefined;
-  if (family && /^[\w\s.-]{1,60}$/.test(family)) {
+  // Police : celle de `body` d'abord (un widget tiers, avis ou chat, peut
+  // avoir plus de texte que le site : recette du 2026-11-04), sinon celle
+  // des titres, sinon la plus lue.
+  const usable = (f: string | undefined) => !!f && !GENERIC_FAMILIES.has(f.toLowerCase()) && /^[\w\s.-]{1,60}$/.test(f);
+  const mostRead = charsBy(desktop.texts, (t) => t.family)
+    .map(([f]) => String(f))
+    .find(usable);
+  const family = [desktop.fonts.body, desktop.fonts.heading, mostRead].find(usable);
+  const headingFamily = usable(desktop.fonts.heading) && desktop.fonts.heading !== family ? desktop.fonts.heading : undefined;
+  if (family) {
     put('font/family/sans', primitive, family);
-    notes.push(`Police : ${family} (la plus lue). Son chargement reste à prévoir côté site.`);
+    notes.push(
+      `Police : ${family}${family === desktop.fonts.body ? ' (texte courant)' : ''}. L’aperçu ne l’affiche que si c’est une police Google ou si elle est installée sur ce poste, sinon police système.`,
+    );
   } else notes.push('Police du site non lue (famille générique) : police du gabarit gardée.');
+  if (headingFamily && !set.tokens['font/family/display']) {
+    wanted.push({ key: 'font/family/display', mode: primitive, value: headingFamily });
+    notes.push(`Police des titres : ${headingFamily}.`);
+  }
 
   const sizesFor = (page: PageInventory) => {
     const total = page.texts.reduce((n, t) => n + t.chars, 0) || 1;
@@ -399,6 +439,7 @@ export function proposeFromInventory(inventory: SiteInventory, set: TokenSet): E
       danger: danger?.hex ?? null,
       accent: accent?.hex ?? null,
       family: family ?? null,
+      candidates: chromatic.slice(0, 8).map((c) => ({ hex: c.hex, share: Math.round((c.score / totalScore) * 1000) / 1000 })),
       notes,
     },
   };

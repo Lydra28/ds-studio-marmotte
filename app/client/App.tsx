@@ -704,6 +704,7 @@ function Workspace({
         <ExtractPanel
           key={extractUrl}
           url={extractUrl}
+          set={state?.set}
           onClose={() => setExtractUrl(null)}
           onDraft={(list) => {
             draftChanges(list, 'lus sur le site');

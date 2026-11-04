@@ -7,10 +7,16 @@
 // remplacer `getComputedStyle`) : toujours la valider par `inventorySchema`.
 //
 // Relevé, élément par élément (3 000 rendus au plus) :
-// - couleurs : texte (poids = caractères propres), fond (poids = surface),
-//   fond de « carte » (fond + rayon, bordure ou ombre), bordure, usage sur un
-//   lien ou un bouton ; fond de la page depuis html puis body (blanc sinon) ;
+// - couleurs : texte (poids = caractères propres), fond (poids = surface,
+//   dégradés et pseudo-éléments ::before/::after compris, surface partagée
+//   entre les arrêts), fond de « carte » (fond + rayon, bordure ou ombre),
+//   bordure, texte d'un lien (`interactive`), remplissage d'un lien ou d'un
+//   bouton (`button`, une fois par lien, partagé entre les arrêts d'un
+//   dégradé), remplissage des SVG (`graphic`, surface des formes : logos,
+//   pictos) ; fond de la page depuis html puis body (blanc sinon) ;
 //   alpha < 0,5 ignoré, couleurs hors rgb() comptées dans `unread` ;
+// - polices de `body` et des titres h1 à h3 (première famille de la pile),
+//   pour ne pas confondre la police du site avec celle d'un widget tiers ;
 // - textes : taille, graisse, première famille de la pile, hauteur de ligne
 //   en % de la taille (0 si `normal`), pondérés par les caractères ;
 // - espacements (padding, marge, gap), rayons (999 = plein), largeurs de
@@ -37,11 +43,40 @@ export const PAGE_SCRIPT = String.raw`(() => {
     const h = (x) => Math.max(0, Math.min(255, Math.round(+x))).toString(16).padStart(2, '0');
     return ('#' + h(m[1]) + h(m[2]) + h(m[3])).toUpperCase();
   };
+  const first = (stack) => (stack.split(',')[0] || '').trim().replace(/^["']|["']$/g, '').slice(0, 80);
   const px = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
   const ownChars = (el) => {
     let n = 0;
     for (const node of el.childNodes) if (node.nodeType === 3) n += node.textContent.replace(/\s+/g, ' ').trim().length;
     return n;
+  };
+  const SVG = 'http://www.w3.org/2000/svg';
+  const svgs = [];
+  const visible = (p) => p.display !== 'none' && p.visibility !== 'hidden' && p.opacity !== '0';
+  // Couleurs peintes par un fond : couleur unie, sinon arrêts d'un dégradé.
+  const paints = (p) => {
+    const bg = rgb(p.backgroundColor);
+    if (bg) return [bg];
+    const bi = p.backgroundImage || '';
+    if (bi.indexOf('gradient') < 0) return [];
+    return (bi.match(/rgba?\([^)]*\)/g) || []).map(rgb).filter(Boolean).slice(0, 8);
+  };
+  const pseudo = (el, which) => {
+    const p = getComputedStyle(el, which);
+    return p.content && p.content !== 'none' && p.content !== 'normal' && visible(p) ? p : null;
+  };
+  const credited = new WeakSet();
+  const LINK = 'a,button,[role=button]';
+  // Fond peint dans un lien ou un bouton (au moins 30 % de sa surface) : le
+  // lien compte une fois, partagé entre les couleurs peintes.
+  const fill = (el, list, area) => {
+    if (!list.length) return;
+    const link = el.closest(LINK);
+    if (!link || credited.has(link)) return;
+    const lr = link.getBoundingClientRect();
+    if (area < lr.width * lr.height * 0.3) return;
+    credited.add(link);
+    for (const c of list) bump(colors, c, 'button', 1 / list.length);
   };
   const skip = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'HEAD', 'META', 'LINK', 'IFRAME', 'CANVAS', 'VIDEO', 'AUDIO', 'IMG', 'PICTURE', 'SOURCE', 'OBJECT', 'EMBED']);
   const html = 'http://www.w3.org/1999/xhtml';
@@ -53,9 +88,13 @@ export const PAGE_SCRIPT = String.raw`(() => {
   bump(colors, canvas || '#FFFFFF', 'canvas', 1);
   const walker = document.createTreeWalker(document.body || root, NodeFilter.SHOW_ELEMENT, {
     acceptNode(el) {
+      if (el.namespaceURI === SVG && el.localName === 'svg') {
+        if (visible(getComputedStyle(el)) && svgs.length < 300) svgs.push(el);
+        return NodeFilter.FILTER_REJECT;
+      }
       if (el.namespaceURI !== html || skip.has(el.tagName)) return NodeFilter.FILTER_REJECT;
       const s = getComputedStyle(el);
-      if (s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0') return NodeFilter.FILTER_REJECT;
+      if (!visible(s)) return NodeFilter.FILTER_REJECT;
       if (s.position === 'fixed' || s.position === 'sticky') {
         const r = el.getBoundingClientRect();
         if (r.width * r.height > vw * vh * 0.5) { overlays++; return NodeFilter.FILTER_REJECT; }
@@ -79,7 +118,7 @@ export const PAGE_SCRIPT = String.raw`(() => {
       if (fg) bump(colors, fg, 'text', chars);
       const size = Math.round(px(s.fontSize));
       const weight = Math.round(+s.fontWeight) || 400;
-      const family = (s.fontFamily.split(',')[0] || '').trim().replace(/^["']|["']$/g, '').slice(0, 80);
+      const family = first(s.fontFamily);
       const lhPx = parseFloat(s.lineHeight);
       const lh = s.lineHeight === 'normal' || !Number.isFinite(lhPx) || !size ? 0 : Math.round((lhPx / size) * 100);
       if (size) bump(texts, [size, weight, family, lh].join('|'), 'chars', chars);
@@ -101,14 +140,22 @@ export const PAGE_SCRIPT = String.raw`(() => {
     let radius = raw.endsWith('%') ? (parseFloat(raw) >= 50 ? 999 : 0) : px(raw);
     if (radius > 0 && radius >= Math.min(r.width, r.height) / 2) radius = 999;
     const bg = rgb(s.backgroundColor);
-    if (bg) {
-      bump(colors, bg, 'area', area);
-      if (radius > 0 || border > 0 || shadow) bump(colors, bg, 'card', area);
+    const own = paints(s);
+    for (const c of own) {
+      bump(colors, c, 'area', area / own.length);
+      if (radius > 0 || border > 0 || shadow) bump(colors, c, 'card', area / own.length);
     }
-    if (interactive) {
-      if (bg) bump(colors, bg, 'interactive', 1);
-      else if (fg) bump(colors, fg, 'interactive', 1);
+    fill(el, own, area);
+    for (const which of ['::before', '::after']) {
+      const p = pseudo(el, which);
+      if (!p) continue;
+      const list = paints(p);
+      if (!list.length) continue;
+      const pa = Math.min(area, px(p.width) * px(p.height) || area);
+      for (const c of list) bump(colors, c, 'area', pa / list.length);
+      fill(el, list, pa);
     }
+    if (interactive && !own.length && fg && !credited.has(el)) bump(colors, fg, 'interactive', 1);
     if (radius > 0 && (bg || border > 0 || shadow)) bump(radii, Math.round(radius), 'count', 1);
     for (const k of sides) {
       for (const v of [px(s['padding' + k]), px(s['margin' + k])]) if (v > 0 && v <= 400) bump(spacings, Math.round(v), 'count', 1);
@@ -117,16 +164,41 @@ export const PAGE_SCRIPT = String.raw`(() => {
       for (const v of [px(s.rowGap), px(s.columnGap)]) if (v > 0 && v <= 400) bump(spacings, Math.round(v), 'count', 1);
     }
   }
+  // Formes des SVG visibles (2 000 au plus) : remplissage, sinon contour.
+  let shapes = 0;
+  for (const svg of svgs) {
+    for (const sh of svg.querySelectorAll('path,circle,rect,ellipse,polygon,polyline,line,text')) {
+      if (shapes >= 2000) break;
+      const p = getComputedStyle(sh);
+      if (!visible(p)) continue;
+      const v = p.fill && p.fill.startsWith('rgb') ? p.fill : p.stroke && p.stroke.startsWith('rgb') ? p.stroke : null;
+      const c = v && rgb(v);
+      if (!c) continue;
+      const r = sh.getBoundingClientRect();
+      if (r.width * r.height < 1) continue;
+      shapes++;
+      bump(colors, c, 'graphic', r.width * r.height);
+    }
+  }
+  const headingFamilies = new Map();
+  for (const h of [...document.querySelectorAll('h1,h2,h3')].slice(0, 200)) {
+    const p = getComputedStyle(h);
+    const n = (h.textContent || '').replace(/\s+/g, ' ').trim().length;
+    if (n && visible(p)) headingFamilies.set(first(p.fontFamily), (headingFamilies.get(first(p.fontFamily)) || 0) + n);
+  }
+  const heading = [...headingFamilies].sort((a, b) => b[1] - a[1])[0];
   const sorted = (map, make, weight, n) => [...map].map(make).sort((a, b) => weight(b) - weight(a)).slice(0, n);
   return {
     url: location.href.slice(0, 500),
     title: document.title.slice(0, 200),
     viewport: { width: vw, height: vh },
     elements, overlays, unread, truncated,
+    fonts: { body: document.body ? first(getComputedStyle(document.body).fontFamily) : '', heading: heading ? heading[0] : '' },
     colors: sorted(colors, ([hex, v]) => ({
       hex, text: v.text || 0, area: Math.round(v.area || 0), card: Math.round(v.card || 0),
-      border: v.border || 0, interactive: v.interactive || 0, canvas: !!v.canvas,
-    }), (c) => c.text + c.area / 1000 + c.border + c.interactive, 200),
+      border: v.border || 0, interactive: v.interactive || 0, button: Math.round((v.button || 0) * 100) / 100,
+      graphic: Math.round(v.graphic || 0), canvas: !!v.canvas,
+    }), (c) => c.text + c.area / 1000 + c.border + c.interactive + c.button * 10 + c.graphic / 1000, 200),
     texts: sorted(texts, ([k, v]) => {
       const [size, weight, family, lineHeight] = k.split('|');
       return { size: +size, weight: +weight, family, lineHeight: +lineHeight, chars: v.chars };

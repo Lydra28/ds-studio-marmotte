@@ -6,10 +6,14 @@
       "width": 1280,
       "height": 800
     },
-    "elements": 15,
+    "elements": 20,
     "overlays": 1,
     "unread": 1,
     "truncated": false,
+    "fonts": {
+      "body": "Inter",
+      "heading": "Inter"
+    },
     "colors": [
       {
         "hex": "#F7F7F5",
@@ -18,24 +22,41 @@
         "card": 0,
         "border": 0,
         "interactive": 0,
+        "button": 0,
+        "graphic": 0,
         "canvas": true
       },
       {
-        "hex": "#FFFFFF",
-        "text": 16,
-        "area": 442624,
-        "card": 442624,
-        "border": 0,
-        "interactive": 0,
-        "canvas": false
-      },
-      {
         "hex": "#1F2937",
-        "text": 431,
+        "text": 856,
         "area": 0,
         "card": 0,
         "border": 0,
         "interactive": 0,
+        "button": 0,
+        "graphic": 0,
+        "canvas": false
+      },
+      {
+        "hex": "#FFFFFF",
+        "text": 21,
+        "area": 442624,
+        "card": 442624,
+        "border": 0,
+        "interactive": 0,
+        "button": 0,
+        "graphic": 0,
+        "canvas": false
+      },
+      {
+        "hex": "#2563EB",
+        "text": 7,
+        "area": 11994,
+        "card": 11994,
+        "border": 0,
+        "interactive": 0,
+        "button": 2,
+        "graphic": 0,
         "canvas": false
       },
       {
@@ -45,15 +66,30 @@
         "card": 0,
         "border": 0,
         "interactive": 0,
+        "button": 0,
+        "graphic": 0,
         "canvas": false
       },
       {
-        "hex": "#2563EB",
-        "text": 7,
-        "area": 11994,
-        "card": 11994,
+        "hex": "#EA580C",
+        "text": 0,
+        "area": 1999,
+        "card": 0,
         "border": 0,
-        "interactive": 2,
+        "interactive": 0,
+        "button": 0.5,
+        "graphic": 0,
+        "canvas": false
+      },
+      {
+        "hex": "#F97316",
+        "text": 0,
+        "area": 1999,
+        "card": 0,
+        "border": 0,
+        "interactive": 0,
+        "button": 0.5,
+        "graphic": 0,
         "canvas": false
       },
       {
@@ -63,6 +99,8 @@
         "card": 2434,
         "border": 0,
         "interactive": 0,
+        "button": 0,
+        "graphic": 0,
         "canvas": false
       },
       {
@@ -72,6 +110,19 @@
         "card": 0,
         "border": 2,
         "interactive": 0,
+        "button": 0,
+        "graphic": 0,
+        "canvas": false
+      },
+      {
+        "hex": "#0D9488",
+        "text": 0,
+        "area": 0,
+        "card": 0,
+        "border": 0,
+        "interactive": 0,
+        "button": 0,
+        "graphic": 1600,
         "canvas": false
       }
     ],
@@ -79,9 +130,16 @@
       {
         "size": 16,
         "weight": 400,
+        "family": "Widget Sans",
+        "lineHeight": 150,
+        "chars": 425
+      },
+      {
+        "size": 16,
+        "weight": 400,
         "family": "Inter",
         "lineHeight": 150,
-        "chars": 380
+        "chars": 385
       },
       {
         "size": 24,
@@ -115,18 +173,18 @@
     "spacings": [
       {
         "value": 24,
-        "count": 16
+        "count": 18
       },
       {
         "value": 12,
-        "count": 8
-      },
-      {
-        "value": 32,
-        "count": 6
+        "count": 10
       },
       {
         "value": 16,
+        "count": 9
+      },
+      {
+        "value": 32,
         "count": 6
       },
       {
@@ -168,36 +226,57 @@
       "width": 390,
       "height": 844
     },
-    "elements": 15,
+    "elements": 20,
     "overlays": 1,
     "unread": 1,
     "truncated": false,
+    "fonts": {
+      "body": "Inter",
+      "heading": "Inter"
+    },
     "colors": [
       {
         "hex": "#1F2937",
-        "text": 431,
+        "text": 856,
         "area": 0,
         "card": 0,
         "border": 0,
         "interactive": 0,
+        "button": 0,
+        "graphic": 0,
         "canvas": false
       },
       {
         "hex": "#F7F7F5",
         "text": 0,
-        "area": 329160,
+        "area": 487340,
         "card": 0,
         "border": 0,
         "interactive": 0,
+        "button": 0,
+        "graphic": 0,
         "canvas": true
       },
       {
         "hex": "#FFFFFF",
-        "text": 16,
+        "text": 21,
         "area": 178648,
         "card": 178648,
         "border": 0,
         "interactive": 0,
+        "button": 0,
+        "graphic": 0,
+        "canvas": false
+      },
+      {
+        "hex": "#2563EB",
+        "text": 7,
+        "area": 11994,
+        "card": 11994,
+        "border": 0,
+        "interactive": 0,
+        "button": 2,
+        "graphic": 0,
         "canvas": false
       },
       {
@@ -207,15 +286,30 @@
         "card": 0,
         "border": 0,
         "interactive": 0,
+        "button": 0,
+        "graphic": 0,
         "canvas": false
       },
       {
-        "hex": "#2563EB",
-        "text": 7,
-        "area": 11994,
-        "card": 11994,
+        "hex": "#EA580C",
+        "text": 0,
+        "area": 1999,
+        "card": 0,
         "border": 0,
-        "interactive": 2,
+        "interactive": 0,
+        "button": 0.5,
+        "graphic": 0,
+        "canvas": false
+      },
+      {
+        "hex": "#F97316",
+        "text": 0,
+        "area": 1999,
+        "card": 0,
+        "border": 0,
+        "interactive": 0,
+        "button": 0.5,
+        "graphic": 0,
         "canvas": false
       },
       {
@@ -225,6 +319,8 @@
         "card": 2434,
         "border": 0,
         "interactive": 0,
+        "button": 0,
+        "graphic": 0,
         "canvas": false
       },
       {
@@ -234,6 +330,19 @@
         "card": 0,
         "border": 2,
         "interactive": 0,
+        "button": 0,
+        "graphic": 0,
+        "canvas": false
+      },
+      {
+        "hex": "#0D9488",
+        "text": 0,
+        "area": 0,
+        "card": 0,
+        "border": 0,
+        "interactive": 0,
+        "button": 0,
+        "graphic": 1600,
         "canvas": false
       }
     ],
@@ -241,9 +350,16 @@
       {
         "size": 16,
         "weight": 400,
+        "family": "Widget Sans",
+        "lineHeight": 150,
+        "chars": 425
+      },
+      {
+        "size": 16,
+        "weight": 400,
         "family": "Inter",
         "lineHeight": 150,
-        "chars": 380
+        "chars": 385
       },
       {
         "size": 20,
@@ -277,18 +393,18 @@
     "spacings": [
       {
         "value": 24,
-        "count": 16
+        "count": 18
       },
       {
         "value": 12,
-        "count": 8
-      },
-      {
-        "value": 32,
-        "count": 6
+        "count": 10
       },
       {
         "value": 16,
+        "count": 9
+      },
+      {
+        "value": 32,
         "count": 6
       },
       {

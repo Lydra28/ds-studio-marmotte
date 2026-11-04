@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import type { Change } from '../shared/model.js';
-import type { PageInventory } from '../shared/extract.js';
+import { useEffect, useMemo, useState } from 'react';
+import { applyChanges, type Change, type TokenSet } from '../shared/model.js';
+import { proposeFromInventory, type PageInventory } from '../shared/extract.js';
 import { extractSite, type ExtractResult } from './api.js';
 
 // Panneau « Extraction » (lot 5) : styles lus sur le site par le Chromium du
@@ -17,14 +17,18 @@ const host = (url: string) => {
   }
 };
 
-function colourShares(page: PageInventory) {
+// Teintes candidates (marque possible) toujours listées, même peu étendues (logo).
+function colourShares(page: PageInventory, keep: Set<string>) {
   const text = page.colors.reduce((n, c) => n + c.text, 0) || 1;
-  const area = page.colors.reduce((n, c) => n + c.area, 0) || 1;
+  // Surfaces peintes : fonds (dégradés compris) et formes SVG (logos, pictos).
+  const area = page.colors.reduce((n, c) => n + c.area + c.graphic, 0) || 1;
+  const role = (c: PageInventory['colors'][number]) =>
+    c.canvas ? 'fond' : c.button ? 'boutons' : c.interactive ? 'liens' : c.graphic > c.area ? 'logo, pictos' : c.text > 0 ? 'texte' : c.border ? 'bordure' : '';
   return page.colors
-    .map((c) => ({ hex: c.hex, share: (c.text / text + c.area / area) / 2, role: c.canvas ? 'fond' : c.interactive ? 'liens, boutons' : c.text > 0 ? 'texte' : c.border ? 'bordure' : '' }))
-    .filter((c) => c.share >= 0.005)
+    .map((c) => ({ hex: c.hex, share: (c.text / text + (c.area + c.graphic) / area) / 2, role: role(c) }))
+    .filter((c) => c.share >= 0.005 || keep.has(c.hex))
     .sort((a, b) => b.share - a.share)
-    .slice(0, 12);
+    .slice(0, 16);
 }
 function bySize(page: PageInventory) {
   const m = new Map<number, number>();
@@ -56,7 +60,19 @@ const values = (list: { value: number; count: number }[], full = false) =>
 const label = (c: Change) =>
   !('op' in c) ? `${c.key} (${c.mode}) → ${c.value}` : c.op === 'add' ? `+ ${c.key}` : c.op === 'remove' ? `− ${c.key}` : c.name;
 
-export default function ExtractPanel({ url, onDraft, onClose }: { url: string; onDraft: (changes: Change[]) => void; onClose: () => void }) {
+export default function ExtractPanel({
+  url,
+  set,
+  onDraft,
+  onClose,
+}: {
+  url: string;
+  // Jeu enregistré du projet : la proposition est recalculée dessus quand
+  // Romain choisit une autre teinte de marque (aucune relecture du site).
+  set: TokenSet | undefined;
+  onDraft: (changes: Change[]) => void;
+  onClose: () => void;
+}) {
   const [phase, setPhase] = useState<Phase>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -100,21 +116,73 @@ export default function ExtractPanel({ url, onDraft, onClose }: { url: string; o
           <button onClick={() => setAttempt((n) => n + 1)}>Réessayer</button>
         </div>
       )}
-      {phase.status === 'done' && <Result result={phase.result} onDraft={onDraft} />}
+      {phase.status === 'done' && <Result result={phase.result} set={set} onDraft={onDraft} />}
     </section>
   );
 }
 
-function Result({ result, onDraft }: { result: ExtractResult; onDraft: (changes: Change[]) => void }) {
-  const { inventory, changes, rejected, report } = result;
+function Result({ result, set, onDraft }: { result: ExtractResult; set: TokenSet | undefined; onDraft: (changes: Change[]) => void }) {
+  const { inventory } = result;
+  const [brand, setBrand] = useState(result.report.brand);
+  const proposal = useMemo(
+    () => (!set || brand === result.report.brand || !brand ? result : proposeFromInventory(inventory, set, { brand })),
+    [result, set, brand, inventory],
+  );
+  const { changes, rejected, report } = proposal;
   const { desktop, mobile } = inventory;
+  // Gamme de marque telle qu'elle sera mise en brouillon.
+  const ramp = useMemo(() => {
+    if (!set) return [];
+    let next = set;
+    try {
+      next = applyChanges(set, changes);
+    } catch {
+      // Rejets déjà listés par la proposition.
+    }
+    return Object.entries(next.tokens)
+      .filter(([k]) => /^color\/brand\/\d+$/.test(k))
+      .map(([k, t]) => ({ step: k.slice('color/brand/'.length), hex: String(Object.values(t.$values)[0]) }))
+      .sort((a, b) => Number(a.step) - Number(b.step));
+  }, [set, changes]);
   return (
     <>
+      <div className="extract-brand" role="group" aria-label="Marque proposée">
+        <h3>Marque {report.brand ? <code>{report.brand}</code> : 'non trouvée'}</h3>
+        {ramp.length > 0 && (
+          <ul className="extract-ramp" aria-label="Gamme de marque proposée">
+            {ramp.map((s) => (
+              <li key={s.step}>
+                <span className="chip" style={{ background: s.hex }} aria-hidden="true" />
+                <span>{s.step}</span> <code>{s.hex}</code>
+              </li>
+            ))}
+          </ul>
+        )}
+        {report.candidates.length > 1 && (
+          <>
+            <p className="hint">Pas la bonne teinte ? Choisis la marque parmi celles du site :</p>
+            <div className="extract-picks">
+              {report.candidates.map((c) => (
+                <button
+                  key={c.hex}
+                  aria-pressed={c.hex === report.brand}
+                  disabled={!set}
+                  onClick={() => setBrand(c.hex)}
+                  title={`Poids dans la page : ${percent(c.share)}`}
+                >
+                  <span className="chip" style={{ background: c.hex }} aria-hidden="true" />
+                  <code>{c.hex}</code>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
       <div className="extract-grid">
         <div>
           <h3>Couleurs</h3>
           <ul className="extract-colours" aria-label="Couleurs du site">
-            {colourShares(desktop).map((c) => (
+            {colourShares(desktop, new Set(report.candidates.map((c) => c.hex))).map((c) => (
               <li key={c.hex} title={c.role}>
                 <span className="chip" style={{ background: c.hex }} aria-hidden="true" />
                 <code>{c.hex}</code> {percent(c.share)}

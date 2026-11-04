@@ -542,18 +542,28 @@ test('extraction : nouveau projet depuis un site, inventaire, brouillons, diff e
   await expect(panel).toContainText('Inter');
   await expect(panel).toContainText('Ombres : 1 relevée(s)');
   await expect(panel.getByText(/\d+ changement\(s\) proposé\(s\)/)).toBeVisible();
+  const ramp = panel.getByRole('list', { name: 'Gamme de marque proposée' });
+  await expect(ramp.locator('li', { hasText: '600' })).toContainText('#2563EB');
+
+  // Autre teinte choisie comme marque : la gamme du panneau suit, et c'est
+  // exactement elle qui arrive en brouillon puis dans l'état enregistré.
+  await panel.getByRole('button', { name: '#0D9488' }).click();
+  await expect(panel.getByRole('button', { name: '#0D9488' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(ramp.locator('li', { hasText: '600' })).toContainText('#0D9488');
+  await expect(colours.locator('li', { hasText: '#0D9488' })).toContainText('marque');
+  await expect(colours.locator('li', { hasText: '#EA580C' })).not.toContainText('danger');
   await page.screenshot({ path: 'test-results/extraction-panneau.png', fullPage: false });
 
   await panel.getByRole('button', { name: 'Mettre en brouillon' }).click();
   await expect(panel).toBeHidden();
   await expect(page.getByRole('status').filter({ hasText: 'lus sur le site mis en brouillon' })).toBeVisible();
-  await expect.poll(() => previewVar(page, '--color-brand-600')).toBe('#2563EB');
+  await expect.poll(() => previewVar(page, '--color-brand-600')).toBe('#0D9488');
   await validate(page);
 
   const headers = { 'X-DS-Project': 'depuis-un-site' };
   const state = await (await page.request.get('/api/state', { headers })).json();
   expect(state.revision).toBe(1);
-  expect(state.set.tokens['color/brand/600'].$values.default).toBe('#2563EB');
+  expect(state.set.tokens['color/brand/600'].$values.default).toBe('#0D9488');
   expect(state.set.tokens['font/family/sans'].$values.default).toBe('Inter');
   const config = await (await page.request.get('/api/config', { headers })).json();
   expect(config.site).toEqual({ url: 'https://atelier-fixture.example/', pages: ['/'] });
