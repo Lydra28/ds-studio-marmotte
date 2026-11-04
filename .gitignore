@@ -39,3 +39,6 @@ release/
 # Serveur (lot 2) : bundle pour Render.
 server/dist/
 !server/license-public.pem
+
+# Site vitrine (lot 7) : cache Astro.
+site/.astro/

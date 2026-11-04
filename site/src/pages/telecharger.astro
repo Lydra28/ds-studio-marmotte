@@ -1,0 +1,33 @@
+---
+import Base from '../layouts/Base.astro';
+import { DOWNLOADS, INSTALLERS } from '../lib/site';
+---
+
+<Base title="Télécharger" description="Télécharge DS-Studio pour Windows, macOS ou Linux.">
+  <h1>Télécharger DS-Studio</h1>
+  <p class="lead muted">Toujours la dernière version publiée. L’app se met ensuite à jour toute seule (Windows et Linux).</p>
+  <div class="grid">
+    {
+      INSTALLERS.map((i) => (
+        <div class="card price">
+          <h2>{i.os}</h2>
+          <p class="muted">{i.detail}</p>
+          <p>{i.note}</p>
+          <a class="button primary" href={`${DOWNLOADS}/${i.file}`} download>
+            Télécharger pour {i.os}
+          </a>
+        </div>
+      ))
+    }
+  </div>
+
+  <section aria-labelledby="ensuite">
+    <h2 id="ensuite">Ensuite</h2>
+    <ol class="steps">
+      <li><div>Au premier lancement, choisis le dossier où ranger tes projets.</div></li>
+      <li><div>Connecte-toi avec ton <a href="/compte/">compte DS-Studio</a> dans Réglages → Compte.</div></li>
+      <li><div>Crée un projet vierge ou depuis l’adresse d’un site.</div></li>
+      <li><div>Pour Figma, suis <a href="/plugin-figma/">l’installation du plugin</a>.</div></li>
+    </ol>
+  </section>
+</Base>

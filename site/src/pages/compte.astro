@@ -1,0 +1,101 @@
+---
+import Base from '../layouts/Base.astro';
+import { API } from '../lib/site';
+---
+
+<Base title="Compte" description="Crée ton compte DS-Studio, connecte-toi, recharge tes crédits ou passe Pro.">
+  <h1>Ton compte</h1>
+  <div data-api={API}>
+    <p class="message" data-message role="status" aria-live="polite" hidden></p>
+
+    <div data-out>
+      <p class="muted">
+        Le même compte sert dans l’application et ici. Sur le site, tu recharges tes crédits, passes Pro ou gères ton
+        abonnement.
+      </p>
+      <div class="tabs" role="group" aria-label="Choix du formulaire">
+        <button type="button" data-tab="login">Se connecter</button>
+        <button type="button" data-tab="signup">Créer un compte</button>
+        <button type="button" data-tab="forgot">Mot de passe oublié</button>
+      </div>
+
+      <div data-pane="login">
+        <form data-form="login">
+          <label>Adresse mail<input name="email" type="email" autocomplete="email" required /></label>
+          <label>Mot de passe<input name="password" type="password" autocomplete="current-password" required /></label>
+          <button class="primary" type="submit">Se connecter</button>
+        </form>
+      </div>
+
+      <div data-pane="signup" hidden>
+        <form data-form="signup">
+          <label>Adresse mail<input name="email" type="email" autocomplete="email" required /></label>
+          <label
+            >Mot de passe (10 caractères au moins)<input
+              name="password"
+              type="password"
+              autocomplete="new-password"
+              minlength="10"
+              required
+            /></label
+          >
+          <p class="muted">
+            En créant un compte, tu acceptes les <a href="/cgv/">conditions de vente</a> et la
+            <a href="/confidentialite/">politique de confidentialité</a>.
+          </p>
+          <button class="primary" type="submit">Créer mon compte</button>
+        </form>
+        <h2>Mail de confirmation perdu ?</h2>
+        <form data-form="resend">
+          <label>Adresse mail<input name="email" type="email" autocomplete="email" required /></label>
+          <button type="submit">Renvoyer le mail</button>
+        </form>
+      </div>
+
+      <div data-pane="forgot" hidden>
+        <form data-form="forgot">
+          <label>Adresse mail<input name="email" type="email" autocomplete="email" required /></label>
+          <button type="submit">Recevoir un code</button>
+        </form>
+        <h2>Choisir un nouveau mot de passe</h2>
+        <form data-form="reset">
+          <label>Code reçu par mail<input name="token" autocomplete="one-time-code" required /></label>
+          <label
+            >Nouveau mot de passe<input name="password" type="password" autocomplete="new-password" minlength="10" required
+            /></label
+          >
+          <button type="submit">Changer le mot de passe</button>
+        </form>
+      </div>
+    </div>
+
+    <div data-in hidden>
+      <dl class="facts">
+        <dt>Adresse</dt>
+        <dd data-email></dd>
+        <dt>Palier</dt>
+        <dd data-tier></dd>
+        <dt>Crédits</dt>
+        <dd data-credit></dd>
+        <dt data-included-row>Inclus Pro restant</dt>
+        <dd data-included-row><span data-included></span></dd>
+        <dt data-sub-row>Abonnement</dt>
+        <dd data-sub-row><span data-sub></span></dd>
+      </dl>
+      <h2>Recharger</h2>
+      <div class="actions" data-packs></div>
+      <div class="actions">
+        <button class="primary" type="button" data-pro>Passer Pro</button>
+        <button type="button" data-portal>Gérer mon abonnement</button>
+        <button type="button" data-logout>Se déconnecter</button>
+      </div>
+      <p class="muted">
+        Paiement sur une page Stripe. De retour dans l’app, clique « Actualiser » dans Réglages → Compte.
+      </p>
+    </div>
+  </div>
+</Base>
+
+<script>
+  import '../scripts/compte.ts';
+</script>

@@ -4,33 +4,8 @@
    accent (Signal), gamme « chaleur » pour les états. Pixelify Sans (titres),
    Silkscreen (étiquettes, boutons), Geist (texte), Geist Mono (valeurs).
    La preview et le site en direct gardent les couleurs du projet. */
+@import './da.css';
 :root {
-  --c-bg: #0b0b0c;
-  --c-panel: #151517;
-  --c-raised: #1f1f22;
-  --c-line: #2a2a2e;
-  --c-text: #f2f1ec;
-  --c-soft: #c9c7bf;
-  --c-muted: #9a9890;
-  --c-accent: #e8ff3a;
-  --c-on-accent: #0b0b0c;
-  --c-warn: #ff7a00;
-  --c-warn-bg: #24160a;
-  --c-draft: #e8ff3a;
-  --c-draft-bg: #1b1d0e;
-  --c-ok: #8ee05a;
-  --c-error: #ff4d1a;
-  --c-heat-1: #ffd60a;
-  --c-heat-2: #ffaa00;
-  --c-heat-3: #ff7a00;
-  --c-heat-4: #ff4d1a;
-  --c-heat-5: #e5251b;
-  --c-dots: #1d1d21;
-  --f-text: 'Geist', 'Segoe UI', system-ui, sans-serif;
-  --f-label: 'Silkscreen', 'Geist Mono', ui-monospace, monospace;
-  --f-title: 'Pixelify Sans', 'Silkscreen', 'Geist', sans-serif;
-  --c-mono: 'Geist Mono', ui-monospace, 'Cascadia Code', Consolas, monospace;
-  --px: polygon(0 4px, 4px 4px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px));
   font-family: var(--f-text);
 }
 body.preview-body {

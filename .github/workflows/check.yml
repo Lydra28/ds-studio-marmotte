@@ -37,6 +37,21 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  # Site vitrine (lot 7) : build Astro hors ligne, pages, CSP et compte simulé.
+  site:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm --prefix site ci
+      - run: npx playwright install chromium
+      - run: npm run test:site
+
   # Serveur DS-Studio (lot 2) : mêmes tests sur PGlite puis sur un vrai Postgres, bundle à blanc.
   server:
     runs-on: ubuntu-latest

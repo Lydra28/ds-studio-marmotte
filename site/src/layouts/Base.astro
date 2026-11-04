@@ -1,0 +1,78 @@
+---
+import '../styles/site.css';
+import icon from '../../../desktop/icon.png';
+import { loadCatalog } from '../lib/site';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+const { title, description = 'DS-Studio : l’atelier de design system installé sur ton poste. Tokens, aperçu en direct, versions, Figma.' } =
+  Astro.props;
+const catalog = await loadCatalog();
+const path = Astro.url.pathname;
+const nav = [
+  { href: '/', label: 'Accueil' },
+  { href: '/telecharger/', label: 'Télécharger' },
+  { href: '/plugin-figma/', label: 'Plugin Figma' },
+  { href: '/prix/', label: 'Prix' },
+  { href: '/compte/', label: 'Compte' },
+];
+---
+
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title === 'DS-Studio' ? title : `${title} · DS-Studio`}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/png" href={icon.src} />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;700&family=Pixelify+Sans:wght@500;700&family=Silkscreen&display=swap"
+    />
+  </head>
+  <body>
+    <a class="skip" href="#contenu">Aller au contenu</a>
+    {
+      catalog.mode !== 'live' && (
+        <p class="banner" role="note">
+          Paiements en mode test : aucune carte réelle n’est débitée pour l’instant.
+        </p>
+      )
+    }
+    <header class="top">
+      <a class="brand" href="/">
+        <img src={icon.src} width="32" height="32" alt="" />
+        <span>DS-Studio</span>
+      </a>
+      <nav aria-label="Navigation principale">
+        <ul>
+          {
+            nav.map((item) => (
+              <li>
+                <a href={item.href} aria-current={path === item.href ? 'page' : undefined}>
+                  {item.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
+    </header>
+    <main id="contenu">
+      <slot />
+    </main>
+    <footer class="foot">
+      <ul>
+        <li><a href="/mentions-legales/">Mentions légales</a></li>
+        <li><a href="/cgv/">Conditions de vente</a></li>
+        <li><a href="/confidentialite/">Confidentialité</a></li>
+      </ul>
+      <p>DS-Studio, atelier de design system. Tes projets restent sur ton poste.</p>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,34 @@
+---
+import Base from '../layouts/Base.astro';
+import Prices from '../components/Prices.astro';
+import { euros, loadCatalog } from '../lib/site';
+
+const c = await loadCatalog();
+---
+
+<Base title="Prix" description="DS-Studio est gratuit sur ton poste. Pro et les crédits paient l’assistant et le Mur des DA.">
+  <h1>Prix</h1>
+  <p class="lead muted">
+    L’atelier est gratuit et complet sur ton poste. Seuls l’assistant et le Mur des DA, qui appellent un modèle d’IA,
+    consomment des crédits ou l’inclus de Pro.
+  </p>
+  <Prices />
+
+  <section aria-labelledby="questions">
+    <h2 id="questions">Questions fréquentes</h2>
+    <div class="prose">
+      <h3>Que consomme une génération ?</h3>
+      <p>
+        Chaque appel au modèle est débité selon son coût réel. Une génération du Mur coûte environ
+        {euros(c.generationCents.wall)}, une question à l’assistant environ {euros(c.generationCents.assistant)}. Le
+        détail de ta consommation est dans Réglages → Compte.
+      </p>
+      <h3>Et si l’inclus de Pro est épuisé ?</h3>
+      <p>Tes crédits prennent le relais. Sans crédits, l’assistant et le Mur attendent la période suivante ou une recharge.</p>
+      <h3>Puis-je résilier ?</h3>
+      <p>Oui, à tout moment depuis ton compte. Pro reste actif jusqu’à la fin de la période payée.</p>
+      <h3>Mes crédits expirent-ils ?</h3>
+      <p>Non.</p>
+    </div>
+  </section>
+</Base>

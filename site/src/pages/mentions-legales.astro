@@ -1,0 +1,30 @@
+---
+import Base from '../layouts/Base.astro';
+import Draft from '../components/Draft.astro';
+---
+
+<Base title="Mentions légales">
+  <div class="prose">
+    <h1>Mentions légales</h1>
+    <Draft />
+    <h2>Éditeur</h2>
+    <p>
+      [Nom et prénom de l’éditeur], [statut : entrepreneur individuel, micro-entreprise], SIRET [numéro].<br />
+      Adresse : [adresse postale].<br />
+      Contact : [adresse mail de contact].<br />
+      Directeur de la publication : [nom].
+    </p>
+    <h2>TVA</h2>
+    <p>[TVA non applicable, art. 293 B du CGI — à confirmer selon le régime retenu.]</p>
+    <h2>Hébergement</h2>
+    <p>
+      Site : Cloudflare, Inc., 101 Townsend St, San Francisco, CA 94107, États-Unis [adresse à vérifier].<br />
+      Serveur du compte : Render Services, Inc., [adresse à vérifier sur render.com].
+    </p>
+    <h2>Propriété intellectuelle</h2>
+    <p>
+      Le nom DS-Studio, la mascotte Pastille et les contenus de ce site appartiennent à l’éditeur. Le code de l’application
+      est publié sous [licence à préciser].
+    </p>
+  </div>
+</Base>

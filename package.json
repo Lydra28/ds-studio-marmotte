@@ -19,6 +19,7 @@
     "check": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "test:e2e": "playwright test",
+    "test:site": "playwright test --config tests/site/playwright.config.ts",
     "scan": "node scripts/scan-public.mjs",
     "doctor": "node scripts/doctor.mjs",
     "qualify": "node scripts/qualify-local.mjs",

@@ -1,0 +1,53 @@
+---
+import Base from '../layouts/Base.astro';
+import { FIGMA_PLUGIN } from '../lib/site';
+---
+
+<Base title="Plugin Figma" description="Installe le plugin DS-Studio pour envoyer ton design system dans les variables Figma.">
+  <h1>Plugin Figma</h1>
+  <p class="lead muted">
+    Le plugin écrit la version acceptée de ton design system dans les variables d’un fichier Figma, et renvoie tes
+    composants à l’atelier. Il ne parle qu’à l’app DS-Studio ouverte sur ton poste.
+  </p>
+  <ol class="steps">
+    <li>
+      <div>
+        <strong>Installe le plugin.</strong>
+        {
+          FIGMA_PLUGIN ? (
+            <>
+              Ouvre <a href={FIGMA_PLUGIN}>la page du plugin sur Figma Community</a> et clique « Open in… » ou « Save ».
+            </>
+          ) : (
+            <>Le plugin est en cours de validation par Figma : son lien Community arrive ici dès sa publication.</>
+          )
+        }
+      </div>
+    </li>
+    <li>
+      <div>
+        <strong>Ouvre DS-Studio</strong> et ton projet, puis clique le bouton <em>Figma</em> de la barre du haut : il affiche le
+        code d’appairage.
+      </div>
+    </li>
+    <li>
+      <div>
+        <strong>Dans Figma</strong>, lance le plugin DS-Studio depuis le menu des plugins, colle le code d’appairage, puis le
+        lien du fichier (menu Partager → Copier le lien).
+      </div>
+    </li>
+    <li>
+      <div>
+        <strong>Transfère.</strong> Le plugin crée sa page et ses collections, sans toucher au reste du fichier.
+      </div>
+    </li>
+  </ol>
+
+  <section aria-labelledby="linux">
+    <h2 id="linux">Sur Linux</h2>
+    <p class="muted">
+      Figma n’a pas d’app Linux officielle : utilise Figma dans le navigateur. Le plugin y fonctionne de la même façon, l’app
+      DS-Studio restant ouverte sur le même poste.
+    </p>
+  </section>
+</Base>

@@ -1,0 +1,41 @@
+---
+import Base from '../../layouts/Base.astro';
+import { API } from '../../lib/site';
+---
+
+<Base title="Confirmer l’adresse">
+  <h1>Confirmation de ton adresse</h1>
+  <div data-verify={API}>
+    <p class="message" data-message role="status" aria-live="polite">Confirmation en cours…</p>
+    <div class="actions" data-next hidden>
+      <a class="button primary" href="/compte/">Se connecter</a>
+      <a class="button" href="/telecharger/">Télécharger l’app</a>
+    </div>
+  </div>
+</Base>
+
+<script>
+  // Lien du mail : le jeton est lu dans l'adresse puis retiré de l'historique.
+  const root = document.querySelector<HTMLElement>('[data-verify]')!;
+  const message = root.querySelector<HTMLElement>('[data-message]')!;
+  const token = new URLSearchParams(location.search).get('token') ?? '';
+  history.replaceState(null, '', location.pathname);
+  const done = (text: string, kind: 'ok' | 'error') => {
+    message.textContent = text;
+    message.className = `message ${kind}`;
+    root.querySelector<HTMLElement>('[data-next]')!.hidden = false;
+  };
+  if (!token) done('Lien incomplet : ouvre le lien du mail en entier, ou demande un nouveau mail depuis la page Compte.', 'error');
+  else
+    fetch(`${root.dataset.verify}/v1/auth/verify`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+      .then(async (res) => {
+        const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+        if (res.ok) done(data.message ?? 'Adresse confirmée. Tu peux te connecter.', 'ok');
+        else done(data.error ?? `Lien refusé (${res.status}).`, 'error');
+      })
+      .catch(() => done('Serveur DS-Studio injoignable. Réessaie dans un instant.', 'error'));
+</script>

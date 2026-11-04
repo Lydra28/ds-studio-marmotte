@@ -1,0 +1,79 @@
+---
+import Base from '../layouts/Base.astro';
+import Prices from '../components/Prices.astro';
+import icon from '../../../desktop/icon-512.png';
+
+// Captures de l'app générées par scripts/site-shots.mjs (projet Marmotte).
+const shots = [
+  { src: '/captures/planche.png', alt: 'Planche du design system : couleurs, typographie, échelles, avec l’aperçu en direct.', caption: 'La planche : tes tokens, les écarts aux règles et l’aperçu en direct.' },
+  { src: '/captures/extraction.png', alt: 'Panneau d’extraction : couleurs, polices et tailles lues sur un site.', caption: 'Depuis l’adresse d’un site : marque, gris, polices et tailles proposées, à valider.' },
+  { src: '/captures/versions.png', alt: 'Diff d’une révision avant validation.', caption: 'Chaque changement passe par un diff, puis devient une version acceptée.' },
+];
+const features = [
+  { title: 'Tokens et aperçu en direct', text: 'Primitives, tokens sémantiques et typographie par mode, avec un aperçu qui suit chaque brouillon.' },
+  { title: 'Règles de correction', text: 'Multiples de 4, contraste, taille de texte, nommage : les écarts sont signalés et corrigés en un clic.' },
+  { title: 'Diff et versions', text: 'Rien n’est écrit sans ton accord : chaque changement passe par un diff, l’historique se rejoue.' },
+  { title: 'Depuis un site', text: 'Donne l’adresse d’un site public : DS-Studio lit ses styles sur ton poste et propose un premier jeu.' },
+  { title: 'Figma', text: 'Le plugin écrit la version acceptée dans tes variables Figma et renvoie tes composants à l’atelier.' },
+  { title: 'Assistant et Mur des DA', text: 'Un assistant qui propose des brouillons et des directions artistiques générées à partir de tes inspirations.' },
+];
+---
+
+<Base title="DS-Studio">
+  <div class="hero">
+    <div>
+      <p class="kicker">Atelier de design system</p>
+      <h1>Ton design system, sur ton poste.</h1>
+      <p class="lead">
+        DS-Studio fait évoluer tes tokens avec un aperçu en direct, des règles de correction et des versions acceptées, puis les
+        envoie dans Figma et dans ton code. Tes projets ne quittent jamais ton ordinateur.
+      </p>
+      <div class="actions">
+        <a class="button primary" href="/compte/#creer">Créer un compte</a>
+        <a class="button" href="/telecharger/">Télécharger l’app</a>
+      </div>
+    </div>
+    <img src={icon.src} width="256" height="256" alt="Pastille, la mascotte de DS-Studio" />
+  </div>
+
+  <section aria-labelledby="fonctions">
+    <h2 id="fonctions">Ce que fait l’atelier</h2>
+    <div class="grid">
+      {
+        features.map((f) => (
+          <div class="card">
+            <h3>{f.title}</h3>
+            <p class="muted">{f.text}</p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section aria-labelledby="captures">
+    <h2 id="captures">En images</h2>
+    <div class="shots">
+      {
+        shots.map((s) => (
+          <figure>
+            <img src={s.src} alt={s.alt} width="1280" height="800" loading="lazy" />
+            <figcaption>{s.caption}</figcaption>
+          </figure>
+        ))
+      }
+    </div>
+  </section>
+
+  <section aria-labelledby="prix">
+    <h2 id="prix">Prix</h2>
+    <Prices />
+  </section>
+
+  <section aria-labelledby="poste">
+    <h2 id="poste">Tes projets restent chez toi</h2>
+    <p class="muted">
+      Le serveur DS-Studio ne garde que ton compte, ton abonnement, ton solde de crédits et le coût de tes générations. Tes
+      projets, tes conversations avec l’assistant et tes captures restent sur ton disque.
+    </p>
+  </section>
+</Base>

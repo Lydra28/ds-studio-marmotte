@@ -1,0 +1,51 @@
+---
+import Base from '../layouts/Base.astro';
+import Draft from '../components/Draft.astro';
+import { euros, loadCatalog } from '../lib/site';
+
+const c = await loadCatalog();
+---
+
+<Base title="Conditions de vente">
+  <div class="prose">
+    <h1>Conditions générales de vente</h1>
+    <Draft />
+    <h2>1. Objet</h2>
+    <p>
+      Ces conditions régissent la vente, par [éditeur] (voir les <a href="/mentions-legales/">mentions légales</a>), de
+      l’abonnement DS-Studio Pro et des recharges de crédits utilisés par l’assistant et le Mur des DA de l’application
+      DS-Studio.
+    </p>
+    <h2>2. Offres et prix</h2>
+    <p>
+      Pro : {euros(c.pro.amountCents)} par mois, dont {euros(c.pro.includedCents)} d’usage inclus par période. Recharges :
+      {c.packs.map((p) => euros(p.amountCents)).join(', ')}. Prix en euros, [TVA non applicable, art. 293 B du CGI — à
+      confirmer]. L’usage est débité selon le coût réel de chaque appel au modèle, affiché dans l’application.
+    </p>
+    <h2>3. Commande et paiement</h2>
+    <p>
+      La commande se fait depuis le compte, sur une page de paiement Stripe. Le paiement est exigible immédiatement.
+      L’abonnement Pro se renouvelle chaque mois jusqu’à résiliation.
+    </p>
+    <h2>4. Droit de rétractation</h2>
+    <p>
+      Les crédits et l’inclus de Pro sont un contenu numérique fourni dès le paiement. En validant la commande, tu demandes
+      leur exécution immédiate et reconnais perdre ton droit de rétractation (article L221-28 13° du Code de la
+      consommation). [À faire relire.]
+    </p>
+    <h2>5. Résiliation</h2>
+    <p>
+      Pro se résilie à tout moment depuis le compte (Gérer mon abonnement). Il reste actif jusqu’à la fin de la période
+      payée, sans remboursement au prorata. Les crédits achetés n’expirent pas.
+    </p>
+    <h2>6. Service</h2>
+    <p>
+      L’atelier fonctionne sur ton poste. L’assistant et le Mur demandent une connexion au serveur DS-Studio ; [engagement de
+      disponibilité à préciser]. Un plafond journalier d’usage protège ton solde.
+    </p>
+    <h2>7. Réclamations et médiation</h2>
+    <p>[Contact pour les réclamations ; médiateur de la consommation à désigner.]</p>
+    <h2>8. Droit applicable</h2>
+    <p>Droit français.</p>
+  </div>
+</Base>

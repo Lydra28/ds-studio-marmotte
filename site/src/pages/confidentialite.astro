@@ -1,0 +1,47 @@
+---
+import Base from '../layouts/Base.astro';
+import Draft from '../components/Draft.astro';
+---
+
+<Base title="Confidentialité">
+  <div class="prose">
+    <h1>Politique de confidentialité</h1>
+    <Draft />
+    <h2>Ce qui reste sur ton poste</h2>
+    <p>
+      Tes projets, tokens, versions, conversations avec l’assistant, inspirations et captures du Mur restent dans le dossier
+      choisi sur ton ordinateur. Le serveur DS-Studio n’en garde aucune copie.
+    </p>
+    <h2>Ce que garde le serveur</h2>
+    <ul>
+      <li>Ton adresse mail et une empreinte de ton mot de passe (jamais le mot de passe lui-même)</li>
+      <li>Ton palier, ton solde de crédits, ton abonnement et l’identifiant client Stripe</li>
+      <li>Le coût et la date de chaque appel au modèle, sans son contenu</li>
+      <li>Tes sessions de connexion</li>
+    </ul>
+    <h2>Ce qui passe sans être gardé</h2>
+    <p>
+      Les questions à l’assistant et les images du Mur traversent le serveur DS-Studio vers le fournisseur du modèle
+      (OpenRouter), sans être enregistrées par DS-Studio.
+    </p>
+    <h2>Sous-traitants</h2>
+    <ul>
+      <li>Render (hébergement du serveur et de la base)</li>
+      <li>Cloudflare (site et réseau)</li>
+      <li>Stripe (paiement : DS-Studio ne voit jamais ta carte)</li>
+      <li>Resend (mails de confirmation et de mot de passe)</li>
+      <li>OpenRouter (modèles d’IA)</li>
+      <li>Sentry (erreurs du serveur)</li>
+    </ul>
+    <h2>Cookies</h2>
+    <p>
+      Un seul cookie, nécessaire à la connexion sur ce site (<code>ds_session</code>). Aucun cookie de mesure d’audience ni de
+      publicité.
+    </p>
+    <h2>Durée et droits</h2>
+    <p>
+      [Durées de conservation à préciser.] Tu peux demander l’accès, la rectification ou la suppression de ton compte à
+      [adresse de contact]. Réclamation possible auprès de la CNIL.
+    </p>
+  </div>
+</Base>

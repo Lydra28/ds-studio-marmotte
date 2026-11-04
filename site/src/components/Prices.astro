@@ -1,0 +1,51 @@
+---
+import { euros, loadCatalog } from '../lib/site';
+
+// Paliers du cadrage (O4) aux montants du catalogue du serveur.
+const c = await loadCatalog();
+const per = (cents: number) => (c.generationCents.wall > 0 ? Math.floor(cents / c.generationCents.wall) : 0);
+---
+
+<div class="grid">
+  <div class="card price">
+    <h3>Gratuit</h3>
+    <p class="amount">0 €</p>
+    <ul>
+      <li>Tout l’atelier sur ton poste : projets, aperçu, règles, diff, versions</li>
+      <li>Export CSS, Tailwind et JSON</li>
+      <li>Plugin Figma</li>
+      <li>Extraction depuis l’adresse d’un site</li>
+      <li>Une génération du Mur offerte à la confirmation de ton adresse</li>
+    </ul>
+    <a class="button" href="/compte/#creer">Créer un compte</a>
+  </div>
+  <div class="card price highlight">
+    <h3>Pro</h3>
+    <p class="amount">{euros(c.pro.amountCents)} <span class="muted">/ mois</span></p>
+    <ul>
+      <li>Tout le gratuit</li>
+      <li>
+        {euros(c.pro.includedCents)} d’usage de l’assistant et du Mur inclus chaque mois{
+          per(c.pro.includedCents) > 0 && ` (≈ ${per(c.pro.includedCents)} générations du Mur)`
+        }
+      </li>
+      <li>Au-delà, tes crédits prennent le relais</li>
+      <li>Sans engagement, résiliable depuis ton compte</li>
+    </ul>
+    <a class="button primary" href="/compte/">Passer Pro</a>
+  </div>
+  <div class="card price">
+    <h3>Crédits</h3>
+    <p class="amount">dès {euros(Math.min(...c.packs.map((p) => p.amountCents)))}</p>
+    <ul>
+      <li>Recharges de {c.packs.map((p) => euros(p.amountCents)).join(', ')}</li>
+      <li>Assistant et Mur payés à l’usage, sans abonnement</li>
+      {per(c.packs[0]?.amountCents ?? 0) > 0 && <li>≈ {per(c.packs[0].amountCents)} générations du Mur pour {euros(c.packs[0].amountCents)}</li>}
+      <li>Sans date d’expiration</li>
+    </ul>
+    <a class="button" href="/compte/">Recharger</a>
+  </div>
+</div>
+<p class="muted">
+  Prix en euros. Le paiement se fait sur une page sécurisée Stripe ; DS-Studio ne voit jamais ta carte.
+</p>
