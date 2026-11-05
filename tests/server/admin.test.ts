@@ -28,6 +28,7 @@ test('administration : keys sans base ; grant, cap, usage et credit sur un compt
     assert.equal(await runAdmin(t.db, ['grant', 'Associe@Example.com '], out, t.now()), 0, 'adresse normalisée');
     assert.match(lines.at(-1)!, /compte offert/);
     assert.equal((await t.api('/v1/me', { token })).body.gifted, true);
+    assert.equal((await t.api('/v1/me', { token })).body.dailyCapCents, 10, 'offert : plafonné d’office');
     assert.equal((await chat()).status, 200, 'offert : l’appel passe');
 
     assert.equal(await runAdmin(t.db, ['cap', user.email, 'abc'], out, t.now()), 1);

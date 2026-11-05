@@ -14,6 +14,8 @@ import { addCredits } from './credits.js';
 import { generateKeys } from './license.js';
 import { usageSummary } from './relay.js';
 
+/** Plafond journalier d'un compte offert, centimes de dollar de coût réel (3,17 € par mois au pire). */
+export const GIFT_DAILY_CAP_CENTS = 10;
 const USAGE = 'Usage : npm run admin -- keys | grant <mail> | cap <mail> <centimes> | usage <mail> | credit <mail> <centimes> | stripe-setup';
 
 interface Row {
@@ -67,8 +69,11 @@ export async function runAdmin(db: Db | null, argv: string[], out: (line: string
     return 1;
   }
   if (command === 'grant') {
-    await db.query('UPDATE accounts SET gifted = true WHERE id = $1', [account.id]);
-    out(`${account.email} : compte offert (palier effectif Pro, jamais débité ; plafond journalier ${account.daily_cap_cents} centimes).`);
+    // Un compte offert n'est jamais débité : tout son usage est un coût,
+    // plafonné d'office (décision du 2026-11-05) ; `cap` l'ajuste ensuite.
+    const cap = Math.min(account.daily_cap_cents, GIFT_DAILY_CAP_CENTS);
+    await db.query('UPDATE accounts SET gifted = true, daily_cap_cents = $2 WHERE id = $1', [account.id, cap]);
+    out(`${account.email} : compte offert (palier effectif Pro, jamais débité ; plafond journalier ${cap} centimes de coût réel).`);
     return 0;
   }
   if (command === 'cap') {
