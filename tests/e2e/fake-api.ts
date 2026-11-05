@@ -127,8 +127,11 @@ const server = http.createServer(async (req, res) => {
       }
     }
     a.relayCalls += 1;
+    const origin = String(req.headers['x-ds-origin']);
+    // Réponse longue pour l'assistant : le fil doit défiler jusqu'au bout (recette du 2026-11-05).
+    const detail = origin === 'assistant' ? '\n\n' + Array.from({ length: 25 }, (_, i) => `Détail ${i + 1} de la réponse.`).join('\n') : '';
     const reply = {
-      choices: [{ message: { content: `Réponse simulée ${a.relayCalls} (${String(req.headers['x-ds-origin'])}).` } }],
+      choices: [{ message: { content: `Réponse simulée ${a.relayCalls} (${origin}).${detail}` } }],
       usage: { prompt_tokens: 10, completion_tokens: 3, cost: 0.00001 },
     };
     if (req.headers['x-ds-keepalive'] !== '1') return send(200, reply);

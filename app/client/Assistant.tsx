@@ -155,7 +155,7 @@ export default function AssistantPanel({
           </div>
         )}
         {state?.messages.map((m, i) => (
-          <div key={m.date + i} className={`bubble ${m.role}`}>
+          <div key={m.date + i} className={`bubble bubble--${m.role}`}>
             {m.content && (m.role === 'assistant' ? <Rich text={m.content} /> : <p>{m.content}</p>)}
             {m.proposal && (
               <div className="proposal">
@@ -179,7 +179,7 @@ export default function AssistantPanel({
             )}
           </div>
         ))}
-        {busy && <div className="bubble assistant pending">L’assistant réfléchit…</div>}
+        {busy && <div className="bubble bubble--assistant bubble--pending">L’assistant réfléchit…</div>}
       </div>
       {error && (
         <p className="add-error assistant-error" role="alert">

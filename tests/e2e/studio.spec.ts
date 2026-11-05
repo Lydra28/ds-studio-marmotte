@@ -135,6 +135,23 @@ test('compte : connexion dans Réglages, Pro (offert) et usage affichés, assist
   await panel.getByLabel('Message à l’assistant').fill('Bonjour');
   await panel.getByRole('button', { name: 'Envoyer' }).click();
   await expect(panel).toContainText('Réponse simulée 1 (assistant)');
+  // Fil de bulles (recette du 2026-11-05) : des réponses longues ne s'empilent
+  // plus en haut du fil, et le bas de la dernière se lit en défilant.
+  await panel.getByLabel('Message à l’assistant').fill('Deuxième question');
+  await panel.getByRole('button', { name: 'Envoyer' }).click();
+  await expect(panel).toContainText('Réponse simulée 2 (assistant)');
+  const log = panel.locator('.assistant-log');
+  const boxes = await log.locator('.bubble').evaluateAll((els: HTMLElement[]) =>
+    els.map((el) => ({ position: getComputedStyle(el).position, top: el.offsetTop, bottom: el.offsetTop + el.offsetHeight })),
+  );
+  expect(boxes).toHaveLength(4);
+  for (const [i, b] of boxes.entries()) {
+    expect(b.position).toBe('static');
+    if (i > 0) expect(b.top).toBeGreaterThanOrEqual(boxes[i - 1].bottom);
+  }
+  await log.evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await expect(panel.getByText('Détail 25 de la réponse.').last()).toBeInViewport();
+  await panel.screenshot({ path: 'test-results/assistant-fil.png' });
   await panel.getByRole('button', { name: 'Effacer' }).click();
   await panel.getByRole('button', { name: 'Fermer l’assistant' }).click();
   // Déconnexion : le formulaire revient, l'assistant se grise de nouveau.

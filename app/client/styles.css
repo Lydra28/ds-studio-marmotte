@@ -1427,16 +1427,20 @@ dialog.diff::backdrop,
   margin: 0;
   white-space: pre-wrap;
 }
-.bubble.user {
+/* Modificateurs `bubble--*` : la classe `assistant` est celle du panneau
+   (sticky, 100vh) ; portée par une bulle, elle les empilait en haut du fil. */
+.bubble--user {
   align-self: flex-end;
   background: #1c2740;
   color: #c9d7ff;
   max-width: 88%;
 }
-.bubble.assistant {
+.bubble--assistant {
+  align-self: flex-start;
+  max-width: 94%;
   background: var(--c-raised);
 }
-.bubble.pending {
+.bubble--pending {
   color: var(--c-muted);
 }
 .proposal {
@@ -1500,16 +1504,16 @@ dialog.diff::backdrop,
 .studio.with-assistant .layout {
   grid-template-columns: minmax(0, 1fr) minmax(300px, 400px);
 }
-.bubble.assistant p + p,
-.bubble.assistant p + ul,
-.bubble.assistant ul + p {
+.bubble--assistant p + p,
+.bubble--assistant p + ul,
+.bubble--assistant ul + p {
   margin-top: 8px;
 }
-.bubble.assistant ul {
+.bubble--assistant ul {
   margin: 0;
   padding-left: 18px;
 }
-.bubble.assistant strong {
+.bubble--assistant strong {
   font-weight: 600;
   color: #fff;
 }
