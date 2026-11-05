@@ -57,7 +57,7 @@ const me = (a: Fake) => ({
 const CATALOG = {
   currency: 'eur',
   mode: 'test',
-  pro: { amountCents: 900, interval: 'month', includedCents: 300 },
+  pro: { amountCents: 999, interval: 'month', includedCents: 300 },
   packs: [
     { pack: '5', amountCents: 500 },
     { pack: '10', amountCents: 1000 },

@@ -138,7 +138,7 @@ test('facturation : catalogue absent → 503 explicite ; stripe-setup crée, rem
   const pro = stripe.only('prices.create').find((c) => c.params.lookup_key === 'pro_monthly')!;
   assert.deepEqual(pro.params.recurring, { interval: 'month' });
   assert.equal(pro.params.currency, 'eur');
-  assert.equal(pro.params.unit_amount, 900);
+  assert.equal(pro.params.unit_amount, 999);
   assert.equal(stripe.only('prices.create').find((c) => c.params.lookup_key === 'credits_5')!.params.recurring, undefined);
 
   stripe.calls.length = 0;
@@ -230,7 +230,7 @@ test('webhook checkout.session.completed (abonnement) puis invoice.paid : Pro, i
     const customer = (await t.db.query<{ stripe_customer_id: string }>('SELECT stripe_customer_id FROM accounts')).rows[0].stripe_customer_id;
     const started = await webhook(
       t,
-      event('checkout.session.completed', { id: 'cs_pro', mode: 'subscription', payment_status: 'paid', amount_total: 900, currency: 'eur', client_reference_id: null, customer, subscription: 'sub_1', metadata: null }),
+      event('checkout.session.completed', { id: 'cs_pro', mode: 'subscription', payment_status: 'paid', amount_total: 999, currency: 'eur', client_reference_id: null, customer, subscription: 'sub_1', metadata: null }),
     );
     assert.equal(started.body.handled, 'new');
     let m = await me(t, token);

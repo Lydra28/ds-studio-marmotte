@@ -15,7 +15,7 @@ import type { Db, Tx } from './db.js';
 export type Pack = '5' | '10' | '20';
 /** Catalogue : un produit et un prix par clé, retrouvés par `lookup_key` (jamais d'identifiant de prix en configuration). */
 export const CATALOG = [
-  { key: 'pro_monthly', name: 'DS-Studio Pro', unitAmount: 900, recurring: true },
+  { key: 'pro_monthly', name: 'DS-Studio Pro', unitAmount: 999, recurring: true },
   { key: 'credits_5', name: 'Crédits DS-Studio · 5 €', unitAmount: 500, recurring: false },
   { key: 'credits_10', name: 'Crédits DS-Studio · 10 €', unitAmount: 1000, recurring: false },
   { key: 'credits_20', name: 'Crédits DS-Studio · 20 €', unitAmount: 2000, recurring: false },

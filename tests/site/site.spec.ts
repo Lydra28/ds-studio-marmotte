@@ -30,7 +30,7 @@ const ME = {
   catalog: {
     currency: 'eur',
     mode: 'test',
-    pro: { amountCents: 900, interval: 'month', includedCents: 300 },
+    pro: { amountCents: 999, interval: 'month', includedCents: 300 },
     packs: [
       { pack: '5', amountCents: 500 },
       { pack: '10', amountCents: 1000 },
@@ -91,7 +91,7 @@ test('prix et téléchargements : montants du catalogue, fichiers à nom fixe', 
   await offline(page);
   await page.goto('/prix/');
   const pro = page.locator('.card', { has: page.getByRole('heading', { name: 'Pro' }) });
-  await expect(pro).toContainText('9 € / mois');
+  await expect(pro).toContainText('9,99 € / mois');
   await expect(pro).toContainText('3 € d’usage');
   await expect(pro).toContainText('≈ 150 générations du Mur');
   await expect(page.locator('.card', { has: page.getByRole('heading', { name: 'Crédits' }) })).toContainText('5 €, 10 €, 20 €');
@@ -145,7 +145,7 @@ test('compte : connexion par cookie du site, solde, recharge vers Stripe, décon
   await expect(page.locator('[data-tier]')).toHaveText('Gratuit');
   await expect(page.locator('[data-credit]')).toHaveText('0,01 € (une génération offerte)');
   await expect(page.getByText('Inclus Pro restant')).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Passer Pro (9 € / mois)' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Passer Pro (9,99 € / mois)' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Gérer mon abonnement' })).toBeHidden();
   expect(seen.find((s) => s.path === '/v1/auth/login')?.body).toMatchObject({ client: 'site', email: ME.email });
 
