@@ -124,3 +124,25 @@ jobs:
           --endpoint-url "${{ secrets.R2_ENDPOINT }}"
           --exclude "*" --include "*.exe" --include "*.blockmap" --include "*.dmg"
           --include "*.zip" --include "*.AppImage" --include "latest*.yml" --include "stable*.yml"
+      # Copies à nom fixe lues par la page Télécharger du site (lot 7.4,
+      # INSTALLERS de site/src/lib/site.ts), envoyées après les fichiers
+      # versionnés : le flux de mise à jour n'en dépend pas, rien n'est effacé.
+      # Un seul fichier attendu par motif, sinon arrêt (lien jamais ambigu).
+      - name: Copies à nom fixe pour le site
+        run: |
+          set -euo pipefail
+          mkdir -p fixed
+          one() {
+            local found=( release/$1 )
+            if [ "${#found[@]}" -ne 1 ] || [ ! -f "${found[0]}" ]; then
+              echo "Attendu un seul fichier $1, trouvé : ${found[*]}"; exit 1
+            fi
+            cp "${found[0]}" "fixed/$2"
+          }
+          one 'DS-Studio-Setup-*.exe' DS-Studio-Setup.exe
+          one 'DS-Studio-*.dmg' DS-Studio.dmg
+          one 'DS-Studio-*.AppImage' DS-Studio.AppImage
+          ls -l fixed
+      - run: >
+          aws s3 cp fixed/ "s3://${{ vars.R2_BUCKET }}/stable/" --recursive
+          --endpoint-url "${{ secrets.R2_ENDPOINT }}" --cache-control "no-cache"

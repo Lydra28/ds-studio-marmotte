@@ -44,6 +44,11 @@ services:
         value: https://api.design-system-studio.fr
       - key: COOKIE_DOMAIN
         value: .design-system-studio.fr
+      # Site vitrine (lot 7.4) : https://design-system-studio.fr, posé dans
+      # Render seulement une fois le site en ligne (lien du mail de
+      # confirmation et retours Stripe pointent dessus).
+      - key: SITE_URL
+        sync: false
       - key: MAIL_FROM
         value: DS-Studio <no-reply@design-system-studio.fr>
       - key: RESEND_API_KEY
