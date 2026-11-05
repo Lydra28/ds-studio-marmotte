@@ -243,7 +243,7 @@ test('webhook checkout.session.completed (abonnement) puis invoice.paid : Pro, i
 
     assert.equal((await chat(t, token)).status, 200);
     m = await me(t, token);
-    assert.equal(m.usage.includedLeftCents, PRO_INCLUDED_CENTS - 2, 'appel pris sur l’inclus');
+    assert.equal(m.usage.includedLeftCents, PRO_INCLUDED_CENTS - 3, 'appel pris sur l’inclus (0,4 c$ × 5,5 → 3 c€)');
     assert.equal(m.creditCents, 1);
 
     t.tick(20 * 86400_000); // sous la durée de session
@@ -262,12 +262,12 @@ test('webhook invoice.payment_failed : statut past_due, Pro conservé en attenda
   const { t } = await billingApp();
   try {
     const token = await connect(t, user);
-    await t.db.query("UPDATE accounts SET stripe_customer_id = 'cus_p', plan = 'pro', subscription_status = 'active', monthly_included_cents = 300 WHERE email = $1", [user.email]);
+    await t.db.query("UPDATE accounts SET stripe_customer_id = 'cus_p', plan = 'pro', subscription_status = 'active', monthly_included_cents = $2 WHERE email = $1", [user.email, PRO_INCLUDED_CENTS]);
     assert.equal((await webhook(t, event('invoice.payment_failed', { customer: 'cus_p', subscription: 'sub_p' }))).body.handled, 'new');
     const m = await me(t, token);
     assert.equal(m.plan, 'pro');
     assert.equal(m.subscription?.status, 'past_due');
-    assert.equal(m.usage.includedLeftCents, 300);
+    assert.equal(m.usage.includedLeftCents, PRO_INCLUDED_CENTS);
   } finally {
     await t.close();
   }
@@ -277,7 +277,7 @@ test('webhook customer.subscription.updated : fin de période et résiliation pr
   const { t } = await billingApp();
   try {
     const token = await connect(t, user);
-    await t.db.query("UPDATE accounts SET stripe_customer_id = 'cus_u', plan = 'pro', subscription_status = 'active', monthly_included_cents = 300 WHERE email = $1", [user.email]);
+    await t.db.query("UPDATE accounts SET stripe_customer_id = 'cus_u', plan = 'pro', subscription_status = 'active', monthly_included_cents = $2 WHERE email = $1", [user.email, PRO_INCLUDED_CENTS]);
     const end = Math.floor(new Date('2026-12-03T12:00:00Z').getTime() / 1000);
     const updated = await webhook(t, event('customer.subscription.updated', { id: 'sub_u', customer: 'cus_u', status: 'active', cancel_at_period_end: true, items: { data: [{ current_period_end: end }] } }));
     assert.equal(updated.body.handled, 'new');
@@ -312,7 +312,7 @@ test('webhook customer.subscription.deleted : gratuit ; un ancien abonnement sup
   const { t } = await billingApp();
   try {
     const token = await connect(t, user);
-    await t.db.query("UPDATE accounts SET stripe_customer_id = 'cus_d', stripe_subscription_id = 'sub_old', plan = 'pro', subscription_status = 'active', monthly_included_cents = 300 WHERE email = $1", [user.email]);
+    await t.db.query("UPDATE accounts SET stripe_customer_id = 'cus_d', stripe_subscription_id = 'sub_old', plan = 'pro', subscription_status = 'active', monthly_included_cents = $2 WHERE email = $1", [user.email, PRO_INCLUDED_CENTS]);
     assert.equal((await webhook(t, event('customer.subscription.deleted', { id: 'sub_old', customer: 'cus_d', status: 'canceled' }))).body.handled, 'new');
     let m = await me(t, token);
     assert.equal(m.plan, 'free');
@@ -325,7 +325,7 @@ test('webhook customer.subscription.deleted : gratuit ; un ancien abonnement sup
     assert.equal((await webhook(t, event('customer.subscription.deleted', { id: 'sub_old', customer: 'cus_d', status: 'canceled' }))).body.handled, 'new');
     m = await me(t, token);
     assert.equal(m.plan, 'pro', 'le nouvel abonnement tient');
-    assert.equal(m.usage.includedLeftCents, 300);
+    assert.equal(m.usage.includedLeftCents, PRO_INCLUDED_CENTS);
 
     // handleEvent directement : compte sans client Stripe connu → ignoré, événement quand même mémorisé.
     assert.equal(await handleEvent(t.db, event('customer.subscription.deleted', { id: 'sub_z', customer: 'cus_z', status: 'canceled' }), t.now()), 'ignored');

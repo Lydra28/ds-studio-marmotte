@@ -23,11 +23,11 @@ export const CATALOG = [
 export const PACKS: Record<Pack, string> = { '5': 'credits_5', '10': 'credits_10', '20': 'credits_20' };
 /**
  * Débit moyen d'une génération, centimes d'euro, par origine : sert aux
- * « ≈ N générations » de l'app et du site. Mesure du 2026-11-02 (0,02 $ pour
- * six appels, × RATE arrondi) ; provisoire (revoir quand les dix générations
- * du lot 7 sont mesurées).
+ * « ≈ N générations » de l'app et du site. Mesure du 2026-11-05 (Mur 0,46 à
+ * 0,77 c$, assistant 0,03 à 0,34 c$, × RATE 5,5 arrondi : 4 et 1,24 c€) ;
+ * revoir avec RATE.
  */
-export const GENERATION_CENTS = { wall: 2, assistant: 1 } as const;
+export const GENERATION_CENTS = { wall: 4, assistant: 1 } as const;
 /** Mode de paiement du serveur : clé live, clé de test, ou pas de Stripe. */
 export type BillingMode = 'live' | 'test' | 'off';
 /**

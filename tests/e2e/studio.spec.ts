@@ -206,7 +206,7 @@ test('facturation : compte gratuit, génération offerte puis 402, recharge, Pro
   await account.getByRole('button', { name: 'Actualiser' }).click();
   await expect(account).toContainText('Pro jusqu’au');
   await expect(account).toContainText('renouvelé automatiquement');
-  await expect(account).toContainText('3,00 € encore inclus ce mois (≈ 150 générations du Mur)');
+  await expect(account).toContainText('3,00 € encore inclus ce mois (≈ 75 générations du Mur)');
   await expect(account.getByRole('button', { name: /Passer Pro/ })).toHaveCount(0);
   await page.screenshot({ path: 'test-results/reglages-facturation-pro.png', fullPage: true });
   // Portail : résiliation programmée, affichée après Actualiser.

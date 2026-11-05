@@ -87,7 +87,7 @@ test('relais : plafond journalier → 429 avec l’heure de remise à zéro, lev
   }
 });
 
-test('relais : bienvenue d’une génération puis 402 ; débit ceil(coût × 3) en centimes d’euro ; Pro puise dans l’inclus puis dans les crédits', async () => {
+test('relais : bienvenue d’une génération puis 402 ; débit ceil(coût × RATE) en centimes d’euro ; Pro puise dans l’inclus puis dans les crédits', async () => {
   const t = await testApp();
   try {
     const token = await connect(t, user);
@@ -95,25 +95,25 @@ test('relais : bienvenue d’une génération puis 402 ; débit ceil(coût × 3)
     assert.equal((await t.api('/v1/me', { token })).body.creditCents, 1);
     assert.equal((await chat(t, token)).status, 200, 'génération offerte');
     let me = await t.api('/v1/me', { token });
-    assert.equal(me.body.creditCents, -1, 'coût 0,4 c$ × 3 = 1,2 → 2 centimes d’euro, solde sous zéro');
+    assert.equal(me.body.creditCents, -2, 'coût 0,4 c$ × 5,5 = 2,2 → 3 centimes d’euro, solde sous zéro');
     assert.equal(me.body.welcome, false, 'bienvenue consommée');
     const refused = await chat(t, token);
     assert.equal(refused.status, 402, 'gratuit sans crédits');
     assert.match(String(refused.body.error), /Solde de crédits à zéro/);
     assert.equal(t.openRouter.calls.length, 1);
 
-    await t.db.query('UPDATE accounts SET credit_cents = 3 WHERE email = $1', [user.email]);
+    await t.db.query('UPDATE accounts SET credit_cents = 4 WHERE email = $1', [user.email]);
     assert.equal((await chat(t, token)).status, 200);
-    assert.equal((await t.api('/v1/me', { token })).body.creditCents, 1, 'débité de 2');
+    assert.equal((await t.api('/v1/me', { token })).body.creditCents, 1, 'débité de 3');
     assert.equal((await chat(t, token)).status, 200, 'un solde positif suffit à lancer l’appel');
-    assert.equal((await t.api('/v1/me', { token })).body.creditCents, -1, 'le dernier appel peut passer sous zéro');
+    assert.equal((await t.api('/v1/me', { token })).body.creditCents, -2, 'le dernier appel peut passer sous zéro');
     assert.equal((await chat(t, token)).status, 402, 'puis refus');
     const { rows } = await events(t);
-    assert.deepEqual(rows.map((r) => [r.charged_to, r.charged_cents]), [['credits', 2], ['credits', 2], ['credits', 2]]);
+    assert.deepEqual(rows.map((r) => [r.charged_to, r.charged_cents]), [['credits', 3], ['credits', 3], ['credits', 3]]);
 
-    // Pro : 5 centimes inclus ; l'appel qui dépasse reste inclus (2, 4, 6), puis crédits.
+    // Pro : 5 centimes inclus ; l'appel qui dépasse reste inclus (3, 6), puis crédits.
     await t.db.query("UPDATE accounts SET plan = 'pro', monthly_included_cents = 5, credit_cents = 0 WHERE email = $1", [user.email]);
-    for (let i = 0; i < 3; i++) assert.equal((await chat(t, token)).status, 200, `Pro, appel inclus ${i + 1}`);
+    for (let i = 0; i < 2; i++) assert.equal((await chat(t, token)).status, 200, `Pro, appel inclus ${i + 1}`);
     me = await t.api('/v1/me', { token });
     assert.equal((me.body.usage as { includedLeftCents: number }).includedLeftCents, 0, 'inclus consommé');
     assert.equal(me.body.creditCents, 0, 'crédits non touchés tant que l’inclus couvre');
@@ -122,8 +122,8 @@ test('relais : bienvenue d’une génération puis 402 ; débit ceil(coût × 3)
     assert.match(String(exhausted.body.error), /inclus du mois épuisé/);
     await t.db.query('UPDATE accounts SET credit_cents = 5 WHERE email = $1', [user.email]);
     assert.equal((await chat(t, token)).status, 200, 'Pro au-delà de l’inclus : crédits');
-    assert.deepEqual((await events(t)).rows.slice(3).map((r) => [r.charged_to, r.charged_cents]), [['pro', 2], ['pro', 2], ['pro', 2], ['credits', 2]]);
-    assert.equal((await t.api('/v1/me', { token })).body.creditCents, 3, 'crédits débités');
+    assert.deepEqual((await events(t)).rows.slice(3).map((r) => [r.charged_to, r.charged_cents]), [['pro', 3], ['pro', 3], ['credits', 3]]);
+    assert.equal((await t.api('/v1/me', { token })).body.creditCents, 2, 'crédits débités');
   } finally {
     await t.close();
   }

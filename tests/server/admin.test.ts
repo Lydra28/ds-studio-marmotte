@@ -37,19 +37,19 @@ test('administration : keys sans base ; grant, cap, usage et credit sur un compt
 
     lines.length = 0;
     assert.equal(await runAdmin(t.db, ['usage', user.email], out, t.now()), 0);
-    assert.match(lines[0], /free \(offert\) ; aujourd’hui 0\.8 c, mois 0\.8 c, plafond 500 c, crédits -0,01 €, inclus restant 0,00 €/);
+    assert.match(lines[0], /free \(offert\) ; aujourd’hui 0\.8 c, mois 0\.8 c, plafond 500 c, crédits -0,02 €, inclus restant 0,00 €/);
     assert.equal(lines.length, 3, 'une ligne de résumé, deux appels');
     assert.match(lines[1], /2026-10-31 12:00 other deepseek\/deepseek-v4\.1-flash-1017 100\+50 jetons 0\.4 c → gift$/);
-    assert.match(lines[2], /0\.4 c → credits \(2 c€\)$/, 'bienvenue débitée de 2 centimes d’euro');
+    assert.match(lines[2], /0\.4 c → credits \(3 c€\)$/, 'bienvenue débitée de 3 centimes d’euro (0,4 × 5,5 = 2,2)');
 
     lines.length = 0;
     assert.equal(await runAdmin(t.db, ['credit', user.email, 'abc'], out, t.now()), 1);
     assert.equal(await runAdmin(t.db, ['credit', user.email, '0'], out, t.now()), 1);
     assert.equal(await runAdmin(t.db, ['credit', user.email, '500'], out, t.now()), 0);
-    assert.match(lines.at(-1)!, /\+500 c, crédits 4,99 €/);
-    assert.equal((await t.api('/v1/me', { token })).body.creditCents, 499);
+    assert.match(lines.at(-1)!, /\+500 c, crédits 4,98 €/);
+    assert.equal((await t.api('/v1/me', { token })).body.creditCents, 498);
     assert.equal(await runAdmin(t.db, ['credit', user.email, '-99'], out, t.now()), 0);
-    assert.match(lines.at(-1)!, /-99 c, crédits 4,00 €/);
+    assert.match(lines.at(-1)!, /-99 c, crédits 3,99 €/);
     const ledger = await t.db.query<{ reason: string; delta_cents: number }>('SELECT reason, delta_cents FROM credit_events ORDER BY id');
     assert.deepEqual(ledger.rows.map((r) => [r.reason, r.delta_cents]), [['welcome', 1], ['admin', 500], ['admin', -99]]);
   } finally {

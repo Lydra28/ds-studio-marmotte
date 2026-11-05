@@ -6,12 +6,13 @@ import { connect, lastToken, testApp } from './helpers.js';
 const user = { email: 'bienvenue@example.com', password: 'un-mot-de-passe-solide' };
 
 test('crédits : débit = ceil(coût × RATE), au moins 1 centime, 0 pour un coût nul', () => {
-  assert.equal(RATE, 3);
+  assert.equal(RATE, 5.5);
   assert.equal(chargedCents(0), 0, 'coût inconnu : rien');
   assert.equal(chargedCents(0.01), 1, 'plancher');
-  assert.equal(chargedCents(0.4), 2, '1,2 arrondi au-dessus');
-  assert.equal(chargedCents(1), 3);
-  assert.equal(chargedCents(1.01), 4);
+  assert.equal(chargedCents(0.4), 3, '2,2 arrondi au-dessus');
+  assert.equal(chargedCents(1), 6, '5,5 arrondi au-dessus');
+  assert.equal(chargedCents(2), 11, 'produit entier : pas de centime de plus');
+  assert.equal(chargedCents(0.6), 4, '3,3000000000000003 → 4');
 });
 
 test('crédits : bienvenue d’un centime à la confirmation du mail, une seule fois ; grand livre idempotent par référence', async () => {

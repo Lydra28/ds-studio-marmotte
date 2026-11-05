@@ -57,14 +57,14 @@ const me = (a: Fake) => ({
 const CATALOG = {
   currency: 'eur',
   mode: 'test',
-  pro: { amountCents: 999, interval: 'month', includedCents: 300 },
+  pro: { amountCents: 999, interval: 'month', includedCents: 1100 },
   packs: [
     { pack: '5', amountCents: 500 },
     { pack: '10', amountCents: 1000 },
     { pack: '20', amountCents: 2000 },
   ],
   welcomeCents: 1,
-  generationCents: { wall: 2, assistant: 1 },
+  generationCents: { wall: 4, assistant: 1 },
 };
 const readJson = (req: http.IncomingMessage) =>
   new Promise<Record<string, unknown>>((resolve) => {

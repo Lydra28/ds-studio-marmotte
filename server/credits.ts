@@ -1,20 +1,26 @@
 // Crédits et prix de vente (lot 4, cadrage O4). Unité des soldes : centimes
 // d'euro de valeur vendue. Le coût LLM (centimes de dollar, usage_events)
 // est débité multiplié par RATE, arrondi au centime supérieur : change,
-// variation des prix OpenRouter et marge, repère de references/server.md
-// (6 appels = 0,02 $). Montants de test, provisoires (revoir quand les dix
-// générations du lot 7 sont mesurées).
+// frais OpenRouter, Stripe, URSSAF et marge. Décision de Romain du
+// 2026-11-05 sur coûts mesurés (EGX references/2026-11-05-tarifs.md) :
+// RATE 5,5 pour tous, Pro inclut 11 € d'usage (≈ 10 % de plus que 10 € de
+// crédits), soit 1,80 € de coût IA au pire par abonné (revoir si le modèle
+// ou ses prix changent).
 import type { Db } from './db.js';
 
 /** Centimes d'euro débités par centime de dollar de coût LLM. */
-export const RATE = 3;
+export const RATE = 5.5;
 /** Crédit de bienvenue : 1 centime = exactement une génération, le serveur laissant le dernier appel passer sous zéro. */
 export const WELCOME_CENTS = 1;
-/** Crédits inclus chaque mois dans Pro, centimes d'euro (prix de test). */
-export const PRO_INCLUDED_CENTS = 300;
+/** Crédits inclus chaque mois dans Pro, centimes d'euro. */
+export const PRO_INCLUDED_CENTS = 1100;
 
-/** Débit d'un appel : au moins 1 centime dès que le coût est connu et positif. */
-export const chargedCents = (costCents: number) => (costCents <= 0 ? 0 : Math.max(1, Math.ceil(costCents * RATE)));
+/**
+ * Débit d'un appel : au moins 1 centime dès que le coût est connu et positif.
+ * RATE n'est pas entier : la marge de 1e-9 évite qu'un produit flottant
+ * (2,0000000001) passe au centime suivant.
+ */
+export const chargedCents = (costCents: number) => (costCents <= 0 ? 0 : Math.max(1, Math.ceil(costCents * RATE - 1e-9)));
 
 export type CreditReason = 'welcome' | 'topup' | 'admin';
 

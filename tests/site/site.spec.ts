@@ -30,7 +30,7 @@ const ME = {
   catalog: {
     currency: 'eur',
     mode: 'test',
-    pro: { amountCents: 999, interval: 'month', includedCents: 300 },
+    pro: { amountCents: 999, interval: 'month', includedCents: 1100 },
     packs: [
       { pack: '5', amountCents: 500 },
       { pack: '10', amountCents: 1000 },
@@ -92,8 +92,8 @@ test('prix et téléchargements : montants du catalogue, fichiers à nom fixe', 
   await page.goto('/prix/');
   const pro = page.locator('.card', { has: page.getByRole('heading', { name: 'Pro' }) });
   await expect(pro).toContainText('9,99 € / mois');
-  await expect(pro).toContainText('3 € d’usage');
-  await expect(pro).toContainText('≈ 150 générations du Mur');
+  await expect(pro).toContainText('11 € d’usage');
+  await expect(pro).toContainText('≈ 275 générations du Mur');
   await expect(page.locator('.card', { has: page.getByRole('heading', { name: 'Crédits' }) })).toContainText('5 €, 10 €, 20 €');
 
   await page.goto('/telecharger/');
