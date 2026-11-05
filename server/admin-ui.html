@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DS-Studio · Administration</title>
+<style>
+  :root {
+    --bg: #0f1012; --panel: #17181b; --raised: #202226; --line: #2c2f35;
+    --text: #e8e8ea; --muted: #9a9ca3; --accent: #c9d94a; --warn: #f0a640; --bad: #ef6461; --ok: #6fcf97;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 16px; align-items: baseline; padding: 18px 24px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 18px; margin: 0; }
+  .base { color: var(--muted); }
+  .base strong { color: var(--warn); font-weight: 600; }
+  .totals { margin-left: auto; display: flex; gap: 20px; color: var(--muted); }
+  .totals b { color: var(--text); font-variant-numeric: tabular-nums; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr); padding: 16px 24px 40px; gap: 16px; }
+  main.with-detail { grid-template-columns: minmax(0, 1fr) 380px; }
+  .tools { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+  input, button { font: inherit; color: inherit; }
+  input { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; }
+  input:focus-visible, button:focus-visible, tr:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  #search { width: min(320px, 100%); }
+  button { background: var(--raised); border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); color: #111; border-color: var(--accent); font-weight: 600; }
+  button.danger { border-color: var(--bad); color: var(--bad); }
+  button:disabled { opacity: .5; cursor: default; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; position: sticky; top: 0; background: var(--panel); }
+  td.num, th.num { text-align: right; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: var(--raised); }
+  tbody tr[aria-selected="true"] { background: #262a1a; }
+  .tag { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 12px; background: var(--raised); border: 1px solid var(--line); }
+  .tag.pro { color: var(--accent); border-color: var(--accent); }
+  .tag.gift { color: var(--ok); border-color: var(--ok); }
+  .tag.warn { color: var(--warn); border-color: var(--warn); }
+  .muted { color: var(--muted); }
+  .hot { color: var(--warn); }
+  .over { color: var(--bad); font-weight: 600; }
+  aside { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; align-self: start; position: sticky; top: 16px; }
+  aside h2 { font-size: 15px; margin: 0 0 4px; word-break: break-all; }
+  aside section { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; display: grid; gap: 8px; }
+  aside h3 { font-size: 13px; margin: 0; color: var(--muted); font-weight: 500; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .row input { width: 110px; }
+  .row input.wide { flex: 1; min-width: 140px; }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; }
+  ul.log { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; font-size: 12px; }
+  ul.log li { padding: 3px 0; border-bottom: 1px dashed var(--line); display: flex; gap: 8px; justify-content: space-between; }
+  #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--raised); border: 1px solid var(--line); padding: 9px 14px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  #toast.error { border-color: var(--bad); color: var(--bad); }
+  .empty { padding: 30px; text-align: center; color: var(--muted); }
+  @media (max-width: 1000px) { main.with-detail { grid-template-columns: minmax(0, 1fr); } aside { position: static; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>DS-Studio · Administration</h1>
+  <span class="base">Base : <strong id="base">…</strong></span>
+  <div class="totals" aria-live="polite">
+    <span>Comptes <b id="t-count">–</b></span>
+    <span>Pro <b id="t-pro">–</b></span>
+    <span>Offerts <b id="t-gift">–</b></span>
+    <span>Coût réel aujourd’hui <b id="t-today">–</b></span>
+    <span>ce mois <b id="t-month">–</b></span>
+  </div>
+</header>
+<main id="main">
+  <div>
+    <div class="tools">
+      <input id="search" type="search" placeholder="Rechercher un mail…" aria-label="Rechercher un mail">
+      <button id="refresh" type="button">Actualiser</button>
+      <span class="muted" id="stamp"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Mail</th><th>Formule</th><th class="num">Crédits</th><th class="num">Inclus restant</th>
+            <th class="num">Aujourd’hui / plafond</th><th class="num">Coût du mois</th><th>Dernière activité</th><th>Inscription</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <p class="empty" id="empty" hidden>Aucun compte.</p>
+    </div>
+    <p class="muted">Coûts réels OpenRouter en centimes de dollar (c$), soldes en euros. Jour et mois en UTC, comme le serveur.</p>
+  </div>
+  <aside id="detail" hidden aria-label="Détail du compte">
+    <div class="row" style="justify-content: space-between">
+      <h2 id="d-email"></h2>
+      <button type="button" id="d-close" aria-label="Fermer le détail">×</button>
+    </div>
+    <dl id="d-facts"></dl>
+
+    <section>
+      <h3>Accès gratuit (compte offert)</h3>
+      <p class="muted" id="d-gift-text"></p>
+      <div class="row"><button type="button" id="d-gift"></button></div>
+    </section>
+
+    <section>
+      <h3>Plafond journalier (c$ de coût réel)</h3>
+      <form class="row" id="f-cap">
+        <input id="cap" type="number" min="0" step="1" required aria-label="Plafond en centimes de dollar">
+        <button type="submit">Enregistrer</button>
+      </form>
+    </section>
+
+    <section>
+      <h3>Crédits (euros, négatif pour retirer)</h3>
+      <form class="row" id="f-credit">
+        <input id="credit" type="text" inputmode="decimal" placeholder="2,50" required aria-label="Montant en euros">
+        <input id="note" class="wide" type="text" maxlength="200" placeholder="Motif (obligatoire)" required aria-label="Motif">
+        <button type="submit" class="primary">Appliquer</button>
+      </form>
+    </section>
+
+    <section>
+      <h3>Mouvements de crédits</h3>
+      <ul class="log" id="d-credits"></ul>
+    </section>
+    <section>
+      <h3>Derniers appels IA</h3>
+      <ul class="log" id="d-usage"></ul>
+    </section>
+  </aside>
+</main>
+<div id="toast" role="status"></div>
+<script>
+'use strict';
+// Jeton du lancement : fragment de l'URL, retiré de la barre d'adresse.
+const token = location.hash.slice(1);
+history.replaceState(null, '', location.pathname);
+const $ = (id) => document.getElementById(id);
+const eur = (c) => (c / 100).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+const usd = (c) => c.toLocaleString('fr-FR', { maximumFractionDigits: 2, minimumFractionDigits: 2 }) + ' c$';
+const date = (iso) => (iso ? new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—');
+const day = (iso) => new Date(iso).toLocaleDateString('fr-FR');
+let accounts = [];
+let selected = null;
+
+async function api(path, body) {
+  const res = await fetch(path, {
+    method: body ? 'POST' : 'GET',
+    headers: { 'x-admin-token': token, ...(body ? { 'content-type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
+  return data;
+}
+function toast(text, error) {
+  const t = $('toast');
+  t.textContent = text;
+  t.className = 'show' + (error ? ' error' : '');
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => (t.className = ''), 3500);
+}
+function el(tag, text, cls) {
+  const e = document.createElement(tag);
+  if (text != null) e.textContent = text;
+  if (cls) e.className = cls;
+  return e;
+}
+function plan(a) {
+  const span = el('span');
+  if (a.gifted) span.append(el('span', 'Offert', 'tag gift'));
+  else if (a.plan === 'pro') span.append(el('span', 'Pro', 'tag pro'));
+  else span.append(el('span', 'Gratuit', 'tag'));
+  if (a.plan === 'pro' && a.subscriptionStatus && a.subscriptionStatus !== 'active') span.append(' ', el('span', a.subscriptionStatus, 'tag warn'));
+  if (a.cancelAtPeriodEnd) span.append(' ', el('span', 'résilié en fin de période', 'tag warn'));
+  if (!a.verified) span.append(' ', el('span', 'mail non confirmé', 'tag warn'));
+  return span;
+}
+function render() {
+  const q = $('search').value.trim().toLowerCase();
+  const shown = accounts.filter((a) => a.email.includes(q));
+  const body = $('rows');
+  body.replaceChildren();
+  for (const a of shown) {
+    const tr = el('tr');
+    tr.tabIndex = 0;
+    tr.setAttribute('aria-selected', String(a.id === selected));
+    const ratio = a.dailyCapCents > 0 ? a.todayCents / a.dailyCapCents : 1;
+    const cells = [
+      el('td', a.email),
+      el('td'),
+      el('td', eur(a.creditCents), 'num'),
+      el('td', a.plan === 'pro' && !a.gifted ? eur(a.includedLeftCents) : '—', 'num'),
+      el('td', `${usd(a.todayCents)} / ${a.dailyCapCents} c$`, 'num ' + (ratio >= 1 ? 'over' : ratio >= 0.8 ? 'hot' : '')),
+      el('td', usd(a.monthCents), 'num'),
+      el('td', date(a.lastUseAt)),
+      el('td', day(a.createdAt)),
+    ];
+    cells[1].append(plan(a));
+    tr.append(...cells);
+    tr.addEventListener('click', () => select(a.id));
+    tr.addEventListener('keydown', (e) => e.key === 'Enter' && select(a.id));
+    body.append(tr);
+  }
+  $('empty').hidden = shown.length > 0;
+}
+async function load() {
+  try {
+    const data = await api('/api/accounts');
+    accounts = data.accounts;
+    $('base').textContent = data.label;
+    $('t-count').textContent = accounts.length;
+    $('t-pro').textContent = accounts.filter((a) => a.plan === 'pro' && !a.gifted).length;
+    $('t-gift').textContent = accounts.filter((a) => a.gifted).length;
+    $('t-today').textContent = usd(accounts.reduce((s, a) => s + a.todayCents, 0));
+    $('t-month').textContent = usd(accounts.reduce((s, a) => s + a.monthCents, 0));
+    $('stamp').textContent = 'à ' + new Date(data.now).toLocaleTimeString('fr-FR');
+    render();
+    if (selected) await showDetail();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+async function select(id) {
+  selected = id;
+  render();
+  await showDetail();
+}
+async function showDetail() {
+  const a = accounts.find((x) => x.id === selected);
+  if (!a) return closeDetail();
+  $('main').classList.add('with-detail');
+  $('detail').hidden = false;
+  $('d-email').textContent = a.email;
+  const facts = $('d-facts');
+  facts.replaceChildren();
+  const fact = (k, v) => facts.append(el('dt', k), el('dd', v));
+  fact('Formule', a.gifted ? 'offert (jamais débité)' : a.plan === 'pro' ? 'Pro' : 'gratuit');
+  if (a.plan === 'pro') fact('Abonnement', `${a.subscriptionStatus ?? '—'}${a.periodEnd ? ', jusqu’au ' + day(a.periodEnd) : ''}`);
+  fact('Mail confirmé', a.verified ? 'oui' : 'non');
+  fact('Crédits', eur(a.creditCents));
+  fact('Coût aujourd’hui', `${usd(a.todayCents)} sur ${a.dailyCapCents} c$`);
+  fact('Coût du mois', usd(a.monthCents));
+  fact('Inscription', date(a.createdAt));
+  $('d-gift-text').textContent = a.gifted
+    ? 'Ce compte n’est jamais débité : tout son usage est un coût pour toi. Retirer l’accès gratuit le rend classique (plafond 200 c$).'
+    : 'Passer en offert : palier Pro, jamais débité, plafond ramené à 10 c$ par jour.';
+  const gift = $('d-gift');
+  gift.textContent = a.gifted ? 'Retirer l’accès gratuit' : 'Passer en compte offert';
+  gift.className = a.gifted ? 'danger' : 'primary';
+  $('cap').value = a.dailyCapCents;
+  try {
+    const h = await api(`/api/accounts/${a.id}/history`);
+    const credits = $('d-credits');
+    credits.replaceChildren();
+    for (const c of h.credits) {
+      const li = el('li');
+      li.append(el('span', `${date(c.at)} · ${c.note ?? c.reason}`), el('span', (c.deltaCents > 0 ? '+' : '') + eur(c.deltaCents)));
+      credits.append(li);
+    }
+    if (!h.credits.length) credits.append(el('li', 'Aucun mouvement.', 'muted'));
+    const usage = $('d-usage');
+    usage.replaceChildren();
+    for (const u of h.usage) {
+      const li = el('li');
+      li.append(el('span', `${date(u.at)} · ${u.origin === 'wall' ? 'Mur' : u.origin === 'assistant' ? 'assistant' : u.origin}`), el('span', `${usd(u.costCents)} → ${u.chargedTo}${u.chargedCents ? ' (' + u.chargedCents + ' c€)' : ''}`));
+      usage.append(li);
+    }
+    if (!h.usage.length) usage.append(el('li', 'Aucun appel.', 'muted'));
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+function closeDetail() {
+  selected = null;
+  $('detail').hidden = true;
+  $('main').classList.remove('with-detail');
+  render();
+}
+$('d-close').addEventListener('click', closeDetail);
+$('search').addEventListener('input', render);
+$('refresh').addEventListener('click', load);
+$('d-gift').addEventListener('click', async () => {
+  const a = accounts.find((x) => x.id === selected);
+  if (!a) return;
+  const on = !a.gifted;
+  if (!confirm(on ? `Offrir l’accès à ${a.email} ? Son usage sera à ta charge (10 c$ par jour au plus).` : `Retirer l’accès gratuit de ${a.email} ?`)) return;
+  try {
+    const r = await api(`/api/accounts/${a.id}/gift`, { gifted: on });
+    toast(on ? `${a.email} : compte offert, plafond ${r.dailyCapCents} c$.` : `${a.email} : accès gratuit retiré.`);
+    await load();
+  } catch (e) {
+    toast(e.message, true);
+  }
+});
+$('f-cap').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const a = accounts.find((x) => x.id === selected);
+  const cents = Number($('cap').value);
+  try {
+    await api(`/api/accounts/${a.id}/cap`, { cents });
+    toast(`${a.email} : plafond ${cents} c$ par jour.`);
+    await load();
+  } catch (err) {
+    toast(err.message, true);
+  }
+});
+$('f-credit').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const a = accounts.find((x) => x.id === selected);
+  const raw = $('credit').value.trim().replace(/\s/g, '').replace(',', '.');
+  if (!/^-?\d+(\.\d{1,2})?$/.test(raw)) return toast('Montant : un nombre d’euros, deux décimales au plus (ex. 2,50 ou -1).', true);
+  const cents = Math.round(Number(raw) * 100);
+  if (!cents) return toast('Montant non nul attendu.', true);
+  const note = $('note').value.trim();
+  if (!confirm(`${cents > 0 ? 'Ajouter' : 'Retirer'} ${eur(Math.abs(cents))} ${cents > 0 ? 'à' : 'de'} ${a.email} ?\nMotif : ${note}`)) return;
+  try {
+    const r = await api(`/api/accounts/${a.id}/credit`, { cents, note });
+    toast(`${a.email} : crédits ${eur(r.creditCents)}.`);
+    $('credit').value = '';
+    $('note').value = '';
+    await load();
+  } catch (err) {
+    toast(err.message, true);
+  }
+});
+if (!token) toast('Lien sans jeton : relance npm run admin:ui et utilise le lien affiché.', true);
+else load();
+</script>
+</body>
+</html>
