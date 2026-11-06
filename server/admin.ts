@@ -5,6 +5,7 @@
 //   npm run admin -- usage <mail>            usage du jour, du mois, crédits, derniers appels
 //   npm run admin -- credit <mail> <centimes> ajoute (négatif : retire) des crédits, centimes d'euro (lot 4)
 //   npm run admin -- stripe-setup            produits et prix Stripe par lookup_key (STRIPE_SECRET_KEY : test ou live)
+//   npm run admin -- delete-account <mail> [confirmer]  suppression sur demande (RGPD) ; sans « confirmer », dit ce qui partirait
 // Base : `DATABASE_URL` (server/.env en local ; depuis le poste, l'URL
 // externe de la base Render). `keys` n'a pas besoin de base.
 import { randomUUID } from 'node:crypto';
@@ -14,10 +15,11 @@ import { pgDb, type Db } from './db.js';
 import { addCredits } from './credits.js';
 import { generateKeys } from './license.js';
 import { usageSummary } from './relay.js';
+import { deleteAccount, deletionPreview } from './retention.js';
 
 /** Plafond journalier d'un compte offert, centimes de dollar de coût réel (3,17 € par mois au pire). */
 export const GIFT_DAILY_CAP_CENTS = 10;
-const USAGE = 'Usage : npm run admin -- keys | grant <mail> | cap <mail> <centimes> | usage <mail> | credit <mail> <centimes> | stripe-setup';
+const USAGE = 'Usage : npm run admin -- keys | grant <mail> | cap <mail> <centimes> | usage <mail> | credit <mail> <centimes> | stripe-setup | delete-account <mail> [confirmer]';
 
 interface Row {
   id: string;
@@ -86,6 +88,7 @@ export async function listAccounts(db: Pick<Db, 'query'>, now: Date): Promise<Ac
             COALESCE(SUM(u.charged_cents) FILTER (WHERE u.charged_to = 'pro' AND u.created_at >= COALESCE(a.included_since, $2)), 0)::int AS included_used,
             MAX(u.created_at) AS last_use
        FROM accounts a LEFT JOIN usage_events u ON u.account_id = a.id
+      WHERE a.deleted_at IS NULL
       GROUP BY a.id
       ORDER BY month DESC, a.created_at DESC`,
     [day, month],
@@ -176,7 +179,7 @@ export async function runAdmin(db: Db | null, argv: string[], out: (line: string
     out(keys.publicKeyPem.trimEnd());
     return 0;
   }
-  if (!command || !['grant', 'cap', 'usage', 'credit'].includes(command) || !email) {
+  if (!command || !['grant', 'cap', 'usage', 'credit', 'delete-account'].includes(command) || !email) {
     out(USAGE);
     return 1;
   }
@@ -192,6 +195,27 @@ export async function runAdmin(db: Db | null, argv: string[], out: (line: string
   if (!account) {
     out(`Aucun compte ${email}.`);
     return 1;
+  }
+  if (command === 'delete-account') {
+    const p = await deletionPreview(db, account.id);
+    if (!p) return 1;
+    if (p.activeSubscription) {
+      out(`${account.email} : abonnement Stripe en cours, à résilier d’abord (tableau de bord Stripe, résiliation immédiate).`);
+      return 1;
+    }
+    const what = p.mode === 'erased' ? 'tout sera effacé' : 'compte anonymisé, grand livre et identifiants Stripe gardés 10 ans';
+    const lost = p.creditCents > 0 ? `, solde perdu ${euros(p.creditCents)}` : '';
+    if (value !== 'confirmer') {
+      out(`${account.email} : ${what}${lost}. Pour supprimer : npm run admin -- delete-account ${account.email} confirmer`);
+      return 1;
+    }
+    const r = await deleteAccount(db, account.id, now);
+    if (!r.ok) {
+      out(`${account.email} : ${r.error}`);
+      return 1;
+    }
+    out(`${account.email} : ${r.mode === 'erased' ? 'compte effacé' : 'compte anonymisé'}${lost}.`);
+    return 0;
   }
   if (command === 'grant') {
     // Un compte offert n'est jamais débité : tout son usage est un coût,

@@ -17,7 +17,7 @@ import Draft from '../components/Draft.astro';
       <li>Ton adresse mail et une empreinte de ton mot de passe (jamais le mot de passe lui-même)</li>
       <li>Ton palier, ton solde de crédits, ton abonnement et l’identifiant client Stripe</li>
       <li>Le coût et la date de chaque appel au modèle, sans son contenu</li>
-      <li>Tes sessions de connexion</li>
+      <li>Tes sessions de connexion et la date de ta dernière activité</li>
     </ul>
     <h2>Ce qui passe sans être gardé</h2>
     <p>
@@ -38,10 +38,27 @@ import Draft from '../components/Draft.astro';
       Un seul cookie, nécessaire à la connexion sur ce site (<code>ds_session</code>). Aucun cookie de mesure d’audience ni de
       publicité.
     </p>
-    <h2>Durée et droits</h2>
+    <h2>Durées de conservation</h2>
+    <ul>
+      <li>Compte jamais confirmé : supprimé 30 jours après sa création.</li>
+      <li>
+        Compte inactif (aucune connexion) pendant 3 ans : supprimé, après un mail d’avertissement 30 jours avant. Un compte
+        avec un solde acheté ou un abonnement en cours n’est jamais supprimé d’office.
+      </li>
+      <li>Sessions de connexion : supprimées à leur expiration (30 jours sans utilisation).</li>
+      <li>Liens et codes envoyés par mail : supprimés 30 jours après leur expiration.</li>
+      <li>Détail de chaque appel au modèle : 12 mois, puis seulement un total par mois.</li>
+      <li>
+        Après la suppression d’un compte qui a payé : l’adresse, le mot de passe, les sessions et l’usage sont effacés ;
+        l’historique des paiements et des crédits et l’identifiant client Stripe sont gardés 10 ans (obligation comptable),
+        sans adresse mail, puis effacés.
+      </li>
+    </ul>
+    <h2>Tes droits</h2>
     <p>
-      [Durées de conservation à préciser.] Tu peux demander l’accès, la rectification ou la suppression de ton compte à
-      <a href="mailto:aubertromain85@gmail.com">aubertromain85@gmail.com</a>. Réclamation possible auprès de la CNIL.
+      Tu peux demander l’accès, la rectification ou la suppression de ton compte à
+      <a href="mailto:aubertromain85@gmail.com">aubertromain85@gmail.com</a> : réponse sous un mois. Un abonnement en cours
+      est d’abord résilié ; le solde de crédits restant est perdu à la suppression. Réclamation possible auprès de la CNIL.
     </p>
   </div>
 </Base>

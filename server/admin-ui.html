@@ -135,6 +135,15 @@
       <h3>Derniers appels IA</h3>
       <ul class="log" id="d-usage"></ul>
     </section>
+
+    <section>
+      <h3>Supprimer le compte (demande de la personne)</h3>
+      <p class="muted">Irréversible. Sans achat, tout est effacé ; après un achat, le compte est anonymisé et le grand livre gardé 10 ans. Refusé tant qu’un abonnement est en cours.</p>
+      <form class="row" id="f-delete">
+        <input id="delete-email" class="wide" type="email" required autocomplete="off" placeholder="Retape l’adresse du compte" aria-label="Adresse du compte, en confirmation">
+        <button type="submit" class="danger">Supprimer</button>
+      </form>
+    </section>
   </aside>
 </main>
 <div id="toast" role="status"></div>
@@ -327,6 +336,28 @@ $('f-credit').addEventListener('submit', async (e) => {
     toast(`${a.email} : crédits ${eur(r.creditCents)}.`);
     $('credit').value = '';
     $('note').value = '';
+    await load();
+  } catch (err) {
+    toast(err.message, true);
+  }
+});
+$('f-delete').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const a = accounts.find((x) => x.id === selected);
+  const email = $('delete-email').value.trim().toLowerCase();
+  if (email !== a.email) return toast('L’adresse retapée ne correspond pas au compte.', true);
+  try {
+    const p = await api(`/api/accounts/${a.id}/deletion`);
+    if (p.activeSubscription) return toast('Abonnement en cours : le résilier d’abord dans Stripe.', true);
+    const what = p.mode === 'erased' ? 'Tout sera effacé.' : 'Compte anonymisé, grand livre gardé 10 ans.';
+    const lost = p.creditCents > 0 ? `
+Solde perdu : ${eur(p.creditCents)}.` : '';
+    if (!confirm(`Supprimer définitivement ${a.email} ?
+${what}${lost}`)) return;
+    const r = await api(`/api/accounts/${a.id}/delete`, { email });
+    toast(r.mode === 'erased' ? `${a.email} : compte effacé.` : `${a.email} : compte anonymisé.`);
+    $('delete-email').value = '';
+    closeDetail();
     await load();
   } catch (err) {
     toast(err.message, true);

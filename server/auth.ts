@@ -167,6 +167,7 @@ export function authRoutes(deps: Deps) {
       'INSERT INTO sessions (token_hash, account_id, client, created_at, last_seen_at, expires_at) VALUES ($1, $2, $3, $4, $4, $5)',
       [sha256(token), accountId, client, now(), expiresAt],
     );
+    await markActive(db, accountId, now());
     return { token, expiresAt };
   }
 
@@ -176,7 +177,7 @@ export function authRoutes(deps: Deps) {
     const data = await body(c, z.object({ email: emailSchema, password: passwordSchema }));
     if (await accountByEmail(data.email)) throw new ApiError('Un compte existe déjà avec cette adresse. Connecte-toi ou utilise « mot de passe oublié ».', 409);
     const { rows } = await db.query<{ id: string }>(
-      'INSERT INTO accounts (email, password_hash, created_at) VALUES ($1, $2, $3) RETURNING id',
+      'INSERT INTO accounts (email, password_hash, created_at, last_active_at) VALUES ($1, $2, $3, $3) RETURNING id',
       [data.email, await hashPassword(data.password), now()],
     );
     await sendVerification({ id: rows[0].id, email: data.email });
@@ -272,6 +273,13 @@ export function authRoutes(deps: Deps) {
   return auth;
 }
 
+// Activité du compte (durées de conservation, server/retention.ts) : une
+// connexion ou une requête authentifiée repousse la suppression pour
+// inactivité et annule l'avertissement déjà parti.
+async function markActive(db: Pick<Deps['db'], 'query'>, accountId: string, at: Date) {
+  await db.query('UPDATE accounts SET last_active_at = $2, inactivity_warned_at = NULL WHERE id = $1', [accountId, at]);
+}
+
 const bearer = (c: Context) => {
   const header = c.req.header('authorization');
   if (header?.toLowerCase().startsWith('bearer ')) return header.slice(7).trim();
@@ -298,6 +306,7 @@ export function requireAccount(deps: Deps) {
         now(),
         new Date(now().getTime() + days(SESSION_DAYS)),
       ]);
+      await markActive(deps.db, row.id as string, now());
     }
     return toAccount(row);
   };

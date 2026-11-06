@@ -10,6 +10,7 @@ import { stripeClient } from './billing.js';
 import { memoryDb, migrate, pgDb, waitForDb } from './db.js';
 import { generateKeys, loadKeys, type LicenseKeys } from './license.js';
 import { consoleMailer, resendMailer } from './mail.js';
+import { formatPurge, purge } from './retention.js';
 
 const env = process.env;
 
@@ -108,6 +109,7 @@ const stripeKey = env.STRIPE_SECRET_KEY ?? '';
 const stripeWebhookSecret = env.STRIPE_WEBHOOK_SECRET ?? '';
 if (!stripeKey || !stripeWebhookSecret) console.warn('STRIPE_SECRET_KEY ou STRIPE_WEBHOOK_SECRET absente : paiement désactivé (503).');
 else console.log(`Stripe en mode ${stripeKey.startsWith('sk_live_') ? 'LIVE' : 'test'}.`);
+const siteUrl = env.SITE_URL ? env.SITE_URL.replace(/\/+$/, '') : undefined;
 const app = createApp({
   db,
   mailer,
@@ -124,13 +126,29 @@ const app = createApp({
       : undefined,
   publicUrl: (env.API_PUBLIC_URL ?? `http://127.0.0.1:${port}`).replace(/\/+$/, ''),
   cookieDomain: env.COOKIE_DOMAIN || undefined,
-  siteUrl: env.SITE_URL ? env.SITE_URL.replace(/\/+$/, '') : undefined,
+  siteUrl,
   version,
   report: sentryDsn ? (err) => Sentry.captureException(err) : undefined,
 });
 const server = serve({ fetch: app.fetch, port, hostname: '0.0.0.0' }, () => {
   console.log(`Serveur DS-Studio ${version} sur le port ${port}`);
 });
+
+// Durées de conservation (server/retention.ts) : une minute après le
+// démarrage puis chaque jour ; chaque redéploiement relance un passage.
+const runPurge = () =>
+  purge(db, mailer, new Date(), siteUrl).then(
+    (r) => {
+      console.log(`Conservation : ${formatPurge(r)}`);
+      if (r.errors.length && sentryDsn) Sentry.captureMessage(`Conservation : ${r.errors.length} erreur(s)`);
+    },
+    (err) => {
+      console.error('Conservation en échec :', err);
+      if (sentryDsn) Sentry.captureException(err);
+    },
+  );
+setTimeout(runPurge, 60_000).unref();
+setInterval(runPurge, 24 * 3600_000).unref();
 
 // Arrêt propre (Render envoie SIGTERM au redéploiement).
 const stop = () => {

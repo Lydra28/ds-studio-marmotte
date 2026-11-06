@@ -15,6 +15,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { accountHistory, adjustCredits, listAccounts, setCap, setGift } from './admin.js';
 import { memoryDb, migrate, pgDb, type Db } from './db.js';
+import { deleteAccount, deletionPreview } from './retention.js';
 
 const PAGE = new URL('./admin-ui.html', import.meta.url);
 
@@ -28,6 +29,7 @@ const creditBody = z.object({
     .refine((n) => Math.abs(n) <= 100_000, '1 000 € au plus'),
   note: z.string().trim().min(1, 'motif obligatoire').max(200),
 });
+const deleteBody = z.object({ email: z.string().trim().toLowerCase() });
 
 const same = (a: string, b: string) => {
   const x = Buffer.from(a);
@@ -90,6 +92,22 @@ export function createAdminApp(opts: { db: Db; token: string; origin: string; la
     if (!b.ok) return c.json({ error: b.error }, 400);
     return c.json({ creditCents: await adjustCredits(opts.db, id, b.data.cents, b.data.note, now()) });
   });
+  // Suppression sur demande (RGPD) : l'adresse du compte retapée en confirmation.
+  app.get('/api/accounts/:id/deletion', async (c) => {
+    const id = c.req.param('id');
+    if (!(await known(id))) return c.json({ error: 'Compte inconnu.' }, 404);
+    return c.json(await deletionPreview(opts.db, id));
+  });
+  app.post('/api/accounts/:id/delete', async (c) => {
+    const id = c.req.param('id');
+    if (!(await known(id))) return c.json({ error: 'Compte inconnu.' }, 404);
+    const b = await body(c, deleteBody);
+    if (!b.ok) return c.json({ error: b.error }, 400);
+    const { rows } = await opts.db.query<{ email: string }>('SELECT email FROM accounts WHERE id = $1', [id]);
+    if (rows[0]?.email !== b.data.email) return c.json({ error: 'Adresse de confirmation différente de celle du compte.' }, 400);
+    const r = await deleteAccount(opts.db, id, now());
+    return r.ok ? c.json(r) : c.json({ error: r.error }, 409);
+  });
   return app;
 }
 
@@ -99,8 +117,8 @@ async function seedDemo(db: Db) {
   const t = Date.now();
   const add = async (email: string, plan: 'free' | 'pro', gifted: boolean, credit: number, cap: number, calls: [string, number][]) => {
     const { rows } = await db.query<{ id: string }>(
-      `INSERT INTO accounts (email, password_hash, email_verified_at, plan, gifted, daily_cap_cents, credit_cents, monthly_included_cents, created_at)
-       VALUES ($1, 'demo', now(), $2, $3, $4, $5, $6, $7) RETURNING id`,
+      `INSERT INTO accounts (email, password_hash, email_verified_at, plan, gifted, daily_cap_cents, credit_cents, monthly_included_cents, created_at, last_active_at)
+       VALUES ($1, 'demo', now(), $2, $3, $4, $5, $6, $7, $7) RETURNING id`,
       [email, plan, gifted, cap, credit, plan === 'pro' ? 300 : 0, new Date(t - 20 * 864e5)],
     );
     for (const [origin, cost] of calls)
