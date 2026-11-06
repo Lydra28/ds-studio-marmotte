@@ -11,6 +11,7 @@ import { body, htmlPage, requireAccount, type Account } from './auth.js';
 import { ApiError, clock, type Deps } from './core.js';
 import { addCredits, PRO_INCLUDED_CENTS, WELCOME_CENTS } from './credits.js';
 import type { Db, Tx } from './db.js';
+import { recordPurchase } from './withdrawal.js';
 
 export type Pack = '5' | '10' | '20';
 /** Catalogue : un produit et un prix par clé, retrouvés par `lookup_key` (jamais d'identifiant de prix en configuration). */
@@ -190,12 +191,15 @@ export async function handleEvent(db: Db, event: WebhookEvent, now: Date): Promi
       if (!accountId) return ignore('compte introuvable');
       if (s.mode === 'subscription') {
         await startPro(tx, accountId, s.customer, s.subscription, now);
+        if (s.payment_status === 'paid' && s.currency === 'eur' && s.amount_total && s.amount_total > 0)
+          await recordPurchase(tx, { accountId, kind: 'pro', ref: `checkout:${s.id}`, amountCents: s.amount_total, now });
         return 'new';
       }
       if (s.mode !== 'payment') return ignore(`mode ${s.mode}`);
       if (s.payment_status !== 'paid') return ignore(`paiement ${s.payment_status}`);
       if (s.currency !== 'eur' || !s.amount_total || s.amount_total <= 0) return ignore(`montant ${s.amount_total} ${s.currency}`);
       await addCredits(tx, { accountId, deltaCents: s.amount_total, reason: 'topup', ref: `checkout:${s.id}`, now });
+      await recordPurchase(tx, { accountId, kind: 'credits', ref: `checkout:${s.id}`, amountCents: s.amount_total, now });
       await tx.query('UPDATE accounts SET stripe_customer_id = COALESCE(stripe_customer_id, $2) WHERE id = $1', [accountId, idOf(s.customer)]);
       return 'new';
     }
@@ -311,14 +315,15 @@ export function billingRoutes(deps: Deps) {
       success_url: back.ok,
       cancel_url: back.cancel,
       locale: 'fr',
-      // Contenu numérique fourni tout de suite : accord exprès et renonciation
-      // au droit de rétractation (art. L221-28 13° du Code de la consommation).
+      // Service fourni tout de suite à la demande exprès du client, qui garde
+      // 14 jours pour se rétracter (CGV section 4, server/withdrawal.ts) : ce
+      // qui a servi n'est pas remboursé (art. L221-25 du Code de la consommation).
       ...(termsConsent && site
         ? {
             consent_collection: { terms_of_service: 'required' as const },
             custom_text: {
               terms_of_service_acceptance: {
-                message: `J’accepte les [conditions de vente](${site}/cgv/) et demande l’accès immédiat à mon achat : je renonce à mon droit de rétractation pour ce contenu numérique.`,
+                message: `J’accepte les [conditions de vente](${site}/cgv/) et demande que le service commence tout de suite. Je garde 14 jours pour me rétracter depuis mon compte ; ce que j’aurai déjà utilisé ne sera pas remboursé.`,
               },
             },
           }

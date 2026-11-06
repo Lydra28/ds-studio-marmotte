@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { accountHistory, adjustCredits, listAccounts, setCap, setGift } from './admin.js';
 import { memoryDb, migrate, pgDb, type Db } from './db.js';
 import { deleteAccount, deletionPreview } from './retention.js';
+import { listWithdrawals, markRefunded } from './withdrawal.js';
 
 const PAGE = new URL('./admin-ui.html', import.meta.url);
 
@@ -92,6 +93,13 @@ export function createAdminApp(opts: { db: Db; token: string; origin: string; la
     if (!b.ok) return c.json({ error: b.error }, 400);
     return c.json({ creditCents: await adjustCredits(opts.db, id, b.data.cents, b.data.note, now()) });
   });
+  // Rétractations (server/withdrawal.ts) : remboursement fait dans Stripe, puis marqué ici.
+  app.get('/api/withdrawals', async (c) => c.json({ withdrawals: await listWithdrawals(opts.db) }));
+  app.post('/api/withdrawals/:id/refunded', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!Number.isInteger(id) || id <= 0) return c.json({ error: 'Rétractation inconnue.' }, 404);
+    return (await markRefunded(opts.db, id, now())) ? c.json({ ok: true }) : c.json({ error: 'Rétractation inconnue ou déjà remboursée.' }, 409);
+  });
   // Suppression sur demande (RGPD) : l'adresse du compte retapée en confirmation.
   app.get('/api/accounts/:id/deletion', async (c) => {
     const id = c.req.param('id');
@@ -131,6 +139,12 @@ async function seedDemo(db: Db) {
   await add('testeur@example.test', 'free', true, 0, 10, [['wall', 0.62], ['assistant', 0.11], ['wall', 0.7]]);
   await add('pro@example.test', 'pro', false, 0, 200, [['assistant', 0.12], ['assistant', 0.2]]);
   await add('gratuit@example.test', 'free', false, 1, 200, []);
+  // Une rétractation fictive à rembourser.
+  await db.query(
+    `INSERT INTO purchases (account_id, kind, ref, amount_cents, purchased_at, withdrawn_at, withdrawal_name, refund_cents)
+     SELECT id, 'pro', 'checkout:cs_demo', 999, $1, $2, 'Client Démo', 799 FROM accounts WHERE email = 'pro@example.test'`,
+    [new Date(t - 6 * 864e5), new Date(t - 864e5)],
+  );
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -389,7 +389,7 @@ test('site (lot 7) : retours Stripe vers les pages du site ; case des CGV seulem
     assert.deepEqual(session.params.consent_collection, { terms_of_service: 'required' });
     const text = (session.params.custom_text as { terms_of_service_acceptance: { message: string } }).terms_of_service_acceptance.message;
     assert.match(text, /\(https:\/\/site\.test\/cgv\/\)/);
-    assert.match(text, /renonce à mon droit de rétractation/);
+    assert.match(text, /Je garde 14 jours pour me rétracter/);
   } finally {
     await consent.t.close();
   }

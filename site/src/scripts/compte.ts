@@ -14,6 +14,21 @@ interface Me {
   catalog?: { pro: { amountCents: number }; packs: { pack: string; amountCents: number }[] };
 }
 
+interface Purchase {
+  id: number;
+  kind: 'credits' | 'pro';
+  label: string;
+  until: string;
+  refundCents: number;
+}
+interface Withdrawn {
+  label: string;
+  refundCents: number;
+  receivedAt: string;
+  refundBy: string;
+  mailed: boolean;
+}
+
 const root = document.querySelector<HTMLElement>('[data-api]');
 if (root) start(root);
 
@@ -157,11 +172,68 @@ function start(root: HTMLElement) {
     $('[data-portal]').hidden = me.gifted || !me.subscription;
   }
 
+  // Rétractation (CGV section 4, server/withdrawal.ts) : « Se rétracter du
+  // contrat ici » ouvre la déclaration, « Confirmer la rétractation » l'envoie.
+  const withdrawForm = $<HTMLFormElement>('form[data-form="withdraw"]');
+  let chosen: Purchase | null = null;
+  const day = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  const refundText = (p: { kind: string; refundCents: number }) =>
+    p.refundCents > 0
+      ? `Remboursement : ${euros(p.refundCents)} (${p.kind === 'pro' ? 'part du mois restant' : 'crédits non utilisés'}).`
+      : `Remboursement : 0 € (${p.kind === 'pro' ? 'mois écoulé' : 'crédits déjà utilisés'}).`;
+
+  async function loadPurchases() {
+    const list = $('[data-purchases]');
+    const { purchases, email } = await call<{ purchases: Purchase[]; email: string }>('/v1/billing/withdrawals');
+    $('[data-w-email]').textContent = email;
+    $('[data-no-purchase]').hidden = purchases.length > 0;
+    list.replaceChildren(
+      ...purchases.map((p) => {
+        const li = document.createElement('li');
+        const text = document.createElement('span');
+        text.textContent = `${p.label} · jusqu’au ${day(p.until)} · ${refundText(p)}`;
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = 'Se rétracter du contrat ici';
+        b.addEventListener('click', () => {
+          quiet();
+          chosen = p;
+          $('[data-w-label]').textContent = p.label;
+          $('[data-w-refund]').textContent = refundText(p);
+          withdrawForm.hidden = false;
+          (withdrawForm.elements.namedItem('name') as HTMLInputElement).focus();
+        });
+        li.append(text, b);
+        return li;
+      }),
+    );
+  }
+  $('[data-w-cancel]').addEventListener('click', () => {
+    chosen = null;
+    withdrawForm.hidden = true;
+  });
+  on('withdraw', async (f) => {
+    if (!chosen) return;
+    const r = await call<Withdrawn>('/v1/billing/withdraw', { body: { purchaseId: chosen.id, name: value(f, 'name') } });
+    const at = new Date(r.receivedAt).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' });
+    say(
+      `Rétractation reçue le ${at} pour : ${r.label}. ` +
+        (r.refundCents > 0 ? `${euros(r.refundCents)} remboursés au plus tard le ${day(r.refundBy)}. ` : '') +
+        (r.mailed ? 'Accusé de réception envoyé par mail.' : 'Le mail d’accusé de réception n’est pas parti : garde cette page, nous te l’envoyons.'),
+    );
+    f.reset();
+    f.hidden = true;
+    chosen = null;
+    await refresh();
+  });
+
   async function refresh() {
     try {
       render(await call<Me>('/v1/me'));
       out.hidden = true;
       inside.hidden = false;
+      await loadPurchases().catch((e) => say((e as Error).message, 'error'));
+      if (location.hash === '#retractation') document.getElementById('retractation')?.scrollIntoView();
     } catch (e) {
       out.hidden = false;
       inside.hidden = true;

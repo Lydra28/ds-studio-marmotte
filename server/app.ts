@@ -9,6 +9,7 @@ import { billingMode, billingRoutes, catalog } from './billing.js';
 import { ApiError, clock, type Deps } from './core.js';
 import { effectiveTier, issueLicense } from './license.js';
 import { relayRoutes, usageSummary } from './relay.js';
+import { withdrawalRoutes } from './withdrawal.js';
 
 export { ApiError, type Deps } from './core.js';
 
@@ -29,7 +30,7 @@ export function createApp(deps: Deps) {
   // (sans en-tête Authorization) : refusée si l'origine n'est pas le site,
   // en plus de SameSite=Lax (sous-domaines voisins compris).
   const siteOrigin = deps.siteUrl ? new URL(deps.siteUrl).origin : null;
-  const SITE_ROUTES = /^\/v1\/(auth\/[a-z]+|me|billing\/(checkout|portal))$/;
+  const SITE_ROUTES = /^\/v1\/(auth\/[a-z]+|me|billing\/(checkout|portal|withdrawals|withdraw))$/;
   app.use('/v1/*', async (c, next) => {
     const origin = c.req.header('origin');
     const allowed = siteOrigin !== null && origin === siteOrigin && SITE_ROUTES.test(c.req.path);
@@ -90,6 +91,8 @@ export function createApp(deps: Deps) {
 
   app.route('/v1/relay', relayRoutes(deps));
   app.route('/v1/billing', billingRoutes(deps));
+  // Rétractation : sans Stripe configuré aussi (le registre des achats suffit).
+  app.route('/v1/billing', withdrawalRoutes(deps));
 
   // Licence signée, renouvelée par l'app à chaque lancement connecté ; la clé
   // publique est aussi servie pour vérification croisée.

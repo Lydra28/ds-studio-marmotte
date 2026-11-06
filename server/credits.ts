@@ -22,7 +22,7 @@ export const PRO_INCLUDED_CENTS = 1100;
  */
 export const chargedCents = (costCents: number) => (costCents <= 0 ? 0 : Math.max(1, Math.ceil(costCents * RATE - 1e-9)));
 
-export type CreditReason = 'welcome' | 'topup' | 'admin';
+export type CreditReason = 'welcome' | 'topup' | 'admin' | 'withdrawal';
 
 // Mouvement de crédits, journalisé dans credit_events ; avec `ref`, jamais
 // appliqué deux fois (webhook Stripe relancé, bienvenue rejouée). Vrai si

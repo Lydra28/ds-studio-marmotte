@@ -126,6 +126,7 @@ test('compte : connexion par cookie du site, solde, recharge vers Stripe, décon
       return json(route, 200, { token: 'ignoré par le site', account: { email: ME.email } });
     }
     if (path === '/v1/billing/checkout') return json(route, 200, { url: `${SITE}/merci/` });
+    if (path === '/v1/billing/withdrawals') return json(route, 200, { days: 14, email: ME.email, purchases: [] });
     if (path === '/v1/auth/logout') {
       logged = false;
       return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': SITE, 'access-control-allow-credentials': 'true' } });
@@ -158,6 +159,43 @@ test('compte : connexion par cookie du site, solde, recharge vers Stripe, décon
   await expect(page.getByRole('status')).toHaveText('Déconnecté.');
   await expect(page.locator('form[data-form="login"]')).toBeVisible();
   expect(errors.filter((e) => !e.includes('401'))).toEqual([]);
+});
+
+test('compte : rétractation d’un achat de moins de 14 jours, déclaration puis confirmation', async ({ page }) => {
+  const errors = await offline(page);
+  let withdrawn = false;
+  let sent: unknown = null;
+  const purchase = { id: 7, kind: 'credits', label: 'Recharge de crédits de 10,00 € du 6 novembre 2026', amountCents: 1000, purchasedAt: '2026-11-06T10:00:00.000Z', until: '2026-11-20T10:00:00.000Z', refundCents: 700 };
+  await page.route(`${API}/**`, async (route) => {
+    const req = route.request();
+    const path = new URL(req.url()).pathname;
+    if (path === '/v1/me') return json(route, 200, ME);
+    if (path === '/v1/billing/withdrawals') return json(route, 200, { days: 14, email: ME.email, purchases: withdrawn ? [] : [purchase] });
+    if (path === '/v1/billing/withdraw') {
+      sent = req.postDataJSON();
+      withdrawn = true;
+      return json(route, 200, { purchaseId: 7, kind: 'credits', label: purchase.label, refundCents: 700, receivedAt: '2026-11-08T09:30:00.000Z', refundBy: '2026-11-22T09:30:00.000Z', mailed: true });
+    }
+    return json(route, 404, { error: 'inconnu' });
+  });
+
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Se rétracter' }).click();
+  await expect(page).toHaveURL(`${SITE}/compte/#retractation`);
+  const box = page.locator('#retractation');
+  await expect(box.getByText('Recharge de crédits de 10,00 € du 6 novembre 2026')).toBeVisible();
+  await expect(box.getByText(/Remboursement : 7 € \(crédits non utilisés\)/)).toBeVisible();
+  await box.getByRole('button', { name: 'Se rétracter du contrat ici' }).click();
+  const form = page.locator('form[data-form="withdraw"]');
+  await expect(form.getByText(`Accusé de réception envoyé à ${ME.email}.`)).toBeVisible();
+  await form.getByLabel('Ton nom').fill('Camille Test');
+  await form.getByRole('button', { name: 'Confirmer la rétractation' }).click();
+  await expect(page.getByRole('status')).toContainText('Rétractation reçue le');
+  await expect(page.getByRole('status')).toContainText('7 € remboursés au plus tard le 22 novembre 2026. Accusé de réception envoyé par mail.');
+  expect(sent).toEqual({ purchaseId: 7, name: 'Camille Test' });
+  await expect(form).toBeHidden();
+  await expect(box.getByText('Aucun achat de moins de 14 jours.')).toBeVisible();
+  expect(errors).toEqual([]);
 });
 
 test('compte : création, onglet ouvert par #creer, mot de passe oublié', async ({ page }) => {

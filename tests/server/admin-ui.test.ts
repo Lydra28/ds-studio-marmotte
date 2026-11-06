@@ -42,6 +42,10 @@ test('admin ui : page sans jeton, API gardée par jeton, hôte et origine', asyn
     assert.equal(page.status, 200);
     assert.match(String(page.body.text), /DS-Studio · Administration/);
     assert.doesNotMatch(String(page.body.text), new RegExp(TOKEN), 'jeton jamais dans la page');
+    // Script en ligne de la page : syntaxe valide (une page blanche ne se voit pas autrement).
+    const script = /<script>([\s\S]*?)<\/script>/.exec(String(page.body.text))?.[1] ?? '';
+    assert.ok(script.length > 1000);
+    assert.doesNotThrow(() => new Function(script), 'script de admin-ui.html analysable');
     assert.match(String(page.headers.get('content-security-policy')), /default-src 'none'/);
 
     assert.equal((await call('/api/accounts', { token: null })).status, 401);

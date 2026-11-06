@@ -16,6 +16,7 @@ import Draft from '../components/Draft.astro';
     <ul>
       <li>Ton adresse mail et une empreinte de ton mot de passe (jamais le mot de passe lui-même)</li>
       <li>Ton palier, ton solde de crédits, ton abonnement et l’identifiant client Stripe</li>
+      <li>Tes achats (date, montant) et, si tu te rétractes, le nom donné dans ta déclaration</li>
       <li>Le coût et la date de chaque appel au modèle, sans son contenu</li>
       <li>Tes sessions de connexion et la date de ta dernière activité</li>
     </ul>
@@ -50,8 +51,8 @@ import Draft from '../components/Draft.astro';
       <li>Détail de chaque appel au modèle : 12 mois, puis seulement un total par mois.</li>
       <li>
         Après la suppression d’un compte qui a payé : l’adresse, le mot de passe, les sessions et l’usage sont effacés ;
-        l’historique des paiements et des crédits et l’identifiant client Stripe sont gardés 10 ans (obligation comptable),
-        sans adresse mail, puis effacés.
+        l’historique des achats, des paiements et des crédits et l’identifiant client Stripe sont gardés 10 ans
+        (obligation comptable), sans adresse mail ni nom, puis effacés.
       </li>
     </ul>
     <h2>Tes droits</h2>

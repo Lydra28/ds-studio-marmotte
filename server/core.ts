@@ -26,6 +26,8 @@ export interface Deps {
    * Absent : pages minimales de l'API, aucune origine admise.
    */
   siteUrl?: string;
+  /** Adresse de Romain prévenue à chaque rétractation (server/withdrawal.ts) ; absente : aucun mail. */
+  adminEmail?: string;
   /** Version affichée par /v1/health (paquet + commit déployé). */
   version: string;
   now?: () => Date;

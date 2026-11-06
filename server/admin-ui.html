@@ -96,6 +96,12 @@
       <p class="empty" id="empty" hidden>Aucun compte.</p>
     </div>
     <p class="muted">Coûts réels OpenRouter en centimes de dollar (c$), soldes en euros. Jour et mois en UTC, comme le serveur.</p>
+
+    <section id="withdrawals-box">
+      <h2>Rétractations</h2>
+      <p class="muted">À rembourser dans Stripe avant la date indiquée (14 jours après la déclaration), puis « Remboursé ».</p>
+      <ul class="log" id="withdrawals"></ul>
+    </section>
   </div>
   <aside id="detail" hidden aria-label="Détail du compte">
     <div class="row" style="justify-content: space-between">
@@ -221,6 +227,35 @@ function render() {
   }
   $('empty').hidden = shown.length > 0;
 }
+async function loadWithdrawals() {
+  const { withdrawals } = await api('/api/withdrawals');
+  const list = $('withdrawals');
+  list.replaceChildren();
+  for (const w of withdrawals) {
+    const li = el('li');
+    const text = `${date(w.withdrawnAt)} · ${w.email}${w.name ? ' (' + w.name + ')' : ''} · ${w.label} · ${eur(w.refundCents)}`;
+    li.append(el('span', w.refundedAt ? `${text} · remboursé le ${day(w.refundedAt)}` : `${text} · avant le ${day(w.refundBy)}`));
+    if (!w.refundedAt) {
+      const b = el('button', 'Remboursé', 'primary');
+      b.type = 'button';
+      b.addEventListener('click', async () => {
+        if (!confirm(`Remboursement de ${eur(w.refundCents)} fait dans Stripe pour ${w.email} ?` + (w.kind === 'pro' ? '\nEt abonnement annulé immédiatement ?' : ''))) return;
+        try {
+          await api(`/api/withdrawals/${w.id}/refunded`, {});
+          toast('Rétractation marquée remboursée.');
+          await loadWithdrawals();
+        } catch (e) {
+          toast(e.message, true);
+        }
+      });
+      li.append(b);
+    }
+    list.append(li);
+  }
+  if (!withdrawals.length) list.append(el('li', 'Aucune rétractation.', 'muted'));
+  const pending = withdrawals.filter((w) => !w.refundedAt).length;
+  $('withdrawals-box').querySelector('h2').textContent = pending ? `Rétractations (${pending} à rembourser)` : 'Rétractations';
+}
 async function load() {
   try {
     const data = await api('/api/accounts');
@@ -233,6 +268,7 @@ async function load() {
     $('t-month').textContent = usd(accounts.reduce((s, a) => s + a.monthCents, 0));
     $('stamp').textContent = 'à ' + new Date(data.now).toLocaleTimeString('fr-FR');
     render();
+    await loadWithdrawals();
     if (selected) await showDetail();
   } catch (e) {
     toast(e.message, true);

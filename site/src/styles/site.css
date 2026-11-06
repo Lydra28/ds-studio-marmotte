@@ -363,6 +363,26 @@ dl.facts dt {
 dl.facts dd {
   margin: 0;
 }
+/* Rétractation (compte) : un achat par ligne, bouton à droite. */
+#retractation {
+  margin-top: 48px;
+}
+ul.purchases {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0;
+  display: grid;
+  gap: 12px;
+}
+ul.purchases li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--c-line);
+}
 [hidden] {
   display: none !important;
 }

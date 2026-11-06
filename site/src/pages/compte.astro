@@ -92,6 +92,26 @@ import { API } from '../lib/site';
       <p class="muted">
         Paiement sur une page Stripe. De retour dans l’app, clique « Actualiser » dans Réglages → Compte.
       </p>
+
+      <section id="retractation" aria-labelledby="retractation-titre">
+        <h2 id="retractation-titre">Rétractation</h2>
+        <p class="muted">
+          Tu as 14 jours après chaque achat pour te rétracter, sans motif. Ce que tu as déjà utilisé n’est pas remboursé
+          (<a href="/cgv/">conditions de vente</a>, section 4).
+        </p>
+        <ul class="purchases" data-purchases></ul>
+        <p class="muted" data-no-purchase hidden>Aucun achat de moins de 14 jours.</p>
+        <form data-form="withdraw" hidden>
+          <p><strong>Contrat :</strong> <span data-w-label></span></p>
+          <p data-w-refund></p>
+          <label>Ton nom<input name="name" autocomplete="name" minlength="2" maxlength="120" required /></label>
+          <p class="muted">Accusé de réception envoyé à <span data-w-email></span>.</p>
+          <div class="actions">
+            <button class="primary" type="submit">Confirmer la rétractation</button>
+            <button type="button" data-w-cancel>Annuler</button>
+          </div>
+        </form>
+      </section>
     </div>
   </div>
 </Base>

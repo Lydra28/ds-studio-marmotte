@@ -41,7 +41,8 @@ const minusYears = (d: Date, n: number) => minusMonths(d, 12 * n);
 // d'office. Un solde seulement offert (bienvenue, geste admin) ne protège
 // pas : sinon tout compte confirmé qui n'a jamais servi resterait à vie.
 const ACTIVE_SUBSCRIPTION = `(subscription_status IS NOT NULL AND subscription_status NOT IN ('canceled', 'incomplete_expired'))`;
-const PURCHASED = `(stripe_customer_id IS NOT NULL OR EXISTS (SELECT 1 FROM credit_events c WHERE c.account_id = a.id AND c.reason = 'topup'))`;
+const PURCHASED = `(stripe_customer_id IS NOT NULL OR EXISTS (SELECT 1 FROM credit_events c WHERE c.account_id = a.id AND c.reason = 'topup')
+  OR EXISTS (SELECT 1 FROM purchases p WHERE p.account_id = a.id))`;
 const PROTECTED = `((credit_cents > 0 AND ${PURCHASED}) OR ${ACTIVE_SUBSCRIPTION})`;
 
 // « A acheté » : client Stripe ou recharge au grand livre ; décide entre
@@ -101,6 +102,8 @@ export async function deleteAccount(db: Db, accountId: string, now: Date): Promi
 async function purgeDetail(tx: Tx, accountId: string) {
   for (const table of ['sessions', 'email_tokens', 'usage_events', 'usage_monthly'])
     await tx.query(`DELETE FROM ${table} WHERE account_id = $1`, [accountId]);
+  // Achats gardés (pièces comptables), sans le nom donné à une rétractation.
+  await tx.query('UPDATE purchases SET withdrawal_name = NULL WHERE account_id = $1', [accountId]);
 }
 
 export interface PurgeReport {

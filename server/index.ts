@@ -127,6 +127,8 @@ const app = createApp({
   publicUrl: (env.API_PUBLIC_URL ?? `http://127.0.0.1:${port}`).replace(/\/+$/, ''),
   cookieDomain: env.COOKIE_DOMAIN || undefined,
   siteUrl,
+  // Rétractations (server/withdrawal.ts) : adresse de contact publique des mentions légales par défaut.
+  adminEmail: env.ADMIN_EMAIL || 'aubertromain85@gmail.com',
   version,
   report: sentryDsn ? (err) => Sentry.captureException(err) : undefined,
 });
