@@ -7,6 +7,12 @@
 {
   "name": "ds-studio-site",
   "compatibility_date": "2026-11-06",
+  // Site servi par le domaine racine design-system-studio.fr (Custom Domain,
+  // 2026-11-06) seulement : ni adresse *.workers.dev ni URL de préversion
+  // (doublons du site ; l'interrupteur du tableau de bord serait annulé par
+  // le déploiement suivant).
+  "workers_dev": false,
+  "preview_urls": false,
   "assets": {
     "directory": "./dist/",
     // Page 404 d'Astro (dist/404.html) avec le statut 404.
