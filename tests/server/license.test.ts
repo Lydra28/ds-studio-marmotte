@@ -45,7 +45,7 @@ test('licence : émise pour la session, vérifiable hors ligne avec la clé publ
     assert.equal(payload.email, user.email);
     assert.equal(payload.tier, 'free');
     assert.equal(payload.gifted, false);
-    assert.equal(payload.cap, 200);
+    assert.equal(payload.cap, 50);
 
     // Grâce hors ligne après l'expiration, puis expirée.
     assert.equal(verifyLicense(t.keys.publicKey, String(issued.body.license), new Date(payload.exp + HOUR)).status, 'grace');

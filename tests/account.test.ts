@@ -53,7 +53,7 @@ test('compte : inscription, confirmation, connexion, licence pro offerte, relais
   assert.equal(status.license?.expiresAt, new Date(srv.now().getTime() + 7 * DAY).toISOString());
   assert.deepEqual(account.enabled(), { enabled: true, reason: null });
   assert.equal(status.usage?.todayCents, 0);
-  assert.equal(status.usage?.dailyCapCents, 200);
+  assert.equal(status.usage?.dailyCapCents, 50);
   // Le fichier porte le jeton ; l'état rendu au navigateur, jamais.
   const stored = JSON.parse(await readFile(path.join(dir, 'account.json'), 'utf8')) as { token: string; license: string };
   assert.ok(stored.token.length > 20);

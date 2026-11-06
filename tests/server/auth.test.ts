@@ -35,7 +35,7 @@ test('comptes : inscription, mail de confirmation, connexion, /me, déconnexion'
     assert.equal(account.email, 'romain@example.com');
     assert.equal(account.plan, 'free');
     assert.equal(account.gifted, false);
-    assert.equal(account.dailyCapCents, 200);
+    assert.equal(account.dailyCapCents, 50, 'plafond par défaut (0007)');
     assert.ok(account.emailVerifiedAt);
 
     const me = await t.api('/v1/me', { token: session });

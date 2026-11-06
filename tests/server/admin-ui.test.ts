@@ -76,7 +76,7 @@ test('admin ui : liste avec usage, offert, plafond, crédits avec motif', async 
     assert.equal(a.gifted, false);
     assert.equal(a.todayCents, 0.4);
     assert.equal(a.monthCents, 0.4);
-    assert.equal(a.dailyCapCents, 200);
+    assert.equal(a.dailyCapCents, 50);
     assert.equal(typeof a.lastUseAt, 'string');
     assert.equal('password_hash' in a || 'passwordHash' in a, false, 'jamais d’empreinte de mot de passe');
 
@@ -92,7 +92,7 @@ test('admin ui : liste avec usage, offert, plafond, crédits avec motif', async 
     assert.equal((await t.api('/v1/me', { token })).body.dailyCapCents, 25);
 
     const off = await call(`/api/accounts/${id}/gift`, { body: { gifted: false } });
-    assert.equal(off.body.dailyCapCents, 200, 'retiré : plafond par défaut rendu');
+    assert.equal(off.body.dailyCapCents, 50, 'retiré : plafond par défaut rendu');
 
     assert.equal((await call(`/api/accounts/${id}/credit`, { body: { cents: 250, note: '' } })).status, 400, 'motif obligatoire');
     assert.equal((await call(`/api/accounts/${id}/credit`, { body: { cents: 0, note: 'x' } })).status, 400);

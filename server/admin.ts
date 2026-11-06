@@ -36,7 +36,7 @@ const euros = (c: number | string) => (Number(c) / 100).toFixed(2).replace('.', 
 const iso = (d: Date | string) => new Date(d).toISOString().slice(0, 16).replace('T', ' ');
 
 /** Plafond journalier par défaut d'un compte (colonne `daily_cap_cents`), rendu en retirant l'offert. */
-export const DEFAULT_DAILY_CAP_CENTS = 200;
+export const DEFAULT_DAILY_CAP_CENTS = 50; // décision du 2026-11-06 (migration 0007)
 
 export interface AccountView {
   id: string;
