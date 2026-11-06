@@ -130,7 +130,8 @@ const lab = (hex: string) => {
   const [L, C, h] = hexToOklch(hex);
   return [L, C * Math.cos((h * Math.PI) / 180), C * Math.sin((h * Math.PI) / 180)];
 };
-const distance = (a: string, b: string) => {
+// Écart perceptuel OKLab (0 = identiques, ~0,02 = à peine visible).
+export const colorDistance = (a: string, b: string) => {
   const [x, y] = [lab(a), lab(b)];
   return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
 };
@@ -277,7 +278,7 @@ export function proposeFromInventory(inventory: SiteInventory, set: TokenSet, op
     let best: string | undefined;
     let gap = Infinity;
     for (const [k, t] of palette) {
-      const d = distance(hex, t.$values[primitive] as string);
+      const d = colorDistance(hex, t.$values[primitive] as string);
       if (d < gap) [best, gap] = [k, d];
     }
     return best;
@@ -412,7 +413,25 @@ export function proposeFromInventory(inventory: SiteInventory, set: TokenSet, op
   if (desktop.unread) notes.push(`${desktop.unread} couleur(s) hors rgb() non lue(s).`);
   if (desktop.truncated) notes.push('Page très longue : 3 000 éléments lus au plus.');
 
-  // --- Passage final : schéma, normalisation, essai à blanc cumulatif.
+  const { changes, rejected } = finalizeChanges(set, wanted);
+  return {
+    changes,
+    rejected,
+    report: {
+      site: { url: desktop.url, title: desktop.title },
+      brand: brand?.hex ?? null,
+      danger: danger?.hex ?? null,
+      accent: accent?.hex ?? null,
+      family: family ?? null,
+      candidates: chromatic.slice(0, 8).map((c) => ({ hex: c.hex, share: Math.round((c.score / totalScore) * 1000) / 1000 })),
+      notes,
+    },
+  };
+}
+
+// Passage final de toute proposition : schéma, normalisation, essai à blanc
+// cumulatif ; un changement refusé est écarté avec sa raison, jamais forcé.
+export function finalizeChanges(set: TokenSet, wanted: Change[]) {
   const changes: Change[] = [];
   const rejected: string[] = [];
   let current = set;
@@ -430,17 +449,5 @@ export function proposeFromInventory(inventory: SiteInventory, set: TokenSet, op
       rejected.push(`${'key' in candidate ? candidate.key : 'changement'} : ${(e as Error).message.slice(0, 120)}`);
     }
   }
-  return {
-    changes,
-    rejected,
-    report: {
-      site: { url: desktop.url, title: desktop.title },
-      brand: brand?.hex ?? null,
-      danger: danger?.hex ?? null,
-      accent: accent?.hex ?? null,
-      family: family ?? null,
-      candidates: chromatic.slice(0, 8).map((c) => ({ hex: c.hex, share: Math.round((c.score / totalScore) * 1000) / 1000 })),
-      notes,
-    },
-  };
+  return { changes, rejected, set: current };
 }

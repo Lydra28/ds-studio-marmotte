@@ -7,7 +7,8 @@ import { proposeSchema } from '../shared/model.js';
 import { Store, StudioError } from './store.js';
 import { ProjectStore } from './project.js';
 import { projectSchema, type Config } from '../shared/project.js';
-import { Registry, newProjectSchema } from './registry.js';
+import { Registry, newProjectSchema, withRepo } from './registry.js';
+import { cleanSubdir, readPlan, readProjectRepo } from './repo-read.js';
 import { Assistant, chatSchema } from './assistant.js';
 import { Wall, directionsRequestSchema, imageSchema, linkSchema } from './wall.js';
 import { readSite, type ReadSite } from './extract.js';
@@ -45,6 +46,16 @@ const accountSchema = z
   .strict();
 // Connexion GitHub depuis Réglages (plan GitHub, G1) : aucun jeton ne passe par le navigateur.
 const githubActionSchema = z.object({ action: z.enum(['start', 'cancel', 'logout', 'repos']) }).strict();
+// Dépôt du projet (plan GitHub, G3) : rattacher puis lire, ou relire.
+const repoActionSchema = z
+  .object({
+    action: z.enum(['read', 'attach']),
+    mode: z.enum(['create', 'attach']).optional(),
+    repo: z.string().trim().max(201).optional(),
+    base: z.string().trim().max(100).optional(),
+    subdir: z.string().trim().max(200).optional(),
+  })
+  .strict();
 const NO_ACCOUNT: AccountStatus = {
   status: 'none',
   online: true,
@@ -234,6 +245,20 @@ export async function createStudioServer(
           }
           if (url.pathname === '/api/project')
             return send(200, await project.read());
+          if (url.pathname === '/api/repo/plan') {
+            // Panneau « Dépôt » : dernière lecture, sans le détail des occurrences.
+            const plan = await readPlan(store.directory);
+            if (!plan) return send(200, null);
+            const files = new Map<string, number>();
+            for (const e of plan.entries) files.set(e.file, (files.get(e.file) ?? 0) + 1);
+            const { entries, tokens, ...rest } = plan;
+            return send(200, {
+              ...rest,
+              tokenCount: tokens.length,
+              entryCount: entries.length,
+              files: [...files].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([file, count]) => ({ file, count })),
+            });
+          }
           if (url.pathname === '/api/state') return send(200, store.snapshot());
           if (url.pathname === '/api/export')
             return send(200, store.snapshot().set);
@@ -344,6 +369,24 @@ export async function createStudioServer(
           // enregistré ; rien n'est écrit, le client met en brouillon.
           const inventory = await readSite(linkSchema.parse(body).url, options.extract);
           return send(200, { inventory, ...proposeFromInventory(inventory, store.snapshot().set) });
+        }
+        if (url.pathname === '/api/repo') {
+          // G3 : archive lue en mémoire, proposition sur le jeu enregistré et
+          // plan de remplacement écrits ; le client met en brouillon.
+          const g = options.githubAuth;
+          if (!g) throw new StudioError('GitHub indisponible dans cette instance.', 409);
+          const b = repoActionSchema.parse(body);
+          await g.token();
+          let current = config;
+          if (b.action === 'attach') {
+            if (!b.repo) throw new StudioError('Dépôt manquant : propriétaire/dépôt.');
+            const subdir = cleanSubdir(b.subdir);
+            current = await registry.updateConfig(typeof header === 'string' ? header : undefined, (c) => withRepo(c, b.repo!, b.base ?? '', subdir));
+          }
+          if (!current.github) throw new StudioError('Ce projet n’a pas de dépôt : rattache-le d’abord.', 409);
+          const snapshot = store.snapshot();
+          const mode = b.mode === 'create' && snapshot.revision === 0 ? 'create' : 'attach';
+          return send(200, { config: current, mode, ...(await readProjectRepo(g, store.directory, current.github, snapshot.set, mode)) });
         }
         if (url.pathname === '/api/proposals') {
           const b = proposeSchema.parse(body);

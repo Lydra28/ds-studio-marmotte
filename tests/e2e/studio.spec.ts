@@ -622,3 +622,70 @@ test('extraction : nouveau projet depuis un site, inventaire, brouillons, diff e
   await page.getByRole('button', { name: 'Tout déplier' }).click();
   await page.screenshot({ path: 'test-results/extraction-valide.png', fullPage: false });
 });
+
+test('dépôt : nouveau projet depuis un dépôt GitHub, tokens repris, plan, brouillon, diff et relecture', async ({ page }) => {
+  // Connexion Pro puis GitHub contre les faux serveurs ; archive fictive de
+  // `dev-e2e/site-vitrine` (tests/e2e/fake-api.ts). Aucun réseau.
+  test.setTimeout(60_000);
+  await page.getByRole('button', { name: 'Réglages' }).click();
+  const form = page.getByRole('form', { name: 'Compte DS-Studio' });
+  await form.getByLabel('Adresse mail').fill('associe@example.com');
+  await form.getByLabel('Mot de passe').fill('mot-de-passe-de-test');
+  await form.getByRole('button', { name: 'Se connecter' }).click();
+  const github = page.getByRole('region', { name: 'GitHub' });
+  await expect(github).not.toContainText('Réservé à DS-Studio Pro');
+  const popup = page.waitForEvent('popup');
+  await github.getByRole('button', { name: 'Connecter GitHub' }).click();
+  await (await popup).close();
+  await expect(github).toContainText('dev-e2e', { timeout: 15_000 });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: /Nouveau projet/ }).click();
+  const create = page.getByRole('form', { name: 'Nouveau projet' });
+  await create.getByLabel('Nom').fill('Depuis un dépôt');
+  await create.getByLabel('Dépôt GitHub (facultatif)').selectOption('dev-e2e/site-vitrine');
+  await create.getByRole('button', { name: 'Créer le projet' }).click();
+  await expect(page).toHaveURL(/#\/p\/depuis-un-depot$/);
+
+  const panel = page.getByRole('region', { name: 'Dépôt GitHub' });
+  await expect(panel.getByRole('heading', { name: 'Dépôt dev-e2e/site-vitrine' })).toBeVisible();
+  await expect(panel).toContainText('commit e2e0c0d');
+  await expect(panel).toContainText('tokens déclarés dans le code');
+  await expect(panel.getByRole('list', { name: 'Plus grands écarts' })).toContainText('#15223E');
+  await expect(panel).toContainText('--shadow-card');
+  // Listes repliées (details fermés) : hors de l'arbre d'accessibilité, lues par leur texte.
+  await expect(panel.locator('ul[aria-label="Valeurs sans token"]')).toContainText('11px');
+  await page.screenshot({ path: 'test-results/depot-panneau.png', fullPage: false });
+
+  await panel.getByRole('button', { name: 'Mettre en brouillon' }).click();
+  await expect(panel).toBeHidden();
+  await expect(page.getByRole('status').filter({ hasText: 'lus dans le dépôt mis en brouillon' })).toBeVisible();
+  await expect.poll(() => previewVar(page, '--color-moss-500')).toBe('#3A7D44');
+  await validate(page);
+
+  const headers = { 'X-DS-Project': 'depuis-un-depot' };
+  const state = await (await page.request.get('/api/state', { headers })).json();
+  expect(state.revision).toBe(1);
+  expect(state.set.tokens['bg/brand'].$values.light).toBe('{color/moss/500}');
+  expect(state.set.tokens['font/size/body'].$values).toEqual({ desktop: 17, mobile: 15 });
+  expect(state.set.tokens['color/neutral/500']).toBeUndefined();
+  const config = await (await page.request.get('/api/config', { headers })).json();
+  expect(config.github).toMatchObject({ repo: 'dev-e2e/site-vitrine', base: 'main', source: 'repo', subdir: null });
+  const plan = await (await page.request.get('/api/repo/plan', { headers })).json();
+  expect(plan.commit).toBe('e2e0c0de');
+  expect(plan.entryCount).toBeGreaterThan(0);
+  expect(JSON.stringify(plan)).not.toMatch(/ghu_|ghr_/);
+
+  // Bouton « Dépôt » : dernier plan, puis relecture en rattachement : rien à reprendre.
+  await page.getByRole('button', { name: 'Dépôt', exact: true }).click();
+  await expect(panel.locator('ul[aria-label="Fichiers du dépôt"]')).toContainText('src/components/Card.css');
+  await panel.getByRole('button', { name: 'Relire le dépôt' }).click();
+  await expect(panel.getByRole('button', { name: 'Rien à reprendre' })).toBeDisabled();
+  await panel.getByRole('button', { name: 'Fermer le dépôt' }).click();
+
+  await page.getByRole('button', { name: 'Réglages' }).click();
+  await github.getByRole('button', { name: 'Déconnecter GitHub' }).click();
+  await expect(github.getByRole('button', { name: 'Connecter GitHub' })).toBeEnabled();
+  await page.getByRole('region', { name: 'Compte' }).getByRole('button', { name: 'Se déconnecter' }).click();
+  await expect(form).toBeVisible();
+});

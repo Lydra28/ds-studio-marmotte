@@ -2362,6 +2362,30 @@ dialog.diff .diff-summary {
   font-size: 13px;
   color: var(--c-muted);
 }
+/* Plan GitHub, G3 : panneau Dépôt (même cadre que l'extraction) */
+.repo-summary {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 14px;
+  font-size: 13px;
+}
+.repo-summary dt {
+  color: var(--c-muted);
+}
+.repo-summary dd {
+  margin: 0;
+}
+.repo-form {
+  display: grid;
+  gap: 10px;
+  max-width: 520px;
+}
+.repo-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
 .extract-changes summary {
   cursor: pointer;
   font-size: 13px;

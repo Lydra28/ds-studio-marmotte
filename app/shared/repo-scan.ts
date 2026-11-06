@@ -39,6 +39,8 @@ export interface Occurrence {
   normalized: string;
   /** Ligne de code autour (reste sur le poste : jamais dans la sonde). */
   context: string;
+  /** Déclaration CSS/SCSS : blocs englobants (`@media (…) > :root`), `''` au premier niveau. */
+  scope?: string;
 }
 
 export const DECLARATIONS: Detector[] = ['css-var', 'theme-v4', 'scss-var', 'tailwind-v3', 'js-theme', 'tokens-json'];
@@ -148,7 +150,7 @@ function lineStarts(text: string) {
   return starts;
 }
 
-function emit(ctx: Ctx, o: Omit<Occurrence, 'file' | 'line' | 'col' | 'context'>) {
+function emit(ctx: Ctx, o: Omit<Occurrence, 'file' | 'line' | 'col' | 'context' | 'scope'> & { scope?: string }) {
   if (ctx.out.length >= MAX_OCCURRENCES) return;
   let lo = 0;
   let hi = ctx.lines.length - 1;
@@ -213,6 +215,22 @@ function scanCss(ctx: Ctx, region: string, base: number, via: Via, scss: boolean
   if (scss) src = src.replace(/(^|[^:\\])\/\/[^\n]*/g, (m, p: string) => p + blank(m.slice(p.length)));
   const themes: [number, number][] = [];
   for (const m of src.matchAll(/@theme\b[^{;]*\{/g)) themes.push([m.index!, braceEnd(src, m.index! + m[0].length - 1)]);
+  // Blocs ouverts au fil du texte (balayage unique, déclarations dans l'ordre).
+  const stack: string[] = [];
+  let cursor = 0;
+  let boundary = -1;
+  const advance = (to: number) => {
+    for (; cursor < to; cursor++) {
+      const c = src[cursor];
+      if (c === '{') {
+        stack.push(src.slice(boundary + 1, cursor).replace(/\s+/g, ' ').trim().slice(0, 120));
+        boundary = cursor;
+      } else if (c === '}') {
+        stack.pop();
+        boundary = cursor;
+      } else if (c === ';') boundary = cursor;
+    }
+  };
   for (const m of src.matchAll(DECL)) {
     const prop = m[1];
     const raw = m[2];
@@ -221,7 +239,9 @@ function scanCss(ctx: Ctx, region: string, base: number, via: Via, scss: boolean
     if (prop.startsWith('--') || (scss && prop.startsWith('$'))) {
       const value = raw.replace(/\s*!(important|default|global)\s*$/i, '');
       const inTheme = themes.some(([a, b]) => m.index! > a && m.index! < b);
+      advance(m.indices![1]![0]);
       emit(ctx, {
+        scope: stack.join(' > '),
         offset: at,
         length: value.length,
         detector: prop.startsWith('$') ? 'scss-var' : inTheme ? 'theme-v4' : 'css-var',

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { createProject, listProjects, type ProjectSummary } from './api.js';
+import { createProject, getGithub, githubAction, listProjects, type GithubRepo, type ProjectSummary } from './api.js';
 
 // Route dans le hash : `#/p/<projet>` ouvre un projet, `#/reglages` les
 // réglages de l'application, sinon l'accueil.
@@ -327,8 +327,26 @@ function NewProject({ onCreated, onCancel }: { onCreated: (slug: string) => void
   const [ideas, setIdeas] = useState('');
   const [figmaUrl, setFigmaUrl] = useState('');
   const [siteUrl, setSiteUrl] = useState('');
+  // Plan GitHub, G3 : dépôts proposés seulement si GitHub est connecté (Pro).
+  const [repos, setRepos] = useState<GithubRepo[]>([]);
+  const [repo, setRepo] = useState('');
+  const [subdir, setSubdir] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let live = true;
+    getGithub()
+      .then((g) => (g.pro && g.status === 'connected' ? githubAction('repos') : null))
+      .then((r) => {
+        if (live && r?.repos) setRepos(r.repos);
+      })
+      .catch(() => {
+        /* Facultatif : le formulaire reste sans dépôt. */
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return setError('Donne un nom au projet.');
@@ -346,12 +364,22 @@ function NewProject({ onCreated, onCancel }: { onCreated: (slug: string) => void
     setBusy(true);
     setError('');
     try {
-      const { slug } = await createProject({ name, doctrine, ideas, figmaUrl, siteUrl: site });
+      const chosen = repos.find((r) => r.fullName === repo);
+      const { slug } = await createProject({
+        name,
+        doctrine,
+        ideas,
+        figmaUrl,
+        siteUrl: site,
+        ...(chosen ? { repo: chosen.fullName, base: chosen.defaultBranch, subdir: subdir.trim() } : {}),
+      });
       // Projet neuf : il s'ouvre sur le Mur des DA, première étape du parcours ;
-      // depuis un site (lot 5), sur la planche avec la lecture des styles lancée.
+      // depuis un site (lot 5) ou un dépôt (G3), sur la planche avec la lecture
+      // lancée (le dépôt prime : ses tokens sont déclarés, ceux du site devinés).
       try {
-        sessionStorage.setItem(`ds-start:${slug}`, site ? 'board' : 'wall');
-        if (site) sessionStorage.setItem(`ds-extract:${slug}`, site);
+        sessionStorage.setItem(`ds-start:${slug}`, site || chosen ? 'board' : 'wall');
+        if (chosen) sessionStorage.setItem(`ds-repo:${slug}`, 'create');
+        else if (site) sessionStorage.setItem(`ds-extract:${slug}`, site);
       } catch {
         /* Facultatif : sinon la planche s'ouvre. */
       }
@@ -394,6 +422,32 @@ function NewProject({ onCreated, onCancel }: { onCreated: (slug: string) => void
         Avec une adresse, DS-Studio lit les styles de la page sur ton poste et propose un premier jeu de tokens, à valider par le
         diff. Jamais un site client ou d’Enov.
       </p>
+      {repos.length > 0 && (
+        <>
+          <label>
+            Dépôt GitHub (facultatif)
+            <select value={repo} onChange={(e) => setRepo(e.target.value)}>
+              <option value="">Aucun</option>
+              {repos.map((r) => (
+                <option key={r.fullName} value={r.fullName}>
+                  {r.fullName}
+                  {r.private ? ' (privé)' : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          {repo && (
+            <label>
+              Sous-dossier du dépôt (facultatif, monorepo)
+              <input value={subdir} onChange={(e) => setSubdir(e.target.value)} placeholder="apps/web" />
+            </label>
+          )}
+          <p className="hint">
+            Avec un dépôt, DS-Studio lit ses tokens sur ton poste (rien n’est exécuté ni écrit dans le dépôt) et les propose en
+            brouillon à la place du gabarit.
+          </p>
+        </>
+      )}
       <p className="hint">
         Projets perso seulement : l'assistant envoie la doctrine et les images à OpenRouter. Rien d'Enov ni de BRiiK.
       </p>

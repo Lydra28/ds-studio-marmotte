@@ -42,6 +42,7 @@ import AssistantPanel from './Assistant.js';
 import { brandColor, MascotDock } from './Mascot.js';
 import Wall from './Wall.js';
 import ExtractPanel from './Extract.js';
+import RepoPanel from './Repo.js';
 import { SiteFrame, SiteFullscreen, SiteView, type Device } from './Site.js';
 import { fontFamilies, loadFonts } from './fonts.js';
 import { previewSrc, ScreenPicker, type Screen } from './DesignSystem.js';
@@ -190,10 +191,20 @@ function Workspace({
       return null;
     }
   });
+  // Plan GitHub, G3 : panneau Dépôt, lancé à la création depuis un dépôt
+  // (`ds-repo:<slug>` = create) ou par le bouton « Dépôt ».
+  const [repoPanel, setRepoPanel] = useState<'create' | 'open' | null>(() => {
+    try {
+      return sessionStorage.getItem(k('ds-repo')) === 'create' ? 'create' : null;
+    } catch {
+      return null;
+    }
+  });
   useEffect(() => {
     try {
       sessionStorage.removeItem(k('ds-start'));
       sessionStorage.removeItem(k('ds-extract'));
+      sessionStorage.removeItem(k('ds-repo'));
     } catch {
       /* Facultatif. */
     }
@@ -392,8 +403,10 @@ function Workspace({
       if (s.get(key) === null) next.delete(key);
       return next.set(key, token);
     });
-  const remove = (key: string) => {
-    const users = draftSet ? referrers(draftSet, key) : [];
+  // `checked` : retrait d'un lot déjà vérifié en entier (draftChanges), où un
+  // alias peut partir avec sa cible ; `draftSet` est encore celui d'avant le lot.
+  const remove = (key: string, checked = false) => {
+    const users = draftSet && !checked ? referrers(draftSet, key) : [];
     if (users.length) {
       setNotice('');
       setError(`${key} est utilisé par ${users.join(', ')} : change ces alias avant de le retirer.`);
@@ -409,11 +422,22 @@ function Workspace({
     });
   };
   // Proposition de l'assistant : chaque changement rejoint le brouillon.
+  // Le lot est d'abord essayé en entier sur le brouillon (alias, retraits) :
+  // refusé, rien n'entre dans le brouillon.
   const draftChanges = (list: Change[], from = 'de l’assistant') => {
+    if (draftSet) {
+      try {
+        applyChanges(draftSet, list);
+      } catch (e) {
+        setNotice('');
+        setError(`Changements ${from} refusés sur le brouillon : ${(e as Error).message}`);
+        return;
+      }
+    }
     for (const c of list) {
       if (!('op' in c)) edit(c.key, c.mode, c.value);
       else if (c.op === 'add') add(c.key, c.token);
-      else if (c.op === 'remove') remove(c.key);
+      else if (c.op === 'remove') remove(c.key, true);
       else saveComponent(c.name, c.component);
     }
     setNotice(`${list.length} changement(s) ${from} mis en brouillon : relis le diff avant de valider.`);
@@ -539,6 +563,15 @@ function Workspace({
             Réglages
           </button>
           <button onClick={() => setFigmaOpen(true)}>Figma</button>
+          <button
+            onClick={() => {
+              setView('board');
+              setRepoPanel('open');
+            }}
+            title="Lire un dépôt GitHub"
+          >
+            Dépôt
+          </button>
           <button onClick={() => file.current?.click()}>Importer</button>
           <input
             ref={file}
@@ -709,6 +742,18 @@ function Workspace({
           onDraft={(list) => {
             draftChanges(list, 'lus sur le site');
             setExtractUrl(null);
+          }}
+        />
+      )}
+      {view === 'board' && repoPanel && config && (
+        <RepoPanel
+          config={config}
+          start={repoPanel}
+          onConfig={setConfig}
+          onClose={() => setRepoPanel(null)}
+          onDraft={(list) => {
+            draftChanges(list, 'lus dans le dépôt');
+            setRepoPanel(null);
           }}
         />
       )}

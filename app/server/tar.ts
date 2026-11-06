@@ -28,6 +28,8 @@ export interface TarResult {
   skipped: { filtered: number; tooLarge: number; links: number; unsafe: number };
   /** Plus de `maxFiles` fichiers acceptés : la suite n'est pas lue. */
   truncated: boolean;
+  /** Dossier racine de l'archive (`<owner>-<repo>-<sha>` chez GitHub). */
+  root: string | null;
 }
 
 const BLOCK = 512;
@@ -80,7 +82,7 @@ export function readTarGz(archive: Buffer, limits: TarLimits): TarResult {
         : 'Archive du dépôt illisible.',
     );
   }
-  const result: TarResult = { files: [], skipped: { filtered: 0, tooLarge: 0, links: 0, unsafe: 0 }, truncated: false };
+  const result: TarResult = { files: [], skipped: { filtered: 0, tooLarge: 0, links: 0, unsafe: 0 }, truncated: false, root: null };
   let at = 0;
   let longName: string | null = null;
   while (at + BLOCK <= tar.length) {
@@ -105,6 +107,7 @@ export function readTarGz(archive: Buffer, limits: TarLimits): TarResult {
     const prefix = field(header, 345, 155);
     const name = longName ?? (prefix ? `${prefix}/${field(header, 0, 100)}` : field(header, 0, 100));
     longName = null;
+    result.root ??= name.replace(/\\/g, '/').split('/').find((p) => p && p !== '.') ?? null;
     if (type === '5') continue;
     if (type === '1' || type === '2') {
       result.skipped.links++;

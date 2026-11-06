@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { writeFile } from 'node:fs/promises';
 import { generateKeys, issueLicense } from '../../server/license.js';
+import { tarGz } from '../tar-fixture.js';
 
 // Faux serveur DS-Studio pour les tests navigateur (scripts/e2e-server.mjs) :
 // deux comptes (Pro offert ; gratuit avec sa génération de bienvenue), relais
@@ -41,6 +42,39 @@ const accounts: Fake[] = [
   { ...E2E_FREE, plan: 'free', gifted: false, creditCents: 1, welcome: true, includedLeftCents: 0, customer: false, subscription: null, todayCents: 0, monthCents: 0, relayCalls: 0 },
 ];
 const sessions = new Map<string, Fake>();
+// Dépôt fictif `dev-e2e/site-vitrine` (commit e2e0c0de) : tokens déclarés,
+// alias, mode mobile, valeurs en dur, ombre non reprise.
+const VITRINE = tarGz([
+  { name: 'pax_global_header', type: 'g', body: '' },
+  { name: 'dev-e2e-site-vitrine-e2e0c0de/', type: '5' },
+  {
+    name: 'dev-e2e-site-vitrine-e2e0c0de/src/styles/tokens.css',
+    body: [
+      ':root {',
+      '  --color-ink-900: #14213D;',
+      '  --color-paper: #FBF8F1;',
+      '  --color-moss-500: #3A7D44;',
+      '  --color-moss-700: #285A30;',
+      '  --text-primary: var(--color-ink-900);',
+      '  --bg-canvas: var(--color-paper);',
+      '  --bg-brand: var(--color-moss-500);',
+      '  --space-sm: 8px;',
+      '  --space-md: 16px;',
+      '  --space-lg: 24px;',
+      '  --radius-card: 12px;',
+      '  --font-body: "Fraunces", serif;',
+      '  --font-size-body: 17px;',
+      '  --shadow-card: 0 1px 2px rgba(0,0,0,.1);',
+      '}',
+      '@media (max-width: 767px) { :root { --font-size-body: 15px; } }',
+    ].join('\n'),
+  },
+  {
+    name: 'dev-e2e-site-vitrine-e2e0c0de/src/components/Card.css',
+    body: '.card { padding: 16px; background: #FBF8F1; color: #15223E; border-radius: 12px; margin: 11px; }',
+  },
+  { name: 'dev-e2e-site-vitrine-e2e0c0de/README.md', body: '# Site vitrine fictif' },
+]);
 let githubPolls = 0;
 const me = (a: Fake) => ({
   email: a.email,
@@ -108,6 +142,12 @@ const server = http.createServer(async (req, res) => {
     if (route === 'GET /user/installations') return send(200, { installations: [{ id: 1 }] });
     if (route === 'GET /user/installations/1/repositories')
       return send(200, { repositories: [{ full_name: 'dev-e2e/site-vitrine', private: true, default_branch: 'main' }] });
+  }
+  // Archive de la branche (G2, G3) : dépôt fictif structuré, fabriqué ici.
+  if (route === 'GET /repos/dev-e2e/site-vitrine/tarball/main') {
+    if (req.headers.authorization !== 'Bearer ghu_e2e_jeton_acces') return send(401, { message: 'Bad credentials' });
+    res.writeHead(200, { 'content-type': 'application/x-gzip', 'content-length': String(VITRINE.length) });
+    return res.end(VITRINE);
   }
   if (route === 'POST /v1/auth/login') {
     const a = accounts.find((x) => x.email === body.email && x.password === body.password);

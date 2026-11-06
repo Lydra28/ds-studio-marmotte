@@ -78,6 +78,17 @@ export const configSchema = z
           .strict()
           .nullable()
           .default(null),
+        // Plan GitHub, G3 : `repo` = projet lu depuis le dépôt (ou rattaché),
+        // branche `base` lue, `subdir` pour un monorepo. Absents des configs
+        // d'avant : `tokens` (PR des fichiers générés seulement), dépôt entier.
+        source: z.enum(['tokens', 'repo']).default('tokens'),
+        subdir: z
+          .string()
+          .regex(/^[\w.-]+(\/[\w.-]+)*$/)
+          .refine((d) => !d.split('/').some((p) => p === '..' || p === '.'), 'sous-dossier relatif attendu')
+          .max(200)
+          .nullable()
+          .default(null),
       })
       .strict()
       .nullable()

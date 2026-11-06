@@ -1,6 +1,7 @@
 import type { Change, Proposal, State, TokenSet } from '../shared/model.js';
 import type { Config } from '../shared/project.js';
 import type { ExtractProposal, SiteInventory } from '../shared/extract.js';
+import type { RepoReport } from '../shared/repo-propose.js';
 export interface Bootstrap {
   csrf: string;
   figma: { label: string; connected: boolean };
@@ -165,8 +166,51 @@ export const desktopAction = (action: DesktopAction) => request<{ ok: true }>('d
 export const getState = () => request<State>('state');
 export const getConfig = () => request<Config>('config');
 export const listProjects = () => request<ProjectSummary[]>('projects');
-export const createProject = (p: { name: string; doctrine: string; ideas: string; figmaUrl: string; siteUrl: string }) =>
-  request<{ slug: string }>('projects', p);
+export const createProject = (p: {
+  name: string;
+  doctrine: string;
+  ideas: string;
+  figmaUrl: string;
+  siteUrl: string;
+  repo?: string;
+  base?: string;
+  subdir?: string;
+}) => request<{ slug: string }>('projects', p);
+// Plan GitHub, G3 : dépôt lu en mémoire sur le poste, proposition sur le jeu
+// enregistré, plan de remplacement gardé dans le projet.
+export interface RepoResult {
+  config: Config;
+  mode: 'create' | 'attach';
+  changes: Change[];
+  rejected: string[];
+  report: RepoReport;
+  source: {
+    repo: string;
+    ref: string;
+    subdir: string | null;
+    commit: string | null;
+    tailwind: 'v3' | 'v4' | 'inconnu' | null;
+    skipped: { filtered: number; tooLarge: number; links: number; unsafe: number };
+    truncated: boolean;
+  };
+}
+export interface RepoPlanSummary {
+  date: string;
+  repo: string;
+  ref: string;
+  subdir: string | null;
+  commit: string | null;
+  mode: 'create' | 'attach';
+  report: RepoReport;
+  tokenCount: number;
+  entryCount: number;
+  truncated: boolean;
+  files: { file: string; count: number }[];
+}
+export const readProjectRepo = (mode: 'create' | 'attach') => request<RepoResult>('repo', { action: 'read', mode });
+export const attachRepo = (repo: string, base: string, subdir: string) =>
+  request<RepoResult>('repo', { action: 'attach', mode: 'attach', repo, base, subdir });
+export const getRepoPlan = () => request<RepoPlanSummary | null>('repo/plan');
 // Lot 5 : styles d'un site lus sur le poste et proposition sur le jeu enregistré.
 export type ExtractResult = ExtractProposal & { inventory: SiteInventory };
 export const extractSite = (url: string) => request<ExtractResult>('extract', { url });

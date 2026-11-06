@@ -79,8 +79,28 @@ export const newProjectSchema = z
     // Site en direct du projet ; la lecture des styles est lancée ensuite par
     // le client (`POST /api/extract`).
     siteUrl: z.string().trim().max(500).default(''),
+    // Plan GitHub, G3 : « Nouveau projet depuis un dépôt » (owner/repo, branche,
+    // sous-dossier) ; la lecture est lancée ensuite par le client (`POST /api/repo`).
+    repo: z.string().trim().max(201).default(''),
+    base: z.string().trim().max(100).default(''),
+    subdir: z.string().trim().max(200).default(''),
   })
   .strict();
+
+// Dépôt rattaché à un projet : réglages d'export gardés si c'est le même dépôt.
+export function withRepo(config: Config, repo: string, base: string, subdir: string | null): Config {
+  const same = config.github?.repo.toLowerCase() === repo.toLowerCase() ? config.github : null;
+  return configSchema.parse({
+    ...config,
+    github: {
+      ...(same ?? { dir: '.', rename: {}, entry: null }),
+      repo,
+      base: base || same?.base || 'main',
+      source: 'repo',
+      subdir,
+    },
+  });
+}
 
 const readJson = (file: string) =>
   fs
@@ -218,13 +238,19 @@ export class Registry {
     for (let n = 2; taken.has(slug); n++) slug = `${base.slice(0, 36)}-${n}`;
     const dir = path.join(this.projectsDir, slug);
     await fs.mkdir(dir, { recursive: false });
-    const config: Config = {
+    let config: Config = configSchema.parse({
       name: p.name,
       figma: fileKey ? { fileKey, page: 'DS-Studio · Foundations', protectedPages: [] } : null,
       github: null,
       site: site?.protocol === 'https:' ? { url: site.origin + '/', pages: ['/'] } : null,
-    };
-    configSchema.parse(config);
+    });
+    if (p.repo) {
+      try {
+        config = withRepo(config, p.repo, p.base, p.subdir || null);
+      } catch {
+        throw new StudioError('Dépôt attendu : propriétaire/dépôt, branche et sous-dossier sans « .. ».');
+      }
+    }
     await atomicWrite(path.join(dir, 'project.config.json'), JSON.stringify(config, null, 2) + '\n');
     await fs.copyFile(this.template, path.join(dir, 'design-system.tokens.json'));
     const instance = await this.get(slug);
@@ -237,6 +263,14 @@ export class Registry {
       figmaUrl: p.figmaUrl,
     });
     return slug;
+  }
+  // Configuration d'un projet ouvert, réécrite sur disque puis en mémoire.
+  async updateConfig(slug: string | undefined, update: (config: Config) => Config) {
+    const instance = await this.get(slug);
+    const next = configSchema.parse(update(instance.config));
+    await atomicWrite(path.join(instance.dir, 'project.config.json'), JSON.stringify(next, null, 2) + '\n');
+    instance.config = next;
+    return next;
   }
   async flush() {
     for (const opening of this.open.values()) await (await opening).store.flush();
