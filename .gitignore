@@ -42,3 +42,4 @@ server/dist/
 
 # Site vitrine (lot 7) : cache Astro.
 site/.astro/
+site/.wrangler/

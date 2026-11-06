@@ -1,0 +1,17 @@
+// Site vitrine sur Cloudflare Workers, fichiers statiques seulement (lot 7.4,
+// 2026-11-06) : Cloudflare oriente désormais les nouveaux projets vers
+// Workers plutôt que Pages. Aucun script Worker : `dist/` (build Astro et
+// `_headers` de scripts/headers.mjs) est servi tel quel.
+// `name` doit rester celui du projet dans le tableau de bord (Workers Builds
+// refuse sinon le déploiement).
+{
+  "name": "ds-studio-site",
+  "compatibility_date": "2026-11-06",
+  "assets": {
+    "directory": "./dist/",
+    // Page 404 d'Astro (dist/404.html) avec le statut 404.
+    "not_found_handling": "404-page"
+    // html_handling par défaut (« auto-trailing-slash ») : /prix/ sert
+    // prix/index.html, comme trailingSlash: 'always' d'astro.config.mjs.
+  }
+}
