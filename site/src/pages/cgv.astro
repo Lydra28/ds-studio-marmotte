@@ -12,15 +12,14 @@ const c = await loadCatalog();
     <Draft />
     <h2>1. Objet</h2>
     <p>
-      Ces conditions régissent la vente, par [éditeur] (voir les <a href="/mentions-legales/">mentions légales</a>), de
+      Ces conditions régissent la vente, par Romain Aubert, entrepreneur individuel (voir les <a href="/mentions-legales/">mentions légales</a>), de
       l’abonnement DS-Studio Pro et des recharges de crédits utilisés par l’assistant et le Mur des DA de l’application
       DS-Studio.
     </p>
     <h2>2. Offres et prix</h2>
     <p>
       Pro : {euros(c.pro.amountCents)} par mois, dont {euros(c.pro.includedCents)} d’usage inclus par période. Recharges :
-      {c.packs.map((p) => euros(p.amountCents)).join(', ')}. Prix en euros, [TVA non applicable, art. 293 B du CGI — à
-      confirmer]. L’usage est débité selon le coût réel de chaque appel au modèle, affiché dans l’application.
+      {c.packs.map((p) => euros(p.amountCents)).join(', ')}. Prix en euros, TVA non applicable, art. 293 B du CGI. L’usage est débité selon le coût réel de chaque appel au modèle, affiché dans l’application.
     </p>
     <h2>3. Commande et paiement</h2>
     <p>
@@ -40,11 +39,14 @@ const c = await loadCatalog();
     </p>
     <h2>6. Service</h2>
     <p>
-      L’atelier fonctionne sur ton poste. L’assistant et le Mur demandent une connexion au serveur DS-Studio ; [engagement de
-      disponibilité à préciser]. Un plafond journalier d’usage protège ton solde.
+      L’atelier fonctionne sur ton poste. L’assistant et le Mur demandent une connexion au serveur DS-Studio, fourni sans
+      garantie de disponibilité ; un appel qui échoue n’est pas débité. Un plafond journalier d’usage protège ton solde.
     </p>
     <h2>7. Réclamations et médiation</h2>
-    <p>[Contact pour les réclamations ; médiateur de la consommation à désigner.]</p>
+    <p>
+      Réclamations : <a href="mailto:aubertromain85@gmail.com">aubertromain85@gmail.com</a>. [Médiateur de la consommation
+      à désigner.]
+    </p>
     <h2>8. Droit applicable</h2>
     <p>Droit français.</p>
   </div>
