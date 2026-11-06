@@ -22,6 +22,7 @@ const MARGIN_MS = 60_000;
 // Bornes de la liste des dépôts : 10 installations, 3 pages de 100 dépôts chacune.
 const MAX_INSTALLATIONS = 10;
 const MAX_PAGES = 3;
+const REPO_NAME = /^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/;
 
 const storedSchema = z
   .object({
@@ -332,6 +333,48 @@ export class GithubAuth {
       }
     }
     return [...new Map(repos.map((r) => [r.fullName, r])).values()].sort((a, b) => a.fullName.localeCompare(b.fullName));
+  }
+
+  // Archive `tar.gz` d'une branche (plan GitHub, G2), lue en mémoire et bornée
+  // (`maxBytes` compressés). GitHub redirige vers codeload avec une URL
+  // signée : le jeton n'y est pas renvoyé (fetch retire `Authorization` d'une
+  // redirection vers un autre domaine).
+  async archive(fullName: string, ref: string, maxBytes: number): Promise<Buffer> {
+    if (!REPO_NAME.test(fullName) || fullName.split('/').some((p) => /^\.+$/.test(p))) throw new StudioError('Nom de dépôt invalide (attendu : propriétaire/dépôt).', 400);
+    if (!ref || ref.length > 200 || /\.\.|[\s~^:?*[\\]/.test(ref)) throw new StudioError('Branche invalide.', 400);
+    const bearer = await this.token();
+    const route = `/repos/${fullName}/tarball/${ref.split('/').map(encodeURIComponent).join('/')}`;
+    let res: Response;
+    try {
+      res = await (this.options.fetch ?? fetch)(this.apiUrl + route, {
+        headers: { Authorization: `Bearer ${bearer}`, 'X-GitHub-Api-Version': API_VERSION, 'User-Agent': 'DS-Studio' },
+        signal: AbortSignal.timeout(120_000),
+      });
+    } catch {
+      throw new StudioError(UNREACHABLE, 502);
+    }
+    if (res.status === 401) {
+      await this.forget(SESSION_LOST);
+      throw new StudioError(SESSION_LOST, 401);
+    }
+    if (res.status === 404) throw new StudioError(`Dépôt ou branche introuvable, ou DS-Studio n'y a pas accès : ${fullName}@${ref}.`, 404);
+    if (!res.ok || !res.body) throw new StudioError(`GitHub : archive refusée (${res.status}).`, 502);
+    const length = Number(res.headers.get('content-length'));
+    const tooBig = new StudioError(`Dépôt trop volumineux (archive de plus de ${Math.round(maxBytes / 1e6)} Mo).`, 413);
+    if (length > maxBytes) throw tooBig;
+    const chunks: Buffer[] = [];
+    let total = 0;
+    try {
+      for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
+        total += chunk.byteLength;
+        if (total > maxBytes) throw tooBig;
+        chunks.push(Buffer.from(chunk));
+      }
+    } catch (e) {
+      if (e === tooBig) throw e;
+      throw new StudioError(UNREACHABLE, 502);
+    }
+    return Buffer.concat(chunks);
   }
 
   status(): GithubStatus {

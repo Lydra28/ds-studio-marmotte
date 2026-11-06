@@ -16,6 +16,8 @@ function fakeGithub() {
   let accessCount = 0;
   let refreshError: string | null = null;
   let userStatus = 200;
+  let tarball: Buffer = Buffer.from('archive-de-test');
+  let tarballLength = 0;
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
   const fakeFetch: typeof fetch = (async (input: string | URL, init: RequestInit = {}) => {
     const url = String(input);
@@ -47,6 +49,14 @@ function fakeGithub() {
       if (id === '7' && page === '2') return json(200, { repositories: [{ full_name: 'org/r100', private: false, default_branch: 'develop' }] });
       return json(200, { repositories: [{ full_name: 'org/r000', private: true, default_branch: 'main' }, { full_name: 'moi/site', private: false, default_branch: '' }] });
     }
+    const tar = /^https:\/\/api\.gh\.test\/repos\/([^/]+\/[^/]+)\/tarball\/(.+)$/.exec(url);
+    if (tar) {
+      if (userStatus !== 200) return json(401, { message: 'Bad credentials' });
+      if (tar[1] !== 'dev-test/site' || tar[2] !== 'feature/theme') return json(404, { message: 'Not Found' });
+      const headers: Record<string, string> = { 'content-type': 'application/x-gzip' };
+      if (tarballLength) headers['content-length'] = String(tarballLength);
+      return new Response(new Uint8Array(tarball), { status: 200, headers });
+    }
     return json(404, { message: `inconnu ${url}` });
   }) as typeof fetch;
   return {
@@ -55,6 +65,7 @@ function fakeGithub() {
     queue,
     setRefreshError: (e: string | null) => (refreshError = e),
     setUserStatus: (s: number) => (userStatus = s),
+    setTarball: (b: Buffer, announced = 0) => ((tarball = b), (tarballLength = announced)),
   };
 }
 
@@ -208,6 +219,34 @@ test('github : déconnexion efface les jetons du poste', async () => {
     assert.equal((await s.auth.logout()).status, 'none');
     await assert.rejects(readFile(path.join(s.dir, 'github.json'), 'utf8'), /ENOENT/);
     assert.equal((await s.open()).status().status, 'none');
+  } finally {
+    await s.close();
+  }
+});
+
+test('github : archive d’une branche bornée en taille, noms vérifiés, 404 et 401 clairs', async () => {
+  const s = await setup();
+  try {
+    await s.auth.start();
+    await s.auth.pollOnce();
+    const got = await s.auth.archive('dev-test/site', 'feature/theme', 1000);
+    assert.equal(got.toString(), 'archive-de-test');
+    const call = s.gh.calls.at(-1)!;
+    assert.equal(call.url, 'https://api.gh.test/repos/dev-test/site/tarball/feature/theme');
+    assert.equal(call.auth, `Bearer ${ACCESS}-1`);
+
+    s.gh.setTarball(Buffer.alloc(2000));
+    await assert.rejects(s.auth.archive('dev-test/site', 'feature/theme', 1000), (e: Error & { status?: number }) => e.status === 413);
+    s.gh.setTarball(Buffer.alloc(10), 5_000_000);
+    await assert.rejects(s.auth.archive('dev-test/site', 'feature/theme', 1000), /trop volumineux/, 'taille annoncée refusée avant lecture');
+
+    for (const [repo, ref] of [['../x', 'main'], ['dev-test/site/../y', 'main'], ['dev-test/site', '../main'], ['dev-test/site', 'a b'], ['a', 'main']])
+      await assert.rejects(s.auth.archive(repo, ref, 1000), (e: Error & { status?: number }) => e.status === 400, `${repo}@${ref}`);
+    await assert.rejects(s.auth.archive('dev-test/autre', 'main', 1000), (e: Error & { status?: number }) => e.status === 404);
+
+    s.gh.setUserStatus(401);
+    await assert.rejects(s.auth.archive('dev-test/site', 'feature/theme', 1000), (e: Error & { status?: number }) => e.status === 401);
+    assert.equal(s.auth.status().status, 'none');
   } finally {
     await s.close();
   }
