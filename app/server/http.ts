@@ -19,6 +19,7 @@ import { atomicWrite } from './files.js';
 import { figmaStatus } from '../../connectors/figma/contract.js';
 import { inDesktop, requestDesktop, updateState } from './desktop.js';
 import type { AccountClient, AccountStatus } from './account.js';
+import type { GithubAuth } from './github-auth.js';
 import type { RecordInfo } from '../../scripts/runtime.mjs';
 
 // Vue Réglages : ce que l'app sait d'elle-même, sans jamais une valeur de secret.
@@ -42,6 +43,8 @@ const accountSchema = z
     pack: z.enum(['5', '10', '20']).optional(),
   })
   .strict();
+// Connexion GitHub depuis Réglages (plan GitHub, G1) : aucun jeton ne passe par le navigateur.
+const githubActionSchema = z.object({ action: z.enum(['start', 'cancel', 'logout', 'repos']) }).strict();
 const NO_ACCOUNT: AccountStatus = {
   status: 'none',
   online: true,
@@ -73,6 +76,8 @@ export async function createStudioServer(
     account?: AccountClient;
     // Lecture des styles d'un site (lot 5) ; absent : Chromium local (extract.ts).
     extract?: ReadSite;
+    // Connexion GitHub de l'app (plan GitHub, G1) ; absente : section GitHub indisponible.
+    githubAuth?: GithubAuth;
   } & (
     | { registry: Registry }
     | { store: Store; projectDir: string; config: Config }
@@ -192,6 +197,10 @@ export async function createStudioServer(
             });
           if (url.pathname === '/api/projects') return send(200, await registry.list());
           if (url.pathname === '/api/account') return send(200, options.account?.status() ?? NO_ACCOUNT);
+          if (url.pathname === '/api/github') {
+            if (!options.githubAuth) throw new StudioError('GitHub indisponible dans cette instance.', 409);
+            return send(200, options.githubAuth.status());
+          }
           if (url.pathname === '/api/settings')
             return send(200, {
               desktop: inDesktop,
@@ -283,6 +292,16 @@ export async function createStudioServer(
           else if (b.action === 'portal') url = (await a.portal()).url;
           else await a.refresh();
           return send(200, { ok: true, message, url, account: a.status() });
+        }
+        if (url.pathname === '/api/github') {
+          const g = options.githubAuth;
+          if (!g) throw new StudioError('GitHub indisponible dans cette instance.', 409);
+          const { action } = githubActionSchema.parse(body);
+          if (action === 'repos') return send(200, { ok: true, repos: await g.repos(), github: g.status() });
+          if (action === 'start') await g.start();
+          else if (action === 'cancel') g.cancel();
+          else await g.logout();
+          return send(200, { ok: true, github: g.status() });
         }
         const { store, dir: projectDir, config, brief: project, assistant, wall } = await instance();
         if (url.pathname === '/api/wall/image') return send(200, await wall.addImage(imageSchema.parse(body)));

@@ -3,10 +3,15 @@ import {
   accountAction,
   desktopAction,
   getAccount,
+  getGithub,
   getSettings,
+  githubAction,
   type AccountAction,
   type AccountStatus,
   type DesktopAction,
+  type GithubAction,
+  type GithubRepo,
+  type GithubStatus,
   type Pack,
   type Settings,
   type UpdateState,
@@ -306,6 +311,137 @@ function AccountSection({ account, onChange }: { account: AccountStatus | undefi
   );
 }
 
+// Connexion GitHub (plan GitHub, G1, réservée à Pro) : un code à saisir sur
+// github.com, puis les dépôts où DS-Studio est installé. Le serveur local
+// sonde GitHub et garde les jetons ; la page relit seulement l'état.
+const open = (url: string) => window.open(url, '_blank', 'noopener');
+function GithubSection({ tier }: { tier: string | undefined }) {
+  const [github, setGithub] = useState<GithubStatus>();
+  const [repos, setRepos] = useState<GithubRepo[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const load = () =>
+    getGithub()
+      .then(setGithub)
+      .catch((e) => setError((e as Error).message));
+  // Palier relu : un passage à Pro débloque la section sans recharger la page.
+  useEffect(() => {
+    void load();
+  }, [tier]);
+  const pending = github?.status === 'pending';
+  useEffect(() => {
+    if (!pending) return;
+    const timer = setInterval(() => void load(), 3000);
+    return () => clearInterval(timer);
+  }, [pending]);
+  const run = async (action: GithubAction) => {
+    setBusy(true);
+    setError('');
+    try {
+      const r = await githubAction(action);
+      setGithub(r.github);
+      if (action === 'repos') setRepos(r.repos ?? []);
+      if (action === 'logout') setRepos(null);
+      if (action === 'start' && r.github.verificationUri) open(r.github.verificationUri);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!github) return null;
+  const g = github;
+  return (
+    <section className="settings-block" aria-labelledby="s-github">
+      <h2 id="s-github">GitHub</h2>
+      <p className="hint">
+        DS-Studio lit le design system d’un dépôt et propose une pull request qui modifie ses valeurs de design ; tu merges
+        toi-même sur GitHub. Le code est lu sur cet ordinateur.
+      </p>
+      {!g.pro && (
+        <p className="message" role="status">
+          Réservé à DS-Studio Pro : passe Pro dans la section Compte.
+        </p>
+      )}
+      {g.status === 'connected' && (
+        <dl>
+          <dt>Compte</dt>
+          <dd className="mono">{g.login}</dd>
+        </dl>
+      )}
+      {g.status === 'pending' && g.userCode && (
+        <div className="github-code">
+          <p>
+            Saisis ce code sur <span className="mono">{g.verificationUri}</span> :
+          </p>
+          <p className="mono github-user-code" aria-label="Code GitHub">
+            {g.userCode}
+          </p>
+          <p className="hint">
+            En attente de GitHub{g.expiresAt ? `, code valable jusqu’à ${time(g.expiresAt)}` : ''}. Choisis ensuite les dépôts
+            auxquels DS-Studio a accès.
+          </p>
+        </div>
+      )}
+      {repos && (
+        <div>
+          {repos.length ? (
+            <ul className="github-repos" aria-label="Dépôts accessibles">
+              {repos.map((r) => (
+                <li key={r.fullName}>
+                  <span className="mono">{r.fullName}</span>
+                  {r.private ? ' (privé)' : ''}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="hint">Aucun dépôt accessible : ajoute DS-Studio à un dépôt sur GitHub.</p>
+          )}
+        </div>
+      )}
+      {g.message && (
+        <p className="message error" role="alert">
+          {g.message}
+        </p>
+      )}
+      {error && (
+        <p className="message error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="form-actions">
+        {g.status === 'none' && (
+          <button className="primary" disabled={busy || !g.pro} onClick={() => void run('start')}>
+            Connecter GitHub
+          </button>
+        )}
+        {g.status === 'pending' && (
+          <>
+            {g.verificationUri && <button onClick={() => open(g.verificationUri!)}>Ouvrir GitHub</button>}
+            <button disabled={busy} onClick={() => void run('cancel')}>
+              Annuler
+            </button>
+          </>
+        )}
+        {g.status === 'connected' && (
+          <>
+            <button disabled={busy || !g.pro} onClick={() => void run('repos')}>
+              Voir mes dépôts
+            </button>
+            <button onClick={() => open(g.installUrl)}>Ajouter un dépôt</button>
+            <button disabled={busy} onClick={() => void run('logout')}>
+              Déconnecter GitHub
+            </button>
+          </>
+        )}
+      </div>
+      {g.status === 'connected' && (
+        <p className="hint">Déconnecter efface les jetons de cet ordinateur ; l’accès se retire aussi dans les réglages GitHub (Applications).</p>
+      )}
+    </section>
+  );
+}
+
 export function SettingsPage({ onBack }: { onBack: () => void }) {
   const [settings, setSettings] = useState<Settings>();
   const [account, setAccount] = useState<AccountStatus>();
@@ -370,6 +506,7 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
               void load();
             }}
           />
+          <GithubSection tier={account?.tier} />
           <section className="settings-block" aria-labelledby="s-app">
             <h2 id="s-app">Application</h2>
             <dl>

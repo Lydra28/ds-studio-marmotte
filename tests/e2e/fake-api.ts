@@ -41,6 +41,7 @@ const accounts: Fake[] = [
   { ...E2E_FREE, plan: 'free', gifted: false, creditCents: 1, welcome: true, includedLeftCents: 0, customer: false, subscription: null, todayCents: 0, monthCents: 0, relayCalls: 0 },
 ];
 const sessions = new Map<string, Fake>();
+let githubPolls = 0;
 const me = (a: Fake) => ({
   email: a.email,
   plan: a.plan,
@@ -74,7 +75,8 @@ const readJson = (req: http.IncomingMessage) =>
       try {
         resolve(text ? (JSON.parse(text) as Record<string, unknown>) : {});
       } catch {
-        resolve({});
+        // Formulaires OAuth de github.com (faux GitHub ci-dessous).
+        resolve(Object.fromEntries(new URLSearchParams(text)));
       }
     });
   });
@@ -86,6 +88,27 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify(json));
   };
   const route = `${req.method} ${(req.url ?? '').split('?')[0]}`;
+  // Faux GitHub (plan GitHub, G1) : device flow de la GitHub App, approuvé au
+  // second sondage ; un seul dépôt installé. Jamais le vrai github.com.
+  if (route === 'POST /login/device/code') {
+    githubPolls = 0;
+    return send(200, { device_code: 'e2e-device-code-123456', user_code: 'E2E0-CODE', verification_uri: `${base}/login/device`, expires_in: 900, interval: 1 });
+  }
+  if (route === 'GET /login/device') {
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    return res.end('<!doctype html><title>Faux GitHub</title><p>Code GitHub simulé : approuvé.</p>');
+  }
+  if (route === 'POST /login/oauth/access_token') {
+    if (body.grant_type === 'urn:ietf:params:oauth:grant-type:device_code' && githubPolls++ === 0) return send(200, { error: 'authorization_pending' });
+    return send(200, { access_token: 'ghu_e2e_jeton_acces', expires_in: 28800, refresh_token: 'ghr_e2e_jeton_renouv', refresh_token_expires_in: 15897600 });
+  }
+  if (route.startsWith('GET /user')) {
+    if (req.headers.authorization !== 'Bearer ghu_e2e_jeton_acces') return send(401, { message: 'Bad credentials' });
+    if (route === 'GET /user') return send(200, { login: 'dev-e2e' });
+    if (route === 'GET /user/installations') return send(200, { installations: [{ id: 1 }] });
+    if (route === 'GET /user/installations/1/repositories')
+      return send(200, { repositories: [{ full_name: 'dev-e2e/site-vitrine', private: true, default_branch: 'main' }] });
+  }
   if (route === 'POST /v1/auth/login') {
     const a = accounts.find((x) => x.email === body.email && x.password === body.password);
     if (!a) return send(401, { error: 'Adresse ou mot de passe incorrect.' });

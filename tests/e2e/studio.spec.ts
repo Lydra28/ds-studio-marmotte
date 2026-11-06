@@ -163,6 +163,41 @@ test('compte : connexion dans Réglages, Pro (offert) et usage affichés, assist
   await expect(page.locator('.bar .project')).toHaveText('Marmotte');
 });
 
+test('github : réservé à Pro, connexion par code contre le faux GitHub, dépôts listés, jetons jamais dans la page', async ({ page }) => {
+  // Sondage réel du serveur local au rythme du faux GitHub (1 s), relu par la page toutes les 3 s.
+  test.setTimeout(45_000);
+  await page.getByRole('button', { name: 'Réglages' }).click();
+  const github = page.getByRole('region', { name: 'GitHub' });
+  await expect(github).toContainText('Réservé à DS-Studio Pro');
+  await expect(github.getByRole('button', { name: 'Connecter GitHub' })).toBeDisabled();
+
+  const form = page.getByRole('form', { name: 'Compte DS-Studio' });
+  await form.getByLabel('Adresse mail').fill('associe@example.com');
+  await form.getByLabel('Mot de passe').fill('mot-de-passe-de-test');
+  await form.getByRole('button', { name: 'Se connecter' }).click();
+  await expect(page.getByRole('region', { name: 'Compte' })).toContainText('Pro (offert)');
+  await expect(github).not.toContainText('Réservé à DS-Studio Pro');
+
+  // github.com/login/device s'ouvre dans un autre onglet (faux GitHub), le code s'affiche ici.
+  const popup = page.waitForEvent('popup');
+  await github.getByRole('button', { name: 'Connecter GitHub' }).click();
+  await expect(github.getByLabel('Code GitHub')).toHaveText('E2E0-CODE');
+  await (await popup).close();
+  // Le serveur local sonde GitHub (attente, puis approuvé) ; la page relit l'état.
+  await expect(github).toContainText('dev-e2e', { timeout: 15_000 });
+  await github.getByRole('button', { name: 'Voir mes dépôts' }).click();
+  await expect(github.getByRole('list', { name: 'Dépôts accessibles' })).toContainText('dev-e2e/site-vitrine (privé)');
+  const status = await (await page.request.get('/api/github')).json();
+  expect(status.status).toBe('connected');
+  expect(JSON.stringify(status)).not.toMatch(/ghu_|ghr_/);
+  await page.screenshot({ path: 'test-results/reglages-github.png', fullPage: true });
+
+  await github.getByRole('button', { name: 'Déconnecter GitHub' }).click();
+  await expect(github.getByRole('button', { name: 'Connecter GitHub' })).toBeEnabled();
+  await page.getByRole('region', { name: 'Compte' }).getByRole('button', { name: 'Se déconnecter' }).click();
+  await expect(form).toBeVisible();
+});
+
 test('facturation : compte gratuit, génération offerte puis 402, recharge, Pro, portail (faux Stripe, URL dans un nouvel onglet)', async ({ page }) => {
   await page.getByRole('button', { name: 'Réglages' }).click();
   const form = page.getByRole('form', { name: 'Compte DS-Studio' });

@@ -8,6 +8,7 @@ import { createSiteRelay } from './site-relay.js';
 import { acquireLease } from '../../scripts/runtime.mjs';
 import { desktopReady, onDesktopStop } from './desktop.js';
 import { AccountClient } from './account.js';
+import { GithubAuth } from './github-auth.js';
 
 // L'app Electron donne la racine (serveur compilé en un seul fichier) et le
 // chemin du `.env` (dans les réglages de l'utilisateur, jamais dans l'exe).
@@ -72,6 +73,15 @@ try {
   });
   account.start();
   void account.refresh();
+  // Connexion GitHub (plan GitHub, G1) : jetons à côté de la session, réservée
+  // à Pro ; faux GitHub en test (DS_STUDIO_GITHUB_URL, DS_STUDIO_GITHUB_API_URL).
+  const githubAuth = await GithubAuth.open({
+    dir: process.env.DS_STUDIO_SETTINGS_DIR ? path.resolve(process.env.DS_STUDIO_SETTINGS_DIR) : directory,
+    isPro: () => account.status().tier === 'pro',
+    clientId: process.env.DS_STUDIO_GITHUB_CLIENT_ID,
+    loginUrl: process.env.DS_STUDIO_GITHUB_URL,
+    apiUrl: process.env.DS_STUDIO_GITHUB_API_URL,
+  });
   const registry = projectsDir
     ? Registry.folder(projectsDir, path.join(root, 'templates/blank/design-system.tokens.json'), 'marmotte', { account })
     : Registry.single(await openInstance(path.basename(projectDir) === 'workspace' ? 'exemple' : path.basename(projectDir).toLowerCase().replace(/[^a-z0-9-]/g, '-'), projectDir, directory, { account }));
@@ -81,6 +91,7 @@ try {
     if (stopping) return;
     stopping = true;
     account.stop();
+    githubAuth.stop();
     for (const relay of relays) relay.close();
     await app.close();
     await registry.flush();
@@ -111,6 +122,7 @@ try {
     relayPort: relayUp ? relayPort : undefined,
     pluginCode: await loadPluginCode(directory),
     account,
+    githubAuth,
     settings: {
       version: process.env.DS_STUDIO_APP_VERSION || pkg.version || '0.0.0',
       appName: process.env.DS_STUDIO_APP_NAME || 'DS-Studio',

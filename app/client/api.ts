@@ -67,6 +67,27 @@ export const getAccount = () => request<AccountStatus>('account');
 // `checkout` et `portal` rendent `url` : page Stripe à ouvrir dans le navigateur.
 export const accountAction = (body: { action: AccountAction; email?: string; password?: string; code?: string; kind?: 'pro' | 'credits'; pack?: Pack }) =>
   request<{ ok: true; message: string | null; url?: string | null; account: AccountStatus }>('account', body);
+// Connexion GitHub (plan GitHub, G1) : état seulement, jamais de jeton.
+// Même forme que `GithubStatus` et `GithubRepo` de app/server/github-auth.ts.
+export interface GithubStatus {
+  status: 'none' | 'pending' | 'connected';
+  pro: boolean;
+  login: string | null;
+  userCode: string | null;
+  verificationUri: string | null;
+  expiresAt: string | null;
+  installUrl: string;
+  message: string | null;
+}
+export interface GithubRepo {
+  fullName: string;
+  private: boolean;
+  defaultBranch: string;
+}
+export type GithubAction = 'start' | 'cancel' | 'logout' | 'repos';
+export const getGithub = () => request<GithubStatus>('github');
+export const githubAction = (action: GithubAction) =>
+  request<{ ok: true; github: GithubStatus; repos?: GithubRepo[] }>('github', { action });
 export interface ProjectSummary {
   slug: string;
   name: string;

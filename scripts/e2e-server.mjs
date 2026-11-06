@@ -35,6 +35,9 @@ const child = spawn(
       DS_STUDIO_API_URL: `http://127.0.0.1:${fakePort}`,
       DS_STUDIO_LICENSE_KEY_FILE: keyFile,
       GITHUB_TOKEN: '',
+      // Plan GitHub (G1) : connexion contre le faux GitHub du faux serveur.
+      DS_STUDIO_GITHUB_URL: `http://127.0.0.1:${fakePort}`,
+      DS_STUDIO_GITHUB_API_URL: `http://127.0.0.1:${fakePort}`,
       // Lot 5 : extraction d'un site lue dans un inventaire de fixture (aucun réseau).
       DS_STUDIO_EXTRACT_FIXTURE: path.resolve('tests/fixtures/site/inventory.json'),
     },

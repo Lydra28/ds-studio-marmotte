@@ -1320,6 +1320,23 @@ dialog.diff::backdrop,
 .settings-block .hint {
   margin: 12px 0 0;
 }
+/* GitHub (plan GitHub, G1) : code de connexion lisible de loin, liste des dépôts */
+.settings-block .hint + dl,
+.settings-block .message + dl {
+  margin-top: 14px;
+}
+.github-user-code {
+  margin: 8px 0;
+  font-size: 28px;
+  letter-spacing: 0.12em;
+  color: var(--c-accent);
+}
+.github-repos {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
 /* Compte DS-Studio : onglets d'action puis formulaire court */
 .account-tabs {
   display: flex;
