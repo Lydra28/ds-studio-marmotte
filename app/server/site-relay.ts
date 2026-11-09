@@ -1,11 +1,19 @@
 import http from 'node:http';
+import fs from 'node:fs/promises';
+import { cssName } from '../shared/model.js';
+import { exportName } from '../shared/export.js';
+import { scanFile } from '../shared/repo-scan.js';
 import type { Registry } from './registry.js';
+import { planFile, readPlan, type RepoPlan } from './repo-read.js';
 
 // Relais « Site en direct » : `http://<projet>.localhost:<port>/` sert le site
 // public du projet (config.site.url), en lecture seule, et y ajoute un script
 // qui reçoit de l'atelier le CSS des tokens en cours (brouillon compris).
 // Origine à part de l'atelier : le site ne peut ni le lire ni appeler son API,
 // et seul l'atelier peut l'afficher dans un cadre. Rien n'est écrit sur le site.
+// G4 : projet rattaché à un dépôt, les valeurs en dur des réponses CSS et HTML
+// deviennent les tokens du plan (comme la PR), pour que Comparaison montre le
+// site après la PR. `brut.<projet>.localhost` sert le site tel qu'en ligne.
 
 const MAX_BODY = 25_000_000;
 const MAX_CACHE = 80_000_000;
@@ -59,9 +67,73 @@ export function injectLive(html: string) {
   return /<\/head>/i.test(html) ? html.replace(/<\/head>/i, `${tag}</head>`) : tag + html;
 }
 
+// --- Plan du dépôt appliqué aux réponses (G4) -------------------------------
+
+/** Nom de variable d'une valeur en dur du site (`--color-x`), null : pas de token. */
+export type SiteLookup = (kind: 'color' | 'length' | 'font', property: string, normalized: string) => string | null;
+
+// Même valeur, même propriété que dans le dépôt : le token le plus souvent
+// choisi par le plan. Couleur et police : la valeur seule suffit aussi (CSS
+// compilé, classes Tailwind) ; longueur : la propriété doit correspondre
+// (16px d'un padding n'est pas une taille de texte).
+export function planLookup(plan: Pick<RepoPlan, 'entries'>, rename: Record<string, string>): SiteLookup {
+  const votes = new Map<string, Map<string, number>>();
+  const vote = (k: string, token: string) => {
+    const m = votes.get(k) ?? new Map<string, number>();
+    m.set(token, (m.get(token) ?? 0) + 1);
+    votes.set(k, m);
+  };
+  for (const e of plan.entries) {
+    if (!e.token || (e.kind !== 'color' && e.kind !== 'length' && e.kind !== 'font')) continue;
+    vote(`${e.kind}|${(e.property ?? '').toLowerCase()}|${e.normalized}`, e.token);
+    if (e.kind !== 'length') vote(`${e.kind}||${e.normalized}`, e.token);
+  }
+  const best = new Map<string, string>();
+  for (const [k, m] of votes) best.set(k, [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0]);
+  return (kind, property, normalized) => {
+    const key = best.get(`${kind}|${property}|${normalized}`) ?? (kind === 'length' ? undefined : best.get(`${kind}||${normalized}`));
+    return key ? cssName(exportName(key, rename)) : null;
+  };
+}
+
+/** Valeurs en dur d'une feuille ou d'une page → `var(--x, valeur)` ; scripts jamais touchés. */
+export function applyPlan(text: string, kind: 'css' | 'html', lookup: SiteLookup) {
+  const scripts = kind === 'html' ? [...text.matchAll(/<script\b[\s\S]*?<\/script\s*>/gi)].map((m) => [m.index!, m.index! + m[0].length]) : [];
+  let out = '';
+  let last = 0;
+  let count = 0;
+  for (const o of scanFile(kind === 'css' ? 'site.css' : 'site.html', text)) {
+    if (o.detector !== 'hardcoded' || (o.via !== 'css' && o.via !== 'style-attr') || o.offset < last) continue;
+    if (o.kind !== 'color' && o.kind !== 'length' && o.kind !== 'font') continue;
+    if (scripts.some(([a, b]) => o.offset >= a && o.offset < b)) continue;
+    const code = lookup(o.kind, (o.name ?? '').toLowerCase(), o.normalized);
+    if (!code) continue;
+    // `!important` reste hors de var() (sinon la déclaration ne vaut plus rien).
+    const original = text.slice(o.offset, o.offset + o.length).replace(/\s*!\s*important\s*$/i, '');
+    out += `${text.slice(last, o.offset)}var(${code}, ${original})`;
+    last = o.offset + original.length;
+    count++;
+  }
+  return { text: out + text.slice(last), count };
+}
+
 export function createSiteRelay(registry: Registry, options: { atelier: string; fetch?: typeof fetch }) {
-  const cache = new Map<string, { at: number; type: string; body: Buffer }>();
+  const cache = new Map<string, { at: number; type: string; body: Buffer; applied?: { plan: string; body: Buffer } }>();
   let cached = 0;
+  // Plan relu seulement quand son fichier (ou le renommage) change.
+  const plans = new Map<string, { stamp: string; lookup: SiteLookup | null }>();
+  const lookupFor = async (dataDir: string, rename: Record<string, string>) => {
+    const file = planFile(dataDir);
+    const stat = await fs.stat(file).catch(() => null);
+    if (!stat) return null;
+    const stamp = `${file}:${stat.mtimeMs}:${JSON.stringify(rename)}`;
+    const known = plans.get(file);
+    if (known?.stamp === stamp) return known;
+    const plan = await readPlan(dataDir).catch(() => null);
+    const found = { stamp, lookup: plan ? planLookup(plan, rename) : null };
+    plans.set(file, found);
+    return found;
+  };
   const server = http.createServer(async (req, res) => {
     const fail = (status: number, message: string) => {
       res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -69,8 +141,9 @@ export function createSiteRelay(registry: Registry, options: { atelier: string; 
     };
     try {
       const port = (server.address() as { port: number }).port;
-      const host = /^([a-z0-9][a-z0-9-]{0,39})\.localhost:(\d+)$/.exec(req.headers.host ?? '');
-      if (!host || Number(host[2]) !== port) return fail(403, 'Hôte refusé : <projet>.localhost attendu.');
+      const host = /^(brut\.)?([a-z0-9][a-z0-9-]{0,39})\.localhost:(\d+)$/.exec(req.headers.host ?? '');
+      if (!host || Number(host[3]) !== port) return fail(403, 'Hôte refusé : <projet>.localhost attendu.');
+      const raw = !!host[1];
       if (req.method !== 'GET' && req.method !== 'HEAD') return fail(405, 'Site en lecture seule dans l’atelier.');
       const headers = {
         'X-Content-Type-Options': 'nosniff',
@@ -83,8 +156,9 @@ export function createSiteRelay(registry: Registry, options: { atelier: string; 
         res.writeHead(200, { ...headers, 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
         return res.end(liveScript(options.atelier));
       }
-      const { config } = await registry.get(host[1]).catch(() => ({ config: null }));
-      if (!config?.site) return fail(404, 'Pas de site configuré pour ce projet.');
+      const instance = await registry.get(host[2]).catch(() => null);
+      const config = instance?.config;
+      if (!instance || !config?.site) return fail(404, 'Pas de site configuré pour ce projet.');
       const origin = new URL(config.site.url).origin;
       const upstream = new URL(path, origin);
       if (upstream.origin !== origin) return fail(400, 'Adresse hors du site.');
@@ -122,12 +196,24 @@ export function createSiteRelay(registry: Registry, options: { atelier: string; 
           cached += body.length;
         }
       }
-      const body = hit.type.startsWith('text/html') ? Buffer.from(injectLive(hit.body.toString('utf8'))) : hit.body;
+      const html = hit.type.startsWith('text/html');
+      const css = hit.type.startsWith('text/css');
+      let body = hit.body;
+      // Plan appliqué à la copie brute du cache, gardé tant que le plan ne change pas.
+      const github = config.github;
+      const plan = !raw && (html || css) && github?.source === 'repo' ? await lookupFor(instance.store.directory, github.rename) : null;
+      if (plan?.lookup) {
+        if (hit.applied?.plan !== plan.stamp)
+          hit.applied = { plan: plan.stamp, body: Buffer.from(applyPlan(hit.body.toString('utf8'), html ? 'html' : 'css', plan.lookup).text) };
+        body = hit.applied.body;
+      }
+      if (html) body = Buffer.from(injectLive(body.toString('utf8')));
       res.writeHead(200, {
         ...headers,
         'Content-Type': hit.type,
         'Content-Length': body.length,
-        'Cache-Control': hit.type.startsWith('text/html') ? 'no-store' : 'max-age=600',
+        // Feuilles revalidées à chaque page : le plan peut changer entre deux lectures.
+        'Cache-Control': html ? 'no-store' : css ? 'no-cache' : 'max-age=600',
       });
       res.end(req.method === 'HEAD' ? undefined : body);
     } catch (e) {

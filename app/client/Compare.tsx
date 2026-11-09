@@ -8,9 +8,10 @@ import { previewSrc, ScreenPicker, type Screen } from './DesignSystem.js';
 
 // Comparaison côte à côte : deux états du jeu (version acceptée, état
 // enregistré ou brouillon) rendus dans deux cadres identiques, défilement lié.
-// Lecture seule : rien n'est écrit depuis cette vue.
+// Lecture seule : rien n'est écrit depuis cette vue. `site` (G4) : le site tel
+// qu'en ligne, sans DS-Studio, face au site après la PR.
 
-export type Source = 'draft' | 'state' | number;
+export type Source = 'draft' | 'state' | 'site' | number;
 
 // Écran générique du DS (même page que la preview latérale), pour un jeu donné.
 export function DsFrame({
@@ -97,20 +98,30 @@ export default function CompareView({
   }, [left, right]);
 
   const accepted = versions.some((v) => v.revision === state.revision);
+  const site = relay && config.site ? config.site : null;
+  const repo = config.github?.source === 'repo';
   const label = (s: Source) =>
     s === 'draft'
       ? 'Brouillon en cours'
-      : s === 'state'
+      : s === 'site'
+        ? 'Site actuel (sans DS-Studio)'
+        : s === 'state'
         ? `Enregistré · r${state.revision}${accepted ? ` (= v${state.revision})` : ''}`
         : `v${s} · ${new Date(versions.find((v) => v.revision === s)?.acceptedAt ?? '').toLocaleDateString('fr-FR')}`;
-  const options: Source[] = [...(draft ? (['draft'] as Source[]) : []), 'state', ...versions.map((v) => v.revision)];
-  const resolve = (s: Source) => (s === 'draft' ? draftSet : s === 'state' ? state.set : loaded[s]);
+  const options: Source[] = [
+    ...(site ? (['site'] as Source[]) : []),
+    ...(draft ? (['draft'] as Source[]) : []),
+    'state',
+    ...versions.map((v) => v.revision),
+  ];
+  // Site actuel : pas de jeu de tokens à lui (les siens), aucun écart de tokens calculé.
+  const resolve = (s: Source) => (s === 'draft' ? draftSet : s === 'state' || s === 'site' ? state.set : loaded[s]);
   const before = resolve(left);
   const after = resolve(right);
-  const patches = useMemo(() => (before && after ? diff(before, after) : []), [before, after]);
+  const vsSite = left === 'site' || right === 'site';
+  const patches = useMemo(() => (before && after && !vsSite ? diff(before, after) : []), [before, after, vsSite]);
   const [detail, setDetail] = useState(false);
 
-  const site = relay && config.site ? config.site : null;
   const [content, setContent] = useState<Screen | 'site'>(site ? 'site' : 'ds');
   const [device, setDevice] = useState<Device>('desktop');
   const [page, setPage] = useState(site?.pages[0] ?? '/');
@@ -153,8 +164,12 @@ export default function CompareView({
           <p className="hint" style={{ width: width * scale }}>
             Chargement de la version…
           </p>
+        ) : s === 'site' && content !== 'site' ? (
+          <p className="hint" style={{ width: width * scale }}>
+            Le site actuel se compare sur le contenu « Site » seulement.
+          </p>
         ) : content === 'site' && site ? (
-          <SiteFrame key={`${device}-${page}`} slug={slug} relay={relay!} config={config} set={set} page={page} {...props} />
+          <SiteFrame key={`${device}-${page}-${s === 'site'}`} slug={slug} relay={relay!} config={config} set={set} page={page} raw={s === 'site'} {...props} />
         ) : (
           <DsFrame key={device} set={set} screen={content === 'site' ? 'ds' : content} {...props} />
         )}
@@ -215,10 +230,17 @@ export default function CompareView({
           <input type="checkbox" checked={linked} onChange={(e) => setLinked(e.target.checked)} /> Défilement lié
         </label>
         <span className="compare__summary">
-          {before && after ? diffSummary(patches) : '…'}
+          {vsSite ? 'Site tel qu’en ligne face aux tokens de l’atelier' : before && after ? diffSummary(patches) : '…'}
           {patches.length > 0 && <button onClick={() => setDetail(true)}>Détail</button>}
         </span>
       </div>
+      <p className="hint">
+        {!site
+          ? `${config.site ? 'Relais du Site en direct arrêté (Réglages → Services)' : 'Pas d’adresse https publique pour ce projet'} : comparaison sur les écrans d’exemple de DS-Studio seulement. Les valeurs en dur de ton code n’y apparaissent pas : vérifie-les dans la pull request.`
+          : repo
+            ? 'Site en direct : les valeurs en dur du CSS et du HTML sont remplacées à la volée par les tokens du plan du dépôt, comme dans la pull request (JavaScript jamais réécrit). « Site actuel » montre le site sans DS-Studio.'
+            : 'Site en direct : seules les variables du site prennent les tokens de l’atelier ; ses valeurs en dur restent telles quelles (rattache un dépôt pour les remplacer).'}
+      </p>
       {error && (
         <p className="message error" role="alert">
           {error}
@@ -241,4 +263,4 @@ export default function CompareView({
   );
 }
 
-const parse = (v: string): Source => (v === 'draft' || v === 'state' ? v : Number(v));
+const parse = (v: string): Source => (v === 'draft' || v === 'state' || v === 'site' ? v : Number(v));

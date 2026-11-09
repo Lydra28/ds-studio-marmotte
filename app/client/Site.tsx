@@ -6,8 +6,10 @@ import { exportCss } from '../shared/export.js';
 // « Site en direct » : le vrai site du projet, servi par le relais local
 // (site-relay.ts), reçoit le CSS des tokens en cours, brouillon compris, avec
 // les noms de variables du code (`github.rename`), comme la PR GitHub.
+// Projet rattaché à un dépôt (G4) : le relais remplace aussi les valeurs en
+// dur par les tokens du plan. `raw` : le site tel qu'en ligne, sans DS-Studio.
 
-export const siteOrigin = (slug: string, relay: number) => `http://${slug}.localhost:${relay}`;
+export const siteOrigin = (slug: string, relay: number, raw = false) => `http://${raw ? 'brut.' : ''}${slug}.localhost:${relay}`;
 
 export function SiteFrame({
   slug,
@@ -21,6 +23,7 @@ export function SiteFrame({
   title,
   onScroll,
   follow,
+  raw = false,
 }: {
   slug: string;
   relay: number;
@@ -34,9 +37,10 @@ export function SiteFrame({
   // Défilement lié : position remontée par le site, position à suivre (fraction).
   onScroll?: (y: number) => void;
   follow?: number;
+  raw?: boolean;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
-  const origin = siteOrigin(slug, relay);
+  const origin = siteOrigin(slug, relay, raw);
   const css = useMemo(
     () =>
       exportCss(
@@ -46,7 +50,7 @@ export function SiteFrame({
       ),
     [set, config],
   );
-  const push = () => frame.current?.contentWindow?.postMessage({ type: 'ds-css', css }, origin);
+  const push = () => !raw && frame.current?.contentWindow?.postMessage({ type: 'ds-css', css }, origin);
   useEffect(() => {
     push();
   }, [css]);
@@ -210,7 +214,9 @@ export function SiteView({
         <span className={`site-view__state ${draft ? 'is-draft' : ''}`}>{draft ? 'Tokens du brouillon' : 'Tokens enregistrés'}</span>
       </div>
       <p className="hint">
-        Le vrai site, avec les tokens de l’atelier à la place des siens. Rien n’est écrit sur le site : pour le publier, accepte une version (pull request).
+        Le vrai site, avec les tokens de l’atelier à la place des siens
+        {config.github?.source === 'repo' && ' (valeurs en dur du CSS et du HTML comprises, selon le plan du dépôt ; JavaScript non réécrit)'}. Rien n’est écrit
+        sur le site : pour le publier, accepte une version (pull request).
       </p>
       <div className="site-view__frames" ref={box}>
         <figure>

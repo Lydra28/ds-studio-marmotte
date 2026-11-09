@@ -456,6 +456,8 @@ test('comparaison côte à côte : brouillon face à l’état enregistré, inve
   const view = page.getByRole('region', { name: 'Comparaison côte à côte' });
   await expect(view.getByLabel('Version après')).toHaveValue('draft');
   await expect(view.getByText('Tokens : 1 modifié(s)')).toBeVisible();
+  // G4 : projet sans site public, limite dite dans le panneau.
+  await expect(view.getByText(/Pas d’adresse https publique pour ce projet : comparaison sur les écrans d’exemple/)).toBeVisible();
   // Chaque cadre reçoit son propre jeu.
   const spaceIn = (side: string) =>
     view
