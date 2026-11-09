@@ -2454,3 +2454,12 @@ dialog.diff .diff-summary {
   outline: 2px solid var(--c-accent, currentColor);
   outline-offset: 1px;
 }
+/* Dégradé du dépôt (G4) : aperçu en lecture seule dans le panneau Dépôt. */
+.repo-swatch {
+  display: inline-block;
+  width: 32px;
+  height: 14px;
+  margin-right: 8px;
+  vertical-align: middle;
+  border: 1px solid var(--c-line);
+}

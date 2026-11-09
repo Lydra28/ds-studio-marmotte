@@ -34,6 +34,7 @@ export default function RepoPanel({
   start,
   onConfig,
   onDraft,
+  onSemantic,
   onClose,
 }: {
   config: Config;
@@ -41,6 +42,8 @@ export default function RepoPanel({
   start: 'create' | 'open';
   onConfig: (config: Config) => void;
   onDraft: (changes: Change[]) => void;
+  // Second brouillon : couleurs à plat → primitives de palette + tokens sémantiques.
+  onSemantic: () => void;
   onClose: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>({ status: 'idle' });
@@ -156,8 +159,14 @@ export default function RepoPanel({
           ) : (
             <p className="hint">Dépôt rattaché, pas encore lu.</p>
           )}
+          <p className="hint">
+            Couleurs du dépôt écrites à plat (<code>--canvas: #0B0B0C</code>) : DS-Studio peut proposer une palette de primitives et
+            garder tes noms comme tokens sémantiques qui y renvoient. Second brouillon, relu par diff ; la PR réécrit alors tes
+            variables.
+          </p>
           <div className="form-actions">
             <button onClick={() => void openForm()}>Changer de dépôt</button>
+            <button onClick={onSemantic}>Proposer une couche sémantique</button>
             <button className="primary" onClick={() => read('attach')}>
               Relire le dépôt
             </button>
@@ -291,11 +300,27 @@ function Summary({ report, tokens }: { report: RepoReport; tokens?: number }) {
       )}
       {report.conflicts.length > 0 && (
         <details className="extract-changes">
-          <summary>{report.conflicts.length} variable(s) déclarée(s) avec plusieurs valeurs (la première gagne)</summary>
+          <summary>{report.conflicts.length} variable(s) déclarée(s) avec plusieurs valeurs (celle du fichier principal gagne)</summary>
           <ul>
             {report.conflicts.map((c) => (
               <li key={c.name}>
                 <code>{c.name}</code> : {c.values.join(' · ')}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {(report.composite?.length ?? 0) > 0 && (
+        <details className="extract-changes" open>
+          <summary>{report.composite!.length} dégradé(s) et ombre(s) gardé(s) dans le code (lecture seule)</summary>
+          <ul aria-label="Dégradés et ombres du dépôt">
+            {report.composite!.map((c) => (
+              <li key={c.name}>
+                {c.kind === 'gradient' && !/url\(|var\(/i.test(c.value) && (
+                  <span className="repo-swatch" style={{ background: c.value }} aria-hidden="true" />
+                )}
+                <code>{c.name}</code> : {c.kind === 'gradient' ? 'dégradé' : 'ombre'}, {c.bound}/{c.colors} couleur(s) liée(s) à un token
+                {c.colors > c.bound && ' (les autres restent en dur : transparence ou pas de token proche)'}
               </li>
             ))}
           </ul>

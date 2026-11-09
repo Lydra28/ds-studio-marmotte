@@ -43,8 +43,9 @@ import AssistantPanel from './Assistant.js';
 import { brandColor, MascotDock } from './Mascot.js';
 import Wall from './Wall.js';
 import ExtractPanel from './Extract.js';
+import { proposeSemanticLayer } from '../shared/semantic.js';
 import RepoPanel from './Repo.js';
-import { SiteFrame, SiteFullscreen, SiteView, type Device } from './Site.js';
+import { SiteFrame, SiteFullscreen, type Device } from './Site.js';
 import { fontFamilies, loadFonts } from './fonts.js';
 import { previewSrc, ScreenPicker, type Screen } from './DesignSystem.js';
 import CompareView, { type Source } from './Compare.js';
@@ -183,8 +184,8 @@ function Workspace({
       return 'board';
     }
   });
-  // Lot 5 : lecture des styles d'un site demandée à la création ou depuis le
-  // Site en direct ; le panneau s'affiche au-dessus de la planche.
+  // Lot 5 : lecture des styles d'un site demandée à la création ou depuis la
+  // preview du site ; le panneau s'affiche au-dessus de la planche.
   const [extractUrl, setExtractUrl] = useState<string | null>(() => {
     try {
       return sessionStorage.getItem(k('ds-extract'));
@@ -310,8 +311,13 @@ function Workspace({
   }, [drafts, structure, componentDrafts]);
 
   const changes: Change[] = [
-    ...[...structure].map(([key, token]): Change =>
-      token ? { op: 'add', key, token } : { op: 'remove', key },
+    // Token enregistré remplacé sous le même nom (couche sémantique) : retrait puis ajout.
+    ...[...structure].flatMap(([key, token]): Change[] =>
+      !token
+        ? [{ op: 'remove', key }]
+        : state?.set.tokens[key]
+          ? [{ op: 'remove', key }, { op: 'add', key, token }]
+          : [{ op: 'add', key, token }],
     ),
     ...[...drafts].map(([id, value]) => {
       const at = id.lastIndexOf('@');
@@ -532,7 +538,6 @@ function Workspace({
         onOpen={onOpen}
         view={view}
         onView={(v) => (v === 'versions' ? openVersions(versionsTab) : setView(v))}
-        site={!!(relay && config?.site)}
         versions={versions.map((v) => v.revision)}
         onVersion={(revision) => openVersions('timeline', revision)}
       >
@@ -666,20 +671,6 @@ function Workspace({
           }}
         />
       )}
-      {view === 'site' && relay && config?.site && draftSet && (
-        <SiteView
-          slug={slug}
-          relay={relay}
-          config={config}
-          set={draftSet}
-          draft={draftCount > 0}
-          onBack={() => setView('board')}
-          onExtract={() => {
-            setExtractUrl(config.site!.url);
-            setView('board');
-          }}
-        />
-      )}
       {view === 'versions' && config && (
         <div className="versions-view">
           <div className="tabs" role="tablist" aria-label="Versions">
@@ -764,6 +755,18 @@ function Workspace({
             draftChanges(list, 'lus dans le dépôt');
             setRepoPanel(null);
           }}
+          onSemantic={() => {
+            if (!draftSet) return;
+            const layer = proposeSemanticLayer(draftSet);
+            if (!layer.changes.length) {
+              setError('');
+              setNotice(layer.notes.join(' '));
+              return;
+            }
+            draftChanges(layer.changes, 'de la couche sémantique');
+            setNotice(`${layer.notes.join(' ')} Relis le diff avant de valider.`);
+            setRepoPanel(null);
+          }}
         />
       )}
       <main className="layout" hidden={view !== 'board'}>
@@ -786,7 +789,10 @@ function Workspace({
               <span>Preview {draftCount ? '· brouillon' : '· enregistrée'}</span>
               <ScreenPicker value={previewSite ? 'site' : previewScreen === 'site' ? 'ds' : previewScreen} onChange={setPreviewScreen} site={siteReady} />
               {previewSite && (
-                <button onClick={() => setSiteFull(devices[device].width >= 1024 ? 'desktop' : 'mobile')}>Plein écran</button>
+                <>
+                  <button onClick={() => setSiteFull(devices[device].width >= 1024 ? 'desktop' : 'mobile')}>Plein écran</button>
+                  <button onClick={() => setExtractUrl(config!.site!.url)}>Relire les styles du site</button>
+                </>
               )}
               <div className="devices" role="group" aria-label="Largeur d’écran">
                 {devices.map((d, i) => (

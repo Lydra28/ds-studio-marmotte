@@ -17,8 +17,10 @@ export const REPO_THRESHOLDS = {
   explicitTokens: 10,
   // Écart OKLab au-delà duquel une couleur en dur n'est rattachée à aucun token.
   colorGap: 0.05,
-  // Fenêtre relative autour d'un cran pour une longueur en dur.
-  lengthWindow: 0.25,
+  // Écart accepté entre une longueur en dur et un cran : 10 % du cran, au
+  // moins 2 px (recette du 2026-11-09 : 25 % changeait 80px en 64px).
+  lengthWindow: 0.1,
+  lengthMin: 2,
   // `@media (max-width: ≤ 1023px)` = mode mobile de la typographie.
   mobileMaxWidth: 1023,
   maxTokens: 500,
@@ -80,7 +82,7 @@ export interface RepoReport {
   };
   /** Rattachement : même token, valeur différente entre le dépôt et le projet (rien changé). */
   differing: { key: string; project: string; repo: string }[];
-  /** Même variable déclarée avec deux valeurs : la première gagne. */
+  /** Même variable déclarée avec deux valeurs : celle du fichier principal gagne. */
   conflicts: { name: string; values: string[] }[];
   rejected: { name: string; reason: string }[];
   hardcoded: { total: number; mapped: number; exact: number; unmapped: number };
@@ -88,6 +90,8 @@ export interface RepoReport {
   unmapped: { value: string; count: number }[];
   /** Classes Tailwind par défaut ou du thème (réécrites à G5). */
   classes: number;
+  /** Dégradés et ombres déclarés : gardés dans le code, couleurs liées aux tokens. */
+  composite?: { name: string; kind: 'gradient' | 'shadow'; value: string; colors: number; bound: number }[];
   notes: string[];
 }
 
@@ -170,6 +174,8 @@ function contextOf(o: Occurrence): Context {
 
 type Converted = { type: TokenType; value: TokenValue; aliasOf?: undefined } | { aliasOf: string; type?: undefined; value?: undefined } | { reason: string };
 
+const GRADIENT = /^\s*(repeating-)?(linear|radial|conic)-gradient\(/i;
+
 const firstFamily = (raw: string) => raw.split(',')[0].trim().replace(/^['"]|['"]$/g, '');
 
 function convert(o: Occurrence): Converted {
@@ -196,6 +202,7 @@ function convert(o: Occurrence): Converted {
     return target ? { aliasOf: target } : { reason: 'alias illisible' };
   }
   if (o.kind === 'shadow') return { reason: 'ombre : pas de type ombre dans le modèle' };
+  if (GRADIENT.test(o.value)) return { reason: 'dégradé : pas de type dégradé dans le modèle' };
   const v = o.value.trim();
   if (/weight/i.test(name) && /^[1-9]00$/.test(v)) return { type: 'fontWeight', value: Number(v) };
   if (/line-?height|leading/i.test(name) && /^\d+(\.\d+)?%?$/.test(v)) {
@@ -280,7 +287,13 @@ export function proposeFromRepo(scan: RepoScan, set: TokenSet, options: { mode: 
   let local = 0;
   let modeIgnored = 0;
 
-  // 1. Déclarations par nom, contexte par contexte ; la première de chaque contexte gagne.
+  // 1. Déclarations par nom, contexte par contexte. Même variable dans
+  // plusieurs fichiers (planches, démos, copies) : celle du fichier qui
+  // déclare le plus de variables (le fichier de tokens) gagne, puis la première.
+  const weight = new Map<string, number>();
+  for (const o of scan.occurrences)
+    if (DECLARATIONS.includes(o.detector) && o.name && contextOf(o) === 'root') weight.set(o.file, (weight.get(o.file) ?? 0) + 1);
+  const heavier = (a: Occurrence, b: Occurrence) => (weight.get(a.file) ?? 0) > (weight.get(b.file) ?? 0);
   const byName = new Map<string, { detector: Detector; root?: Occurrence; dark?: Occurrence; mobile?: Occurrence; values: Set<string> }>();
   for (const o of scan.occurrences) {
     if (!DECLARATIONS.includes(o.detector) || !o.name) continue;
@@ -292,8 +305,8 @@ export function proposeFromRepo(scan: RepoScan, set: TokenSet, options: { mode: 
     const d = byName.get(o.name) ?? { detector: o.detector, values: new Set<string>() };
     if (ctx === 'root') {
       d.values.add(o.normalized);
-      d.root ??= o;
-    } else d[ctx] ??= o;
+      if (!d.root || heavier(o, d.root)) d.root = o;
+    } else if (!d[ctx] || heavier(o, d[ctx]!)) d[ctx] = o;
     byName.set(o.name, d);
   }
   for (const [name, d] of byName) if (d.values.size > 1) conflicts.push({ name, values: [...d.values].slice(0, 4) });
@@ -489,7 +502,9 @@ export function proposeFromRepo(scan: RepoScan, set: TokenSet, options: { mode: 
 
   // 5. Plan de remplacement : chaque valeur en dur vers le token le plus juste du jeu obtenu.
   const colorTokens: { key: string; hex: string; semantic: boolean }[] = [];
-  const dims: { key: string; px: number }[] = [];
+  // Longueur : valeur de chaque mode (taille de texte mobile comprise), l'écart
+  // retenu est le pire : une valeur en dur fixe ne change pas sur mobile.
+  const dims: { key: string; px: number; all: number[] }[] = [];
   const fonts: { key: string; family: string }[] = [];
   for (const [key, t] of Object.entries(next.tokens)) {
     let v: TokenValue;
@@ -499,7 +514,18 @@ export function proposeFromRepo(scan: RepoScan, set: TokenSet, options: { mode: 
       continue;
     }
     if (t.$type === 'color' && typeof v === 'string') colorTokens.push({ key, hex: v.toUpperCase(), semantic: t.$collection !== 'primitives' });
-    else if (t.$type === 'dimension' && typeof v === 'number') dims.push({ key, px: v });
+    else if (t.$type === 'dimension' && typeof v === 'number') {
+      const all = next.modes[t.$collection]
+        .map((m) => {
+          try {
+            return resolve(next, key, { [t.$collection]: m });
+          } catch {
+            return v;
+          }
+        })
+        .filter((x): x is number => typeof x === 'number');
+      dims.push({ key, px: v, all });
+    }
     else if (t.$type === 'fontFamily') fonts.push({ key, family: String(v).toLowerCase() });
   }
   const role = (prop: string) =>
@@ -524,11 +550,12 @@ export function proposeFromRepo(scan: RepoScan, set: TokenSet, options: { mode: 
     /radius|^rounded/.test(prop) ? /radius|rounded/ : /font-size|^text-/.test(prop) ? /font\/size|(^|\/)text\/|font-size/ : /(^|\/)(space|spacing|gap|gutter)(\/|$)/;
   const pickLength = (px: number, prop: string): { token: string | null; gap: number | null } => {
     const re = scaleOf(prop);
-    let best: { key: string; px: number } | null = null;
-    for (const d of dims) if (re.test(d.key) && (!best || Math.abs(d.px - px) < Math.abs(best.px - px))) best = d;
+    const gapOf = (d: (typeof dims)[number]) => Math.max(...d.all.map((x) => Math.abs(x - px)), Math.abs(d.px - px));
+    let best: (typeof dims)[number] | null = null;
+    for (const d of dims) if (re.test(d.key) && (!best || gapOf(d) < gapOf(best))) best = d;
     if (!best) return { token: null, gap: null };
-    const gap = Math.abs(best.px - px);
-    return { token: gap === 0 || gap <= Math.max(1, best.px * T.lengthWindow) ? best.key : null, gap };
+    const gap = gapOf(best);
+    return { token: gap === 0 || gap <= Math.max(T.lengthMin, best.px * T.lengthWindow) ? best.key : null, gap };
   };
   const entries: PlanEntry[] = [];
   let truncated = false;
@@ -567,6 +594,15 @@ export function proposeFromRepo(scan: RepoScan, set: TokenSet, options: { mode: 
     });
   }
   const mapped = entries.filter((e) => e.token);
+  // Dégradés et ombres : restent dans le code ; leurs couleurs liées à un token
+  // sont réécrites (PR, Site en direct). Montrés en lecture seule dans le panneau.
+  const composite: RepoReport['composite'] = [];
+  for (const r of rejectedNames) {
+    const o = byName.get(r.name)?.root;
+    if (!o || (o.kind !== 'shadow' && !GRADIENT.test(o.value))) continue;
+    const inside = entries.filter((e) => e.kind === 'color' && e.file === o.file && e.offset >= o.offset && e.offset < o.offset + o.length);
+    composite.push({ name: r.name, kind: o.kind === 'shadow' ? 'shadow' : 'gradient', value: o.value.slice(0, 300), colors: inside.length, bound: inside.filter((e) => e.token).length });
+  }
   const unmappedCounts = new Map<string, number>();
   for (const e of entries) if (!e.token) unmappedCounts.set(e.normalized, (unmappedCounts.get(e.normalized) ?? 0) + 1);
 
@@ -625,6 +661,7 @@ export function proposeFromRepo(scan: RepoScan, set: TokenSet, options: { mode: 
         .slice(0, 10)
         .map(([value, count]) => ({ value, count })),
       classes: scan.occurrences.filter((o) => o.detector === 'tailwind-class').length,
+      composite: composite.slice(0, 50),
       notes,
     },
   };

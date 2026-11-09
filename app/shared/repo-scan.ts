@@ -177,16 +177,21 @@ const NAMED = /(?<![\w$#.-])(?:white|black)(?![\w-])/gi;
 const LENGTH = /(?<![\w$#.-])-?(?:\d+\.?\d*|\.\d+)(?:px|rem|em)(?![\w-])/gi;
 const VAR_USE = /var\(\s*(--[A-Za-z0-9_-]+)/g;
 
-// Valeurs en dur d'une valeur de propriété (CSS, attribut style, objet JSX).
-function scanValue(ctx: Ctx, prop: string, value: string, at: number, via: Via) {
-  const clean = value.replace(/url\([^)]*\)/gi, blank);
-  for (const m of clean.matchAll(VAR_USE)) emit(ctx, { offset: at + m.index!, length: m[0].length + 1, detector: 'var-use', via, kind: 'alias', name: prop, value: m[1], normalized: `var(${m[1]})` });
+// Couleurs en dur d'une valeur (`clean` : url() déjà masquées).
+function scanColors(ctx: Ctx, prop: string, clean: string, at: number, via: Via) {
   const colors: [number, string][] = [];
   for (const re of [HEX, COLOR_FN, NAMED]) for (const m of clean.matchAll(re)) colors.push([m.index!, m[0]]);
   for (const [i, raw] of colors) {
     const normalized = parseColor(raw);
     if (normalized) emit(ctx, { offset: at + i, length: raw.length, detector: 'hardcoded', via, kind: 'color', name: prop, value: raw, normalized });
   }
+}
+
+// Valeurs en dur d'une valeur de propriété (CSS, attribut style, objet JSX).
+function scanValue(ctx: Ctx, prop: string, value: string, at: number, via: Via) {
+  const clean = value.replace(/url\([^)]*\)/gi, blank);
+  for (const m of clean.matchAll(VAR_USE)) emit(ctx, { offset: at + m.index!, length: m[0].length + 1, detector: 'var-use', via, kind: 'alias', name: prop, value: m[1], normalized: `var(${m[1]})` });
+  scanColors(ctx, prop, clean, at, via);
   if (LENGTH_PROP.test(prop))
     for (const m of clean.matchAll(LENGTH)) {
       const normalized = parseLength(m[0]);
@@ -240,6 +245,7 @@ function scanCss(ctx: Ctx, region: string, base: number, via: Via, scss: boolean
       const value = raw.replace(/\s*!(important|default|global)\s*$/i, '');
       const inTheme = themes.some(([a, b]) => m.index! > a && m.index! < b);
       advance(m.indices![1]![0]);
+      const kind = kindOf(prop, value);
       emit(ctx, {
         scope: stack.join(' > '),
         offset: at,
@@ -248,8 +254,11 @@ function scanCss(ctx: Ctx, region: string, base: number, via: Via, scss: boolean
         via,
         name: prop,
         value,
-        ...kindOf(prop, value),
+        ...kind,
       });
+      // Variable composée (dégradé, ombre) : pas de token à elle, mais ses
+      // couleurs en dur suivent les tokens comme toute valeur en dur.
+      if (kind.kind === 'other' || kind.kind === 'shadow') scanColors(ctx, prop, value.replace(/url\([^)]*\)/gi, blank), at, via);
     } else if (!prop.startsWith('$')) scanValue(ctx, prop.toLowerCase(), raw, at, via);
   }
 }

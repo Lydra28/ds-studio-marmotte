@@ -42,7 +42,7 @@ export const sections = [
 // Sections repliables : celles de la sous-barre et « Autres primitives ».
 export const foldable = ['h-colors', 'h-tokens', 'h-type', 'h-scales', 'h-others', 'h-components', 'h-names'];
 
-export type View = 'wall' | 'board' | 'site' | 'versions';
+export type View = 'wall' | 'board' | 'versions';
 const NEW = '__new';
 
 // Barre du haut, dans l'ordre du travail : s'inspirer, construire, voir, versionner.
@@ -54,7 +54,6 @@ export function TopNav({
   onOpen,
   view,
   onView,
-  site,
   versions,
   onVersion,
   children,
@@ -66,8 +65,6 @@ export function TopNav({
   onOpen: (slug?: string) => void;
   view: View;
   onView: (view: View) => void;
-  // Faux : pas de site configuré (ou relais arrêté), l'étape est masquée.
-  site: boolean;
   // Révisions des versions acceptées : une marche de « chaleur » chacune.
   versions: number[];
   onVersion: (revision: number) => void;
@@ -77,7 +74,6 @@ export function TopNav({
   const steps: [View, string][] = [
     ['wall', 'Mur des DA'],
     ['board', 'Design system'],
-    ...(site ? [['site', 'Site en direct'] as [View, string]] : []),
     ['versions', 'Versions'],
   ];
   return (
@@ -201,8 +197,7 @@ export function SectionBar({
 const journey = [
   ['S’inspirer', 'Mur des DA : images, liens, DA proposées par l’assistant'],
   ['Construire', 'Design system : primitives, tokens, typo, composants'],
-  ['Voir', 'Site en direct et preview, brouillon appliqué'],
-  ['Versionner', 'Diff, version acceptée, Figma et pull request'],
+  ['Versionner', 'Comparer avec le site en ligne, diff, version acceptée, Figma et pull request'],
 ] as const;
 
 export function Home({ onOpen }: { onOpen: (slug?: string) => void }) {

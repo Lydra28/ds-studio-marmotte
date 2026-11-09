@@ -87,7 +87,8 @@ test('repo-propose : création depuis un dépôt structuré, gabarit remplacé, 
   assert.equal(by('Satoshi, sans-serif')[0].token, 'font/body');
   assert.equal(by('12px')[0].token, 'radius/card');
   assert.ok(p.report.gaps.length > 0);
-  assert.deepEqual(p.report.unmapped.map((u) => u.value).sort(), ['#FF00AA', '11px']);
+  // Couleur d'ombre (transparente) lue depuis la recette du 2026-11-09 : sans token.
+  assert.deepEqual(p.report.unmapped.map((u) => u.value).sort(), ['#0000001A', '#FF00AA', '11px']);
   // Déclarations gardées pour G5 : nom de code et position.
   const ink = p.tokens.find((t) => t.key === 'color/ink/900')!;
   assert.equal(ink.code, '--color-ink-900');
@@ -171,4 +172,48 @@ test('config : migration non destructive des configs GitHub d’avant G3', () =>
   assert.throws(() => configSchema.parse({ name: 'x', github: { repo: 'a/b', dir: '.', subdir: '../x' } }));
   const _typed: TokenSet = template();
   assert.ok(_typed);
+});
+
+test('repo-propose (recette 2026-11-09) : fichier de tokens prioritaire, écarts resserrés, dégradés liés', () => {
+  const files = [
+    // Planche de référence lue avant le site : ses couleurs ne doivent pas gagner.
+    { path: 'references/planche.html', text: '<style>:root { --canvas: #FF0000; --surface: #00FF00; }</style>' },
+    {
+      path: 'site/src/styles/tokens.css',
+      text: [
+        ':root {',
+        '  --canvas: #0B0B0C;',
+        '  --surface: #16161A;',
+        '  --brand: #7C3AED;',
+        '  --text: #F5F5F4;',
+        '  --muted: #A1A1AA;',
+        '  --brand-gradient: linear-gradient(135deg, #7C3AED, #0b0b0c 60%, rgba(0,0,0,.5));',
+        '  --space-md: 16px;',
+        '  --space-3xl: 64px;',
+        '  --space-x: 8px;',
+        '  --space-y: 12px;',
+        '  --space-z: 24px;',
+        '  --radius-2xl: 32px;',
+        '}',
+      ].join('\n'),
+    },
+    { path: 'site/src/styles/layout.css', text: '.hero { padding: 80px; margin: 17px; border-radius: 40px; gap: 65px; }' },
+  ];
+  const p = proposeFromRepo(scanRepo(files), template(), { mode: 'create' });
+  const set = applyChanges(template(), p.changes);
+  assert.equal(resolve(set, 'canvas'), '#0B0B0C');
+  assert.equal(resolve(set, 'surface'), '#16161A');
+  assert.equal(p.tokens.find((t) => t.code === '--canvas')?.file, 'site/src/styles/tokens.css');
+  assert.ok(p.report.conflicts.some((c) => c.name === '--canvas'));
+  // 80px n'est plus rattaché à 64px ; 65px l'est (1 px), 17px aussi (16px, 1 px).
+  const entry = (v: string) => p.entries.find((e) => e.value === v);
+  assert.equal(entry('80px')?.token, null);
+  assert.equal(entry('40px')?.token, null);
+  assert.equal(entry('65px')?.token, 'space/3xl');
+  assert.equal(entry('17px')?.token, 'space/md');
+  // Dégradé : pas de token, mais ses couleurs en dur sont rattachées (alpha exclue).
+  assert.match(p.report.rejected.find((r) => r.name === '--brand-gradient')!.reason, /dégradé/);
+  const g = p.report.composite?.find((c) => c.name === '--brand-gradient');
+  assert.deepEqual({ kind: g?.kind, colors: g?.colors, bound: g?.bound }, { kind: 'gradient', colors: 3, bound: 2 });
+  assert.equal(p.entries.find((e) => e.value === '#7C3AED' && e.property === '--brand-gradient')?.token, 'brand');
 });

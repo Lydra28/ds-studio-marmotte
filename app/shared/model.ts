@@ -238,6 +238,8 @@ export function applyChanges(set: TokenSet, changes: Change[]): TokenSet {
     token.$values[change.mode] = change.value;
   }
   for (const key of removed) {
+    // Retiré puis rajouté sous le même nom (autre collection) : les alias restent valides.
+    if (next.tokens[key]) continue;
     const users = referrers(next, key);
     if (users.length)
       throw new Error(`Token utilisé par ${users.join(', ')} : changer ces alias avant de retirer ${key}.`);

@@ -685,11 +685,23 @@ test('dépôt : nouveau projet depuis un dépôt GitHub, tokens repris, plan, br
   await expect(panel.getByRole('button', { name: 'Rien à reprendre' })).toBeDisabled();
   await panel.getByRole('button', { name: 'Fermer le dépôt' }).click();
 
+  // Couche sémantique (recette du 2026-11-09) : couleur à plat → primitive de palette + rôle.
+  await page.getByRole('button', { name: 'Dépôt', exact: true }).click();
+  await expect(panel.getByRole('button', { name: 'Proposer une couche sémantique' })).toBeVisible();
+  await page.screenshot({ path: 'test-results/depot-semantique.png', fullPage: false });
+  await panel.getByRole('button', { name: 'Proposer une couche sémantique' }).click();
+  await expect(panel).toBeHidden();
+  await expect(page.getByRole('status').filter({ hasText: 'passée(s) en tokens sémantiques' })).toBeVisible();
+  await validate(page);
+  const layered = await (await page.request.get('/api/state', { headers })).json();
+  expect(layered.set.tokens['color/paper']).toMatchObject({ $collection: 'tokens', $values: { light: '{color/neutral/50}' } });
+  expect(layered.set.tokens['color/neutral/50'].$values.default).toBe('#FBF8F1');
+
   // Acceptation (G5) : PR qui modifie le code du dépôt, par la connexion GitHub de l'app.
   await page.getByRole('button', { name: 'Accepter cette version' }).click();
   const review = page.getByRole('dialog');
   await expect(review).toContainText('branche ds-studio/design-system');
-  await review.getByRole('button', { name: 'Accepter v1' }).click();
+  await review.getByRole('button', { name: 'Accepter v2' }).click();
   const pr = page.getByRole('status').filter({ hasText: 'Pull request ouverte' });
   await expect(pr).toContainText('/dev-e2e/site-vitrine/pull/1');
   await expect(pr).toContainText('4 valeur(s) en dur remplacée(s)');
