@@ -19,6 +19,7 @@ import {
   bootstrap,
   commit,
   getConfig,
+  getGithub,
   getState,
   setProject,
   getVersions,
@@ -468,12 +469,15 @@ function Workspace({
       const target = config?.figma
         ? `Le transfert appliquera ces changements au fichier Figma (page « ${config.figma.page} »).`
         : 'Aucune cible Figma pour ce projet : accepter fige la version, rien n’est envoyé dans Figma.';
+      // État relu à l'ouverture : la connexion GitHub a pu changer depuis le lancement.
+      const gh = config?.github ? await getGithub().catch(() => null) : null;
+      const connected = gh ? gh.pro && gh.status === 'connected' : github;
       const code = config?.github
-        ? github
-          ? ` Une pull request sera ouverte sur ${config.github.repo} (branche ds-studio/v${state!.revision}) ; rien n’arrive sur ${config.github.base} sans ton merge.`
-          : desktop
-            ? ' Aucun jeton GitHub dans cette installation : la pull request ne sera pas ouverte.'
-            : ' GITHUB_TOKEN absent de .env : la pull request ne sera pas ouverte.'
+        ? connected
+          ? config.github.source === 'repo'
+            ? ` La pull request DS-Studio de ${config.github.repo} (branche ds-studio/design-system) sera ouverte ou mise à jour : le code est réécrit d’après la dernière lecture du dépôt ; rien n’arrive sur ${config.github.base} sans ton merge.`
+            : ` Une pull request sera ouverte sur ${config.github.repo} (branche ds-studio/v${state!.revision}) ; rien n’arrive sur ${config.github.base} sans ton merge.`
+          : ' GitHub n’est pas connecté (Réglages → GitHub) : la pull request ne sera pas ouverte.'
         : '';
       setComparison({
         title: last !== undefined
@@ -604,6 +608,8 @@ function Workspace({
         <SectionBar folded={folded} onJump={jump} onFoldAll={(fold) => setFolded(new Set(fold ? foldable : []))} />
       )}
       </div>
+      {/* Pile des messages : le lien de la PR reste visible sous l'avis d'acceptation. */}
+      <div className="message-stack">
       {published && (
         <p className={`message ${published.result.status === 'error' ? 'error' : 'ok'}`} role="status">
           {published.result.status === 'error' ? (
@@ -625,6 +631,8 @@ function Workspace({
               <a href={published.result.url} target="_blank" rel="noreferrer">
                 {published.result.url}
               </a>
+              {published.result.summary &&
+                ` · ${published.result.summary.files} fichier(s), ${published.result.summary.written} valeur(s) en dur remplacée(s), ${published.result.summary.changed} variable(s) changée(s), ${published.result.summary.added} ajoutée(s) ; ${published.result.summary.skipped} non écrite(s) (détail dans la PR).`}
             </>
           )}
         </p>
@@ -646,6 +654,7 @@ function Workspace({
           )}
         </p>
       )}
+      </div>
       {view === 'wall' && (
         <Wall
           project={slug}

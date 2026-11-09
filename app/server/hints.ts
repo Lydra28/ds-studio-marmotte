@@ -1,9 +1,4 @@
-import { inDesktop } from './desktop.js';
-
-// Messages quand un service manque. Dans l'app installée, plus personne
-// n'édite un `.env` ; depuis les sources, le `.env` du dépôt reste le mode des
-// développeurs. L'assistant et le Mur, eux, dépendent du compte (account.ts).
-export const githubOff = () =>
-  inDesktop
-    ? 'Pull request non ouverte : aucun jeton GitHub dans cette installation.'
-    : 'GITHUB_TOKEN absent de .env : PR non ouverte. Ajoute le jeton puis relance l’atelier.';
+// Messages quand un service manque. L'assistant et le Mur dépendent du compte
+// (account.ts) ; la PR GitHub, de la connexion GitHub de l'app (plan GitHub,
+// G5 : plus de jeton dans un `.env`).
+export const githubOff = () => 'Pull request non ouverte : GitHub n’est pas connecté (Réglages → GitHub, DS-Studio Pro), puis « Réessayer ».';

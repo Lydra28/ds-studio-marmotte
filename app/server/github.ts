@@ -4,18 +4,60 @@ import type { TokenSet } from '../shared/model.js';
 import { exportCss, exportJson } from '../shared/export.js';
 export { exportCss, exportJson, exportName } from '../shared/export.js';
 import type { Config } from '../shared/project.js';
+import { rewriteRepo, type RewriteResult } from '../shared/repo-rewrite.js';
+import type { RepoPlan } from './repo-read.js';
 
-// Code du projet sur GitHub : une version acceptée devient une branche
-// `ds-studio/v<N>` et une pull request avec deux fichiers générés (CSS, JSON),
+// Code du projet sur GitHub. Projet lu dans un dépôt (`source: 'repo'`, plan
+// GitHub G5) : une version acceptée réécrit les fichiers du dépôt d'après le
+// plan de remplacement, sur une seule branche `ds-studio/design-system` et une
+// seule PR, mise à jour à chaque version. Projet de tokens (`source:
+// 'tokens'`) : branche `ds-studio/v<N>` et deux fichiers générés (CSS, JSON),
 // plus, une seule fois, la ligne qui les importe dans le fichier d'entrée.
-// Jamais d'écriture sur la branche de base : Romain relit et merge.
-// Jeton : GITHUB_TOKEN dans .env, lu par le serveur seulement.
+// Jamais d'écriture sur la branche de base : le dev relit et merge.
+// Jeton : celui de la connexion GitHub de l'app (github-auth.ts), jamais dans
+// un fichier du projet.
 export interface GithubOptions {
   token?: string;
   fetch?: typeof fetch;
+  /** API GitHub (faux GitHub des tests) ; défaut https://api.github.com. */
+  apiUrl?: string;
 }
-export const githubFromEnv = (): GithubOptions => ({ token: process.env.GITHUB_TOKEN || undefined });
 type Target = NonNullable<Config['github']>;
+
+function client(options: GithubOptions, repo: string) {
+  const api = (options.apiUrl ?? 'https://api.github.com').replace(/\/+$/, '');
+  const call = async (method: string, route: string, body?: unknown) => {
+    let res: Response;
+    try {
+      res = await (options.fetch ?? fetch)(`${api}/repos/${repo}${route}`, {
+        method,
+        headers: {
+          Authorization: `Bearer ${options.token}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          'User-Agent': 'DS-Studio',
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(30_000),
+      });
+    } catch {
+      throw new StudioError('GitHub injoignable : vérifie la connexion puis « Réessayer ».', 502);
+    }
+    const data = (await res.json().catch(() => ({}))) as Record<string, any>;
+    return { status: res.status, data };
+  };
+  const fail = (what: string, r: { status: number; data: Record<string, any> }): never => {
+    const hint =
+      r.status === 401
+        ? 'jeton refusé ou expiré (reconnecte GitHub dans Réglages)'
+        : r.status === 403 || r.status === 404
+          ? `DS-Studio n’a pas accès en écriture à ${repo} (Contents et Pull requests)`
+          : String(r.data.message ?? r.status);
+    throw new StudioError(`GitHub, ${what} : ${hint}.`, 502);
+  };
+  return { call, fail };
+}
 
 // Ligne qui importe le CSS généré, écrite depuis le fichier d'entrée du site.
 export function importLine(target: Target) {
@@ -48,31 +90,7 @@ export async function publishVersion(
   version: { project: string; revision: number; hash: string; set: TokenSet },
 ) {
   if (!options.token) throw new StudioError(githubOff(), 503);
-  const call = async (method: string, route: string, body?: unknown) => {
-    const res = await (options.fetch ?? fetch)(`https://api.github.com/repos/${target.repo}${route}`, {
-      method,
-      headers: {
-        Authorization: `Bearer ${options.token}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-        'User-Agent': 'DS-Studio',
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
-      },
-      body: body ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(20_000),
-    });
-    const data = (await res.json().catch(() => ({}))) as Record<string, any>;
-    return { status: res.status, data };
-  };
-  const fail = (what: string, r: { status: number; data: Record<string, any> }): never => {
-    const hint =
-      r.status === 401
-        ? 'jeton refusé ou expiré'
-        : r.status === 403 || r.status === 404
-          ? `jeton sans accès à ${target.repo} (Contents et Pull requests en écriture)`
-          : String(r.data.message ?? r.status);
-    throw new StudioError(`GitHub, ${what} : ${hint}.`, 502);
-  };
+  const { call, fail } = client(options, target.repo);
 
   const header = `Généré par DS-Studio · ${version.project} v${version.revision} (${version.hash.slice(0, 8)}). Ne pas modifier à la main : change le DS dans l’atelier.`;
   const files = [
@@ -151,4 +169,136 @@ export async function publishVersion(
   if (pr.status !== 201) fail('ouverture de la pull request', pr);
   return { status: 'opened' as const, branch, url: String(pr.data.html_url) };
 }
-export type PublishResult = Awaited<ReturnType<typeof publishVersion>>;
+
+// --- PR qui modifie le code (G5) ---------------------------------------------
+
+export const REPO_BRANCH = 'ds-studio/design-system';
+export interface RepoPrSummary {
+  files: number;
+  written: number;
+  changed: number;
+  added: number;
+  removed: number;
+  skipped: number;
+  unmapped: number;
+}
+
+const list = <T,>(items: T[], line: (x: T) => string, max = 40) => [
+  ...items.slice(0, max).map((x) => `- ${line(x)}`),
+  ...(items.length > max ? [`- … et ${items.length - max} autre(s)`] : []),
+];
+const gapText = (g: RewriteResult['gaps'][number]) =>
+  g.kind === 'color' ? `ΔE ${String(Math.round(g.gap * 1000) / 10).replace('.', ',')}` : g.kind === 'length' ? `${g.gap} px` : 'police';
+const code = (s: string) => `\`${s}\``;
+
+export function repoPrBody(r: RewriteResult, version: { revision: number; hash: string }, plan: Pick<RepoPlan, 'commit' | 'date' | 'ref'>) {
+  const names = (xs: string[], max = 30) => xs.slice(0, max).map(code).join(', ') + (xs.length > max ? '…' : '');
+  const body = [
+    `Version **v${version.revision}** acceptée dans DS-Studio (empreinte ${code(version.hash.slice(0, 8))}), d’après la lecture de ${code(plan.ref)}${plan.commit ? ` au commit ${code(plan.commit.slice(0, 7))}` : ''} du ${plan.date.slice(0, 10)}.`,
+    '',
+    'Cette PR remplace des valeurs écrites en dur par les variables du design system et aligne les variables sur la version acceptée. Rien n’est exécuté ; seuls les fichiers listés changent.',
+    '',
+    '### Tokens',
+    `- ${r.changed.length} variable(s) à la nouvelle valeur${r.changed.length ? ' : ' + names(r.changed) : ''}`,
+    `- ${r.added.length} variable(s) ajoutée(s)${r.added.length ? ` dans ${code(r.added[0].file)}` : ''}`,
+    `- ${r.removed.length} déclaration(s) retirée(s), sans usage${r.removed.length ? ' : ' + names(r.removed) : ''}`,
+    '',
+    `### Fichiers modifiés (${r.files.length})`,
+    ...list(r.files, (f) => `${code(f.path)} : ${f.edits} modification(s)`),
+    '',
+    `### Valeurs en dur remplacées (${r.written})`,
+    r.gaps.length
+      ? `Dont ${r.gaps.length} par un token proche, pas identique (écart de rendu à vérifier) :`
+      : 'Toutes par un token de même valeur : aucun écart de rendu attendu.',
+    ...list(
+      [...r.gaps].sort((a, b) => b.gap - a.gap),
+      (g) => `${code(`${g.file}:${g.line}`)} ${code(g.value)} → ${code(g.code)} (${gapText(g)})`,
+    ),
+    '',
+    `### Non écrit (${r.skipped.length + r.unmapped})`,
+    `- ${r.unmapped} valeur(s) en dur sans token assez proche, laissée(s) telle(s) quelle(s) (liste dans le panneau Dépôt de l’atelier).`,
+    ...list(r.skipped, (x) => `${code(`${x.file}:${x.line}`)} ${code(x.value)} : ${x.reason}`),
+    ...(r.notes.length ? ['', '### Notes', ...r.notes.map((n) => `- ${n}`)] : []),
+  ].join('\n');
+  return body.length > 60_000 ? body.slice(0, 60_000) + '\n\n… (corps tronqué)' : body;
+}
+
+/**
+ * Version acceptée d'un projet lu dans un dépôt → un commit sur la base,
+ * branche `ds-studio/design-system` refaite à chaque version, une seule PR.
+ * `readBase(sha)` rend le texte des fichiers lus (archive de ce commit).
+ */
+export async function publishRepoVersion(
+  options: GithubOptions,
+  target: Target,
+  version: { project: string; revision: number; hash: string; set: TokenSet },
+  plan: RepoPlan,
+  readBase: (sha: string) => Promise<Map<string, string>>,
+) {
+  if (!options.token) throw new StudioError(githubOff(), 503);
+  const { call, fail } = client(options, target.repo);
+  const head = `${target.repo.split('/')[0]}:${REPO_BRANCH}`;
+  // PR mergée depuis la lecture : le code a changé sous le plan, relecture d'abord.
+  const closed = await call('GET', `/pulls?state=closed&head=${encodeURIComponent(head)}&per_page=20`);
+  if (closed.status === 200 && Array.isArray(closed.data) && closed.data.some((p) => p.merged_at && String(p.merged_at) > plan.date))
+    throw new StudioError('La PR DS-Studio a été mergée depuis la dernière lecture du dépôt : relis-le (bouton Dépôt) avant de publier.', 409);
+
+  const base = await call('GET', `/git/ref/heads/${target.base}`);
+  if (base.status !== 200) fail(`branche ${target.base}`, base);
+  const sha = String(base.data.object.sha);
+  const files = await readBase(sha);
+  const result = rewriteRepo({ tokens: plan.tokens, entries: plan.entries, set: version.set, rename: target.rename, files, truncated: plan.truncated });
+  if (result.blocked.length)
+    throw new StudioError(
+      `Token(s) retiré(s) dans l’atelier mais encore utilisé(s) dans le code : ${result.blocked
+        .slice(0, 10)
+        .map((b) => `${b.code} (${b.uses} usage(s))`)
+        .join(', ')}. Remets-les ou remplace leurs usages, puis « Réessayer ».`,
+      409,
+    );
+  const summary: RepoPrSummary = {
+    files: result.files.length,
+    written: result.written,
+    changed: result.changed.length,
+    added: result.added.length,
+    removed: result.removed.length,
+    skipped: result.skipped.length,
+    unmapped: result.unmapped,
+  };
+  if (!result.files.length) return { status: 'unchanged' as const, branch: null, url: null, summary };
+
+  const commit = await call('GET', `/git/commits/${sha}`);
+  if (commit.status !== 200) fail(`commit ${sha.slice(0, 7)}`, commit);
+  const tree = await call('POST', '/git/trees', {
+    base_tree: commit.data.tree.sha,
+    tree: result.files.map((f) => ({ path: f.path, mode: '100644', type: 'blob', content: f.text })),
+  });
+  if (tree.status !== 201) fail('écriture des fichiers', tree);
+  const made = await call('POST', '/git/commits', {
+    message: `DS-Studio : ${version.project} v${version.revision}`,
+    tree: tree.data.sha,
+    parents: [sha],
+  });
+  if (made.status !== 201) fail('commit', made);
+  // Branche refaite depuis la base à chaque version : la PR montre l'écart
+  // avec la base, jamais un empilement de versions.
+  const existing = await call('GET', `/git/ref/heads/${REPO_BRANCH}`);
+  const moved =
+    existing.status === 200
+      ? await call('PATCH', `/git/refs/heads/${REPO_BRANCH}`, { sha: made.data.sha, force: true })
+      : await call('POST', '/git/refs', { ref: `refs/heads/${REPO_BRANCH}`, sha: made.data.sha });
+  if (moved.status !== 200 && moved.status !== 201) fail(`branche ${REPO_BRANCH}`, moved);
+
+  const title = `DS-Studio : ${version.project} v${version.revision}`;
+  const body = repoPrBody(result, version, plan);
+  const open = await call('GET', `/pulls?state=open&head=${encodeURIComponent(head)}`);
+  const current = open.status === 200 && Array.isArray(open.data) ? open.data[0] : null;
+  if (current) {
+    const updated = await call('PATCH', `/pulls/${current.number}`, { title, body });
+    if (updated.status !== 200) fail('mise à jour de la pull request', updated);
+    return { status: 'updated' as const, branch: REPO_BRANCH, url: String(current.html_url), summary };
+  }
+  const pr = await call('POST', '/pulls', { title, head: REPO_BRANCH, base: target.base, body });
+  if (pr.status !== 201) fail('ouverture de la pull request', pr);
+  return { status: 'opened' as const, branch: REPO_BRANCH, url: String(pr.data.html_url), summary };
+}

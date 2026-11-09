@@ -561,7 +561,7 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
               <dt>Site en direct</dt>
               <dd>{on(settings.services.relay, 'Relais actif', 'Relais arrêté')}</dd>
               <dt>Pull request GitHub</dt>
-              <dd>{on(settings.services.github, 'Jeton présent', 'Aucun jeton (usage avancé)')}</dd>
+              <dd>{on(settings.services.github, 'Par ta connexion GitHub', 'GitHub non connecté (section GitHub)')}</dd>
             </dl>
           </section>
         </div>

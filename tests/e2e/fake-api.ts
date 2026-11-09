@@ -75,6 +75,8 @@ const VITRINE = tarGz([
   },
   { name: 'dev-e2e-site-vitrine-e2e0c0de/README.md', body: '# Site vitrine fictif' },
 ]);
+const VITRINE_SHA = 'e2e0c0de' + '0'.repeat(32);
+const vitrine: { branch: string | null; pr: boolean; trees: string[][] } = { branch: null, pr: false, trees: [] };
 let githubPolls = 0;
 const me = (a: Fake) => ({
   email: a.email,
@@ -143,11 +145,34 @@ const server = http.createServer(async (req, res) => {
     if (route === 'GET /user/installations/1/repositories')
       return send(200, { repositories: [{ full_name: 'dev-e2e/site-vitrine', private: true, default_branch: 'main' }] });
   }
-  // Archive de la branche (G2, G3) : dépôt fictif structuré, fabriqué ici.
-  if (route === 'GET /repos/dev-e2e/site-vitrine/tarball/main') {
+  // Dépôt fictif (G2, G3, G5) : archive de `main` ou de son commit, puis
+  // API Git Data de la PR qui modifie le code (un commit, une branche, une PR).
+  if (route.startsWith('GET /repos/dev-e2e/site-vitrine/') || route.startsWith('POST /repos/dev-e2e/site-vitrine/') || route.startsWith('PATCH /repos/dev-e2e/site-vitrine/')) {
     if (req.headers.authorization !== 'Bearer ghu_e2e_jeton_acces') return send(401, { message: 'Bad credentials' });
-    res.writeHead(200, { 'content-type': 'application/x-gzip', 'content-length': String(VITRINE.length) });
-    return res.end(VITRINE);
+    const r = route.replace('/repos/dev-e2e/site-vitrine', '');
+    if (r === 'GET /tarball/main' || r === `GET /tarball/${VITRINE_SHA}`) {
+      res.writeHead(200, { 'content-type': 'application/x-gzip', 'content-length': String(VITRINE.length) });
+      return res.end(VITRINE);
+    }
+    if (r === 'GET /git/ref/heads/main') return send(200, { object: { sha: VITRINE_SHA } });
+    if (r === 'GET /git/ref/heads/ds-studio/design-system') return vitrine.branch ? send(200, { object: { sha: vitrine.branch } }) : send(404, {});
+    if (r === `GET /git/commits/${VITRINE_SHA}`) return send(200, { tree: { sha: 'e2e-tree' } });
+    if (r === 'POST /git/trees') {
+      vitrine.trees.push((body.tree as { path: string }[]).map((f) => f.path));
+      return send(201, { sha: `e2e-tree-${vitrine.trees.length}` });
+    }
+    if (r === 'POST /git/commits') return send(201, { sha: `e2e-commit-${vitrine.trees.length}` });
+    if (r === 'POST /git/refs' || r === 'PATCH /git/refs/heads/ds-studio/design-system') {
+      vitrine.branch = String(body.sha);
+      return send(r.startsWith('POST') ? 201 : 200, {});
+    }
+    if (r === 'GET /pulls')
+      return send(200, new URL(req.url ?? '/', base).searchParams.get('state') === 'open' && vitrine.pr ? [{ number: 1, html_url: `${base}/dev-e2e/site-vitrine/pull/1` }] : []);
+    if (r === 'POST /pulls') {
+      vitrine.pr = true;
+      return send(201, { html_url: `${base}/dev-e2e/site-vitrine/pull/1` });
+    }
+    if (r === 'PATCH /pulls/1') return send(200, {});
   }
   if (route === 'POST /v1/auth/login') {
     const a = accounts.find((x) => x.email === body.email && x.password === body.password);

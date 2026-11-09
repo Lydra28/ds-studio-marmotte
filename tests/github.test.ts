@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { addImport, exportCss, exportName, importLine, publishVersion } from '../app/server/github.js';
-import { tokenSetSchema } from '../app/shared/model.js';
+import { addImport, exportCss, exportName, importLine, publishRepoVersion, publishVersion, REPO_BRANCH } from '../app/server/github.js';
+import { applyChanges, tokenSetSchema } from '../app/shared/model.js';
 import { configSchema } from '../app/shared/project.js';
+import { proposeFromRepo } from '../app/shared/repo-propose.js';
+import { scanRepo } from '../app/shared/repo-scan.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const set = tokenSetSchema.parse(JSON.parse(await readFile(path.join(root, 'projects/marmotte/design-system.tokens.json'), 'utf8')));
@@ -66,7 +68,7 @@ test('export : noms renommés comme dans le code, alias en var(), mode mobile en
 });
 
 test('GitHub : branche ds-studio/vN et pull request, jamais sur main ; rien si déjà à jour ; jeton exigé', async () => {
-  await assert.rejects(() => publishVersion({}, target, version), /GITHUB_TOKEN/);
+  await assert.rejects(() => publishVersion({}, target, version), /GitHub n’est pas connecté/);
   const gh = fakeGithub();
   const opened = await publishVersion({ token: 'jeton', fetch: gh.fetch }, target, version);
   assert.deepEqual(opened, { status: 'opened', branch: 'ds-studio/v7', url: 'https://github.com/romain/site/pull/1' });
@@ -118,4 +120,148 @@ test('GitHub : la première PR importe le CSS généré dans le fichier d’entr
   await publishVersion({ token: 'jeton', fetch: lost.fetch }, site, version);
   assert.equal(lost.branches.get('ds-studio/v7')!['site/src/layouts/BaseLayout.astro'], '---\n---\n');
   assert.match(lost.pulls[0].body, /introuvable/);
+});
+
+// --- PR qui modifie le code (plan GitHub, G5) --------------------------------
+
+const REPO_FILES = {
+  'src/styles/tokens.css':
+    ':root {\n  --color-ink: #111111;\n  --color-paper: #FAFAF7;\n  --bg-canvas: var(--color-paper);\n  --text-primary: var(--color-ink);\n  --space-sm: 8px;\n  --space-md: 16px;\n  --space-lg: 24px;\n  --radius-card: 12px;\n  --font-body: "Satoshi", sans-serif;\n  --font-size-body: 16px;\n}\n',
+  'src/components/Card.css': '.card { background: #FAFAF7; padding: 16px; color: var(--text-primary); }\n',
+};
+
+// Faux GitHub, API Git Data : un commit sur la base, une branche, des PR.
+function fakeGitData(options: { merged?: string } = {}) {
+  const calls: string[] = [];
+  const refs = new Map<string, string>([['main', 'base-sha']]);
+  const trees: { base: string; files: { path: string; content: string }[] }[] = [];
+  const pulls: { number: number; head: string; title: string; body: string; state: string; merged_at: string | null }[] = [];
+  if (options.merged) pulls.push({ number: 9, head: 'ds-studio/design-system', title: 'ancienne', body: '', state: 'closed', merged_at: options.merged });
+  const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
+  const fetch = (async (url: string, init: RequestInit) => {
+    const u = new URL(url);
+    assert.equal(u.origin, 'http://faux-github.test');
+    const route = u.pathname.replace('/repos/dev/site', '');
+    calls.push(`${init.method} ${route}`);
+    assert.equal((init.headers as Record<string, string>).Authorization, 'Bearer jeton-app');
+    const body = init.body ? JSON.parse(String(init.body)) : {};
+    if (route.startsWith('/git/ref/heads/')) {
+      const sha = refs.get(route.slice('/git/ref/heads/'.length));
+      return sha ? json(200, { object: { sha } }) : json(404, {});
+    }
+    if (route === '/git/commits/base-sha') return json(200, { tree: { sha: 'base-tree' } });
+    if (route === '/git/trees') {
+      trees.push({ base: body.base_tree, files: body.tree });
+      return json(201, { sha: `tree-${trees.length}` });
+    }
+    if (route === '/git/commits') {
+      assert.deepEqual(body.parents, ['base-sha']);
+      return json(201, { sha: `commit-${body.tree}` });
+    }
+    if (route === '/git/refs' && init.method === 'POST') {
+      refs.set(body.ref.replace('refs/heads/', ''), body.sha);
+      return json(201, {});
+    }
+    if (route.startsWith('/git/refs/heads/') && init.method === 'PATCH') {
+      assert.equal(body.force, true);
+      refs.set(route.slice('/git/refs/heads/'.length), body.sha);
+      return json(200, {});
+    }
+    if (route === '/pulls' && init.method === 'GET') {
+      const state = u.searchParams.get('state');
+      assert.equal(u.searchParams.get('head'), 'dev:ds-studio/design-system');
+      return json(
+        200,
+        pulls.filter((p) => p.state === state).map((p) => ({ number: p.number, html_url: `https://github.com/dev/site/pull/${p.number}`, merged_at: p.merged_at })),
+      );
+    }
+    if (route === '/pulls' && init.method === 'POST') {
+      assert.equal(body.base, 'main');
+      pulls.push({ number: 1, head: body.head, title: body.title, body: body.body, state: 'open', merged_at: null });
+      return json(201, { html_url: 'https://github.com/dev/site/pull/1' });
+    }
+    if (route.startsWith('/pulls/') && init.method === 'PATCH') {
+      const pr = pulls.find((p) => p.number === Number(route.slice(7)))!;
+      Object.assign(pr, { title: body.title, body: body.body });
+      return json(200, {});
+    }
+    return json(500, {});
+  }) as typeof globalThis.fetch;
+  return { fetch, calls, refs, trees, pulls };
+}
+
+test('GitHub G5 : la version réécrit le code du dépôt, une seule branche et une seule PR, mise à jour', async () => {
+  const blank = tokenSetSchema.parse(JSON.parse(await readFile(path.join(root, 'templates/blank/design-system.tokens.json'), 'utf8')));
+  const p = proposeFromRepo(scanRepo(Object.entries(REPO_FILES).map(([file, text]) => ({ path: file, text }))), blank, { mode: 'create' });
+  const plan = {
+    version: 2 as const,
+    date: '2026-11-09T10:00:00.000Z',
+    repo: 'dev/site',
+    ref: 'main',
+    subdir: null,
+    commit: 'abc1234',
+    mode: 'create' as const,
+    report: p.report,
+    tokens: p.tokens,
+    entries: p.entries,
+    truncated: false,
+  };
+  const set = applyChanges(blank, p.changes);
+  const repoTarget = configSchema.parse({ name: 'S', github: { repo: 'dev/site', dir: '.', source: 'repo' } }).github!;
+  const v = { project: 'Site', revision: 1, hash: 'b'.repeat(64), set };
+  const read = async (sha: string) => {
+    assert.equal(sha, 'base-sha', 'fichiers lus au commit de la base');
+    return new Map(Object.entries(REPO_FILES));
+  };
+  const access = { token: 'jeton-app', apiUrl: 'http://faux-github.test' };
+  await assert.rejects(() => publishRepoVersion({}, repoTarget, v, plan, read), /pas connecté/);
+
+  const gh = fakeGitData();
+  const opened = await publishRepoVersion({ ...access, fetch: gh.fetch }, repoTarget, v, plan, read);
+  assert.equal(opened.status, 'opened');
+  assert.equal(opened.branch, REPO_BRANCH);
+  assert.equal(gh.refs.get('main'), 'base-sha', 'la base ne bouge jamais');
+  assert.equal(gh.refs.get(REPO_BRANCH), 'commit-tree-1');
+  const card = gh.trees[0].files.find((f) => f.path === 'src/components/Card.css')!;
+  assert.equal(card.content, '.card { background: var(--bg-canvas); padding: var(--space-md); color: var(--text-primary); }\n');
+  assert.equal(gh.trees[0].base, 'base-tree');
+  assert.equal(opened.summary.written, 2);
+  assert.match(gh.pulls[0].body, /Valeurs en dur remplacées \(2\)/);
+  assert.match(gh.pulls[0].body, /aucun écart de rendu attendu/);
+
+  // Version suivante : même branche refaite depuis la base, même PR mise à jour.
+  const v2 = { ...v, revision: 2, set: structuredClone(set) };
+  v2.set.tokens['color/paper'].$values.default = '#FFFFFF';
+  const updated = await publishRepoVersion({ ...access, fetch: gh.fetch }, repoTarget, v2, plan, read);
+  assert.equal(updated.status, 'updated');
+  assert.equal(gh.pulls.length, 1);
+  assert.equal(gh.pulls[0].title, 'DS-Studio : Site v2');
+  assert.ok(gh.calls.includes(`PATCH /git/refs/heads/${REPO_BRANCH}`));
+  assert.match(gh.trees[1].files.find((f) => f.path === 'src/styles/tokens.css')!.content, /--color-paper: #FFFFFF;/);
+
+  // PR mergée après la lecture : relecture du dépôt exigée, rien n'est écrit.
+  const merged = fakeGitData({ merged: '2026-11-09T12:00:00Z' });
+  await assert.rejects(() => publishRepoVersion({ ...access, fetch: merged.fetch }, repoTarget, v, plan, read), /mergée depuis la dernière lecture/);
+  assert.equal(merged.trees.length, 0);
+  // Mergée avant la lecture : sans effet.
+  const before = fakeGitData({ merged: '2026-11-08T12:00:00Z' });
+  assert.equal((await publishRepoVersion({ ...access, fetch: before.fetch }, repoTarget, v, plan, read)).status, 'opened');
+
+  // Token retiré encore utilisé : refusé, usages cités, rien n'est écrit.
+  const removed = { ...v, set: structuredClone(set) };
+  delete removed.set.tokens['text/primary'];
+  const refused = fakeGitData();
+  await assert.rejects(() => publishRepoVersion({ ...access, fetch: refused.fetch }, repoTarget, removed, plan, read), /--text-primary \(1 usage\(s\)\)/);
+  assert.equal(refused.trees.length, 0);
+
+  // Code déjà à jour : aucune branche.
+  const done = fakeGitData();
+  const clean = async () =>
+    new Map([
+      ['src/styles/tokens.css', REPO_FILES['src/styles/tokens.css']],
+      ['src/components/Card.css', '.card { background: var(--bg-canvas); }\n'],
+    ]);
+  const unchanged = await publishRepoVersion({ ...access, fetch: done.fetch }, repoTarget, v, { ...plan, entries: [] }, clean);
+  assert.equal(unchanged.status, 'unchanged');
+  assert.ok(!done.calls.some((c) => c.startsWith('POST')));
 });

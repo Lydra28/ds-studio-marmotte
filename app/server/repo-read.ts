@@ -50,15 +50,23 @@ export function readArchive(archive: Buffer, subdir: string | null) {
   });
 }
 
-export async function readRepo(auth: GithubAuth, repo: string, ref: string, subdir?: string | null): Promise<RepoRead> {
-  const dir = cleanSubdir(subdir);
+async function fetchArchive(auth: GithubAuth, repo: string, ref: string, dir: string | null) {
   const archive = await auth.archive(repo, ref, REPO_LIMITS.archiveBytes);
-  let tar: TarResult;
   try {
-    tar = readArchive(archive, dir);
+    return readArchive(archive, dir);
   } catch (e) {
     throw new StudioError((e as Error).message, 422);
   }
+}
+
+/** Fichiers lus d'un commit (PR de G5 : textes de la base avant réécriture). */
+export async function readRepoFiles(auth: GithubAuth, repo: string, ref: string, subdir?: string | null) {
+  return (await fetchArchive(auth, repo, ref, cleanSubdir(subdir))).files;
+}
+
+export async function readRepo(auth: GithubAuth, repo: string, ref: string, subdir?: string | null): Promise<RepoRead> {
+  const dir = cleanSubdir(subdir);
+  const tar: TarResult = await fetchArchive(auth, repo, ref, dir);
   if (dir && tar.files.length === 0) throw new StudioError(`Aucun fichier de style lu dans ${dir}/ : vérifie le sous-dossier.`, 422);
   return {
     repo,
@@ -76,7 +84,8 @@ export async function readRepo(auth: GithubAuth, repo: string, ref: string, subd
 // PR (G5). Données du dépôt (chemins, valeurs) : restent sur le poste.
 
 export interface RepoPlan {
-  version: 1;
+  // 2 : jetons avec `value` et `uses` (G5) ; un plan plus ancien se relit.
+  version: 2;
   date: string;
   repo: string;
   ref: string;
@@ -94,7 +103,7 @@ export const planFile = (dataDir: string) => path.join(dataDir, 'github', 'plan.
 export async function readPlan(dataDir: string): Promise<RepoPlan | null> {
   try {
     const plan = JSON.parse(await readPrivate(planFile(dataDir), 50_000_000)) as RepoPlan;
-    return plan.version === 1 ? plan : null;
+    return plan.version === 2 ? plan : null;
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw new StudioError('Plan du dépôt illisible : relis le dépôt.', 500);
@@ -112,7 +121,7 @@ export async function readProjectRepo(
   const read = await readRepo(auth, github.repo, github.base, github.subdir);
   const proposal = proposeFromRepo(read.scan, set, { mode, rename: github.rename });
   const plan: RepoPlan = {
-    version: 1,
+    version: 2,
     date: new Date().toISOString(),
     repo: read.repo,
     ref: read.ref,

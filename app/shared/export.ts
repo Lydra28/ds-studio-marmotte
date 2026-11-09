@@ -16,7 +16,8 @@ export function exportName(key: string, rename: Record<string, string>) {
   return from === undefined ? key : rename[from] + key.slice(from.length);
 }
 
-function value(set: TokenSet, key: string, v: TokenValue, rename: Record<string, string>) {
+// Valeur d'un token telle qu'écrite dans le code (PR, réécriture du dépôt).
+export function value(set: TokenSet, key: string, v: TokenValue, rename: Record<string, string>) {
   if (isAlias(v)) return `var(${cssName(exportName(aliasTarget(v), rename))})`;
   const type = set.tokens[key].$type;
   if (type === 'fontFamily') {

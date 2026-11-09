@@ -8,14 +8,14 @@ import { Store, StudioError } from './store.js';
 import { ProjectStore } from './project.js';
 import { projectSchema, type Config } from '../shared/project.js';
 import { Registry, newProjectSchema, withRepo } from './registry.js';
-import { cleanSubdir, readPlan, readProjectRepo } from './repo-read.js';
+import { cleanSubdir, readPlan, readProjectRepo, readRepoFiles } from './repo-read.js';
 import { Assistant, chatSchema } from './assistant.js';
 import { Wall, directionsRequestSchema, imageSchema, linkSchema } from './wall.js';
 import { readSite, type ReadSite } from './extract.js';
 import { proposeFromInventory } from '../shared/extract.js';
 import { acceptVersion, listVersions, readVersion } from './versions.js';
 import { clearInbox, handlePlugin, readInbox } from './plugin.js';
-import { githubFromEnv, publishVersion, type GithubOptions } from './github.js';
+import { publishRepoVersion, publishVersion, type GithubOptions } from './github.js';
 import { atomicWrite } from './files.js';
 import { figmaStatus } from '../../connectors/figma/contract.js';
 import { inDesktop, requestDesktop, updateState } from './desktop.js';
@@ -77,7 +77,7 @@ export async function createStudioServer(
     dev?: boolean;
     // Code d'appairage du plugin Figma ; absent : routes du plugin fermées.
     pluginCode?: string;
-    // Accès GitHub (jeton, fetch simulé en test) ; par défaut GITHUB_TOKEN de .env.
+    // Accès GitHub de la PR (jeton, fetch simulé en test) ; par défaut la connexion de l'app.
     github?: GithubOptions;
     // Port du relais « Site en direct » (site-relay.ts) ; absent : pas de site.
     relayPort?: number;
@@ -109,14 +109,36 @@ export async function createStudioServer(
           wall: new Wall(options.store.directory, {}),
         });
   const csrf = randomBytes(32).toString('hex');
-  const github = options.github ?? githubFromEnv();
+  // Accès GitHub de la PR : options de test, sinon la connexion de l'app (G5).
+  const githubAccess = async (): Promise<GithubOptions> => {
+    if (options.github) return options.github;
+    if (!options.githubAuth) return {};
+    try {
+      return await options.githubAuth.publishOptions();
+    } catch {
+      return {};
+    }
+  };
+  const githubConnected = () => !!options.github?.token || options.githubAuth?.status().status === 'connected';
   // Version acceptée → pull request sur le code du projet ; un échec GitHub
   // n'annule jamais l'acceptation, il est rendu avec la version.
-  const publish = async (projectDir: string, config: Config, revision: number) => {
+  const publish = async (projectDir: string, dataDir: string, config: Config, revision: number) => {
     if (!config.github) return null;
     try {
       const v = await readVersion(projectDir, revision);
-      const result = await publishVersion(github, config.github, { project: config.name, revision, hash: v.hash, set: v.set });
+      const access = await githubAccess();
+      const version = { project: config.name, revision, hash: v.hash, set: v.set };
+      let result;
+      if (config.github.source === 'repo') {
+        const plan = await readPlan(dataDir);
+        if (!plan) throw new StudioError('Lis le dépôt (bouton Dépôt) avant de publier : aucun plan de remplacement à jour.', 409);
+        const auth = options.githubAuth;
+        const target = config.github;
+        result = await publishRepoVersion(access, target, version, plan, async (sha) => {
+          if (!auth) throw new StudioError('GitHub indisponible dans cette instance.', 409);
+          return new Map((await readRepoFiles(auth, target.repo, sha, target.subdir)).map((f) => [f.path, f.text]));
+        });
+      } else result = await publishVersion(access, config.github, version);
       await atomicWrite(
         path.join(projectDir, 'versions', `v${revision}.github.json`),
         JSON.stringify({ date: new Date().toISOString(), repo: config.github.repo, ...result }, null, 2) + '\n',
@@ -202,7 +224,7 @@ export async function createStudioServer(
               multi: registry.multi,
               fallback: registry.fallback,
               plugin: options.pluginCode ?? null,
-              github: !!github.token,
+              github: githubConnected(),
               relay: options.relayPort ?? null,
               desktop: inDesktop,
             });
@@ -220,7 +242,7 @@ export async function createStudioServer(
               update: updateState(),
               services: {
                 assistant: options.account?.enabled().enabled ?? false,
-                github: !!github.token,
+                github: githubConnected(),
                 relay: !!options.relayPort,
                 plugin: !!options.pluginCode,
               },
@@ -427,12 +449,12 @@ export async function createStudioServer(
             .parse(body);
           await store.flush();
           const version = await acceptVersion(projectDir, config, store.snapshot(), b.revision);
-          return send(200, { ...version, github: await publish(projectDir, config, version.revision) });
+          return send(200, { ...version, github: await publish(projectDir, store.directory, config, version.revision) });
         }
         if (url.pathname === '/api/github/publish') {
           const b = z.object({ revision: z.number().int().nonnegative() }).strict().parse(body);
           if (!config.github) throw new StudioError('Ce projet n’a pas de dépôt GitHub configuré.', 409);
-          return send(200, await publish(projectDir, config, b.revision));
+          return send(200, await publish(projectDir, store.directory, config, b.revision));
         }
         throw new StudioError('Route inconnue.', 404);
       }

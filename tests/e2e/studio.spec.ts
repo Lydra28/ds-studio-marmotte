@@ -683,6 +683,16 @@ test('dépôt : nouveau projet depuis un dépôt GitHub, tokens repris, plan, br
   await expect(panel.getByRole('button', { name: 'Rien à reprendre' })).toBeDisabled();
   await panel.getByRole('button', { name: 'Fermer le dépôt' }).click();
 
+  // Acceptation (G5) : PR qui modifie le code du dépôt, par la connexion GitHub de l'app.
+  await page.getByRole('button', { name: 'Accepter cette version' }).click();
+  const review = page.getByRole('dialog');
+  await expect(review).toContainText('branche ds-studio/design-system');
+  await review.getByRole('button', { name: 'Accepter v1' }).click();
+  const pr = page.getByRole('status').filter({ hasText: 'Pull request ouverte' });
+  await expect(pr).toContainText('/dev-e2e/site-vitrine/pull/1');
+  await expect(pr).toContainText('4 valeur(s) en dur remplacée(s)');
+  await page.screenshot({ path: 'test-results/depot-pr.png', fullPage: false });
+
   await page.getByRole('button', { name: 'Réglages' }).click();
   await github.getByRole('button', { name: 'Déconnecter GitHub' }).click();
   await expect(github.getByRole('button', { name: 'Connecter GitHub' })).toBeEnabled();

@@ -37,6 +37,10 @@ export interface PlanToken {
   col: number;
   offset: number;
   length: number;
+  /** Valeur lue à cette position (G5 : vérifiée avant toute réécriture). */
+  value: string;
+  /** `var(--x)` du dépôt qui visent ce token ; null : usages non mesurés (SCSS, config, JSON). */
+  uses: number | null;
 }
 
 /** Valeur en dur du dépôt et le token qui la remplacerait (null : aucun assez proche). */
@@ -567,9 +571,22 @@ export function proposeFromRepo(scan: RepoScan, set: TokenSet, options: { mode: 
   for (const e of entries) if (!e.token) unmappedCounts.set(e.normalized, (unmappedCounts.get(e.normalized) ?? 0) + 1);
 
   const finalKeys = new Set(Object.keys(next.tokens));
+  const varUses = new Map<string, number>();
+  for (const o of scan.occurrences) if (o.detector === 'var-use') varUses.set(o.value, (varUses.get(o.value) ?? 0) + 1);
   const tokens: PlanToken[] = kept
     .filter((d) => finalKeys.has(d.key))
-    .map((d) => ({ key: d.key, code: d.name, detector: d.detector, file: d.root.file, line: d.root.line, col: d.root.col, offset: d.root.offset, length: d.root.length }));
+    .map((d) => ({
+      key: d.key,
+      code: d.name,
+      detector: d.detector,
+      file: d.root.file,
+      line: d.root.line,
+      col: d.root.col,
+      offset: d.root.offset,
+      length: d.root.length,
+      value: d.root.value,
+      uses: d.detector === 'css-var' || d.detector === 'theme-v4' ? (varUses.get(d.name) ?? 0) : null,
+    }));
   const addedFinal = added.filter((k) => finalKeys.has(k) && !set.tokens[k]);
   if (local) notes.push(`${local} redéclaration(s) dans un composant ou un sélecteur, ignorée(s) : le projet garde la valeur de :root.`);
   if (modeIgnored) notes.push(`${modeIgnored} valeur(s) d'un mode absent du projet (sombre, mobile) non reprise(s).`);

@@ -269,6 +269,11 @@ export class GithubAuth {
     return this.refreshing;
   }
 
+  /** Accès de la PR (github.ts) : jeton valable, même API que la connexion. */
+  async publishOptions() {
+    return { token: await this.token(), apiUrl: this.apiUrl, fetch: this.options.fetch };
+  }
+
   private async renew(s: Stored) {
     const usable = s.refreshToken && (!s.refreshExpiresAt || this.ms() < new Date(s.refreshExpiresAt).getTime());
     if (!usable) {

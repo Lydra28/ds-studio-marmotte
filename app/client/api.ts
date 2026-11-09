@@ -225,9 +225,19 @@ export const commit = (proposal: Proposal) =>
 export const accept = (revision: number) =>
   request<VersionSummary & { github: GithubResult | null }>('accept', { revision });
 // Pull request sur le code du projet après une version acceptée.
+// `summary` : PR qui modifie le code (projet lu dans un dépôt, G5), même forme que `RepoPrSummary` de github.ts.
+export interface RepoPrSummary {
+  files: number;
+  written: number;
+  changed: number;
+  added: number;
+  removed: number;
+  skipped: number;
+  unmapped: number;
+}
 export type GithubResult =
-  | { status: 'opened' | 'updated'; branch: string; url: string }
-  | { status: 'unchanged'; branch: null; url: null }
+  | { status: 'opened' | 'updated'; branch: string; url: string; summary?: RepoPrSummary }
+  | { status: 'unchanged'; branch: null; url: null; summary?: RepoPrSummary }
   | { status: 'error'; message: string };
 export const publishGithub = (revision: number) => request<GithubResult>('github/publish', { revision });
 export const getVersions = () => request<VersionSummary[]>('versions');

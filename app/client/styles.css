@@ -115,6 +115,24 @@ code {
 .count.ok {
   color: var(--c-ok);
 }
+/* Messages empilés en haut à droite (PR GitHub puis avis), jamais superposés. */
+.message-stack {
+  position: fixed;
+  top: 76px;
+  right: 20px;
+  z-index: 25;
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+  pointer-events: none;
+}
+.message-stack:empty {
+  display: none;
+}
+.message-stack > .message {
+  position: static;
+  pointer-events: auto;
+}
 .message {
   position: fixed;
   top: 76px;
