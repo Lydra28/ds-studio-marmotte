@@ -211,7 +211,7 @@ function Workspace({
     }
   }, []);
   // Vue Versions : onglet ouvert, et révision visée depuis la frise.
-  const [versionsTab, setVersionsTab] = useState<'history' | 'timeline' | 'compare'>('history');
+  const [versionsTab, setVersionsTab] = useState<'history' | 'timeline' | 'compare'>('compare');
   const [timelineAt, setTimelineAt] = useState<number>();
   // Sections repliées de la planche : toutes au lancement (voulu par Romain),
   // puis gardées par projet le temps de la session (sessionStorage).
@@ -685,9 +685,9 @@ function Workspace({
           <div className="tabs" role="tablist" aria-label="Versions">
             {(
               [
-                ['history', 'Historique'],
-                ['timeline', 'Évolution'],
                 ['compare', 'Comparer'],
+                ['timeline', 'Évolution'],
+                ['history', 'Historique'],
               ] as const
             ).map(([tab, label]) => (
               <button
