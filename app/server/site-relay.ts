@@ -88,8 +88,11 @@ export function planLookup(plan: Pick<RepoPlan, 'entries'>, rename: Record<strin
     vote(`${e.kind}|${(e.property ?? '').toLowerCase()}|${e.normalized}`, e.token);
     if (e.kind !== 'length') vote(`${e.kind}||${e.normalized}`, e.token);
   }
+  // Valeur seule : seulement si le plan n'a qu'un token pour elle (sinon un
+  // texte blanc prendrait le token d'un fond blanc), la valeur reste en dur.
   const best = new Map<string, string>();
-  for (const [k, m] of votes) best.set(k, [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0]);
+  for (const [k, m] of votes)
+    if (!k.includes('||') || m.size === 1) best.set(k, [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0]);
   return (kind, property, normalized) => {
     const key = best.get(`${kind}|${property}|${normalized}`) ?? (kind === 'length' ? undefined : best.get(`${kind}||${normalized}`));
     return key ? cssName(exportName(key, rename)) : null;
@@ -187,7 +190,7 @@ export function createSiteRelay(registry: Registry, options: { atelier: string; 
         const old = cache.get(upstream.href);
         if (old) {
           cache.delete(upstream.href);
-          cached -= old.body.length;
+          cached -= old.body.length + (old.applied?.body.length ?? 0);
         }
         hit = { at: Date.now(), type, body };
         // Pages HTML jamais gardées : elles reflètent le site au moment de l'affichage.
@@ -201,11 +204,22 @@ export function createSiteRelay(registry: Registry, options: { atelier: string; 
       let body = hit.body;
       // Plan appliqué à la copie brute du cache, gardé tant que le plan ne change pas.
       const github = config.github;
-      const plan = !raw && (html || css) && github?.source === 'repo' ? await lookupFor(instance.store.directory, github.rename) : null;
+      // Texte non UTF-8 annoncé : laissé tel quel (le réencoder corromprait ses octets).
+      const utf8 = !/charset\s*=/i.test(hit.type) || /charset\s*=\s*"?utf-?8/i.test(hit.type);
+      const plan = !raw && utf8 && (html || css) && github?.source === 'repo' ? await lookupFor(instance.store.directory, github.rename) : null;
       if (plan?.lookup) {
-        if (hit.applied?.plan !== plan.stamp)
-          hit.applied = { plan: plan.stamp, body: Buffer.from(applyPlan(hit.body.toString('utf8'), html ? 'html' : 'css', plan.lookup).text) };
-        body = hit.applied.body;
+        if (hit.applied?.plan === plan.stamp) body = hit.applied.body;
+        else {
+          body = Buffer.from(applyPlan(hit.body.toString('utf8'), html ? 'html' : 'css', plan.lookup).text);
+          // Gardée avec la copie brute si elle tient sous le plafond du cache.
+          const kept = cache.get(upstream.href) === hit;
+          if (kept) cached -= hit.applied?.body.length ?? 0;
+          hit.applied = undefined;
+          if (kept && cached + body.length <= MAX_CACHE) {
+            hit.applied = { plan: plan.stamp, body };
+            cached += body.length;
+          }
+        }
       }
       if (html) body = Buffer.from(injectLive(body.toString('utf8')));
       res.writeHead(200, {

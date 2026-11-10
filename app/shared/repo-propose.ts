@@ -18,9 +18,11 @@ export const REPO_THRESHOLDS = {
   // Écart OKLab au-delà duquel une couleur en dur n'est rattachée à aucun token.
   colorGap: 0.05,
   // Écart accepté entre une longueur en dur et un cran : 10 % du cran, au
-  // moins 2 px (recette du 2026-11-09 : 25 % changeait 80px en 64px).
+  // moins 2 px (recette du 2026-11-09 : 25 % changeait 80px en 64px), et
+  // jamais plus de 25 % de la valeur en dur (2px ne devient pas 4px).
   lengthWindow: 0.1,
   lengthMin: 2,
+  lengthOwn: 0.25,
   // `@media (max-width: ≤ 1023px)` = mode mobile de la typographie.
   mobileMaxWidth: 1023,
   maxTokens: 500,
@@ -555,8 +557,12 @@ export function proposeFromRepo(scan: RepoScan, set: TokenSet, options: { mode: 
     for (const d of dims) if (re.test(d.key) && (!best || gapOf(d) < gapOf(best))) best = d;
     if (!best) return { token: null, gap: null };
     const gap = gapOf(best);
-    return { token: gap === 0 || gap <= Math.max(T.lengthMin, best.px * T.lengthWindow) ? best.key : null, gap };
+    const fits = (g: number) => g === 0 || (g <= Math.max(T.lengthMin, best!.px * T.lengthWindow) && g <= px * T.lengthOwn);
+    // Rattachable au mode principal, écarté seulement à cause d'un autre mode (mobile) : compté.
+    if (!fits(gap) && fits(Math.abs(best.px - px))) modeOnly++;
+    return { token: fits(gap) ? best.key : null, gap };
   };
+  let modeOnly = 0;
   const entries: PlanEntry[] = [];
   let truncated = false;
   for (const o of hard) {
@@ -626,6 +632,8 @@ export function proposeFromRepo(scan: RepoScan, set: TokenSet, options: { mode: 
   const addedFinal = added.filter((k) => finalKeys.has(k) && !set.tokens[k]);
   if (local) notes.push(`${local} redéclaration(s) dans un composant ou un sélecteur, ignorée(s) : le projet garde la valeur de :root.`);
   if (modeIgnored) notes.push(`${modeIgnored} valeur(s) d'un mode absent du projet (sombre, mobile) non reprise(s).`);
+  if (modeOnly)
+    notes.push(`${modeOnly} longueur(s) en dur laissée(s) telle(s) quelle(s) : le token proche change sur mobile, la valeur du code non (rendu mobile gardé).`);
   if (options.mode === 'attach' && differing.length)
     notes.push(`${differing.length} token(s) du projet ont une autre valeur dans le dépôt : rien n'est changé, la PR de la prochaine version alignera le code.`);
 

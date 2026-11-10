@@ -188,6 +188,7 @@ test('repo-propose (recette 2026-11-09) : fichier de tokens prioritaire, écarts
         '  --text: #F5F5F4;',
         '  --muted: #A1A1AA;',
         '  --brand-gradient: linear-gradient(135deg, #7C3AED, #0b0b0c 60%, rgba(0,0,0,.5));',
+        '  --label: "white";',
         '  --space-md: 16px;',
         '  --space-3xl: 64px;',
         '  --space-x: 8px;',
@@ -197,7 +198,7 @@ test('repo-propose (recette 2026-11-09) : fichier de tokens prioritaire, écarts
         '}',
       ].join('\n'),
     },
-    { path: 'site/src/styles/layout.css', text: '.hero { padding: 80px; margin: 17px; border-radius: 40px; gap: 65px; }' },
+    { path: 'site/src/styles/layout.css', text: '.hero { padding: 80px; margin: 17px; border-radius: 40px; gap: 65px; row-gap: 6px; }' },
   ];
   const p = proposeFromRepo(scanRepo(files), template(), { mode: 'create' });
   const set = applyChanges(template(), p.changes);
@@ -211,9 +212,11 @@ test('repo-propose (recette 2026-11-09) : fichier de tokens prioritaire, écarts
   assert.equal(entry('40px')?.token, null);
   assert.equal(entry('65px')?.token, 'space/3xl');
   assert.equal(entry('17px')?.token, 'space/md');
+  assert.equal(entry('6px')?.token, null); // 6px → 8px : plus de 25 % de la valeur en dur
   // Dégradé : pas de token, mais ses couleurs en dur sont rattachées (alpha exclue).
   assert.match(p.report.rejected.find((r) => r.name === '--brand-gradient')!.reason, /dégradé/);
   const g = p.report.composite?.find((c) => c.name === '--brand-gradient');
   assert.deepEqual({ kind: g?.kind, colors: g?.colors, bound: g?.bound }, { kind: 'gradient', colors: 3, bound: 2 });
   assert.equal(p.entries.find((e) => e.value === '#7C3AED' && e.property === '--brand-gradient')?.token, 'brand');
+  assert.equal(p.entries.some((e) => e.property === '--label'), false); // couleur dans une chaîne : jamais lue
 });

@@ -258,7 +258,9 @@ function scanCss(ctx: Ctx, region: string, base: number, via: Via, scss: boolean
       });
       // Variable composée (dégradé, ombre) : pas de token à elle, mais ses
       // couleurs en dur suivent les tokens comme toute valeur en dur.
-      if (kind.kind === 'other' || kind.kind === 'shadow') scanColors(ctx, prop, value.replace(/url\([^)]*\)/gi, blank), at, via);
+      // Dégradés et ombres seulement ; chaînes et url() masquées (jamais de couleur dans un texte).
+      if (kind.kind === 'shadow' || (kind.kind === 'other' && /(^|[\s,(])(repeating-)?(linear|radial|conic)-gradient\(/i.test(value)))
+        scanColors(ctx, prop, value.replace(/url\([^)]*\)|"[^"]*"|'[^']*'/gi, blank), at, via);
     } else if (!prop.startsWith('$')) scanValue(ctx, prop.toLowerCase(), raw, at, via);
   }
 }

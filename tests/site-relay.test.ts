@@ -158,9 +158,9 @@ test('site en direct (G4) : plan du dépôt appliqué au CSS et au HTML, JS inta
   assert.equal(
     css.body,
     'a{color:var(--color-brand, rgb(255,0,0));padding:var(--space-4, 16px);margin:16px;' +
-      'font-family:var(--font-family-body, Inter, sans-serif) !important;border:1px solid var(--color-brand, #ff0000)}' +
+      'font-family:var(--font-family-body, Inter, sans-serif) !important;border:1px solid #ff0000}' +
       '.x{color:#123456}:root{--brand:#ff0000}',
-  ); // marge sans token de même propriété, couleur sans token et variable du site intactes
+  ); // marge sans token de même propriété, bordure à deux tokens possibles, couleur sans token et variable du site intactes
   assert.equal(css.headers['cache-control'], 'no-cache');
   assert.equal(Number(css.headers['content-length']), Buffer.byteLength(css.body));
   const home = await get('/');
@@ -185,11 +185,14 @@ test('site en direct (G4) : choix du token par propriété puis par valeur', () 
       { kind: 'color', property: 'background', normalized: '#FF0000', token: 'color/alert' },
       { kind: 'color', property: 'background', normalized: '#FF0000', token: 'color/alert' },
       { kind: 'length', property: 'padding', normalized: '16px', token: 'space/4' },
+      { kind: 'color', property: 'background', normalized: '#00FF00', token: 'color/ok' },
     ],
   } as unknown as Parameters<typeof planLookup>[0];
   const lookup = planLookup(plan, {});
   assert.equal(lookup('color', 'color', '#FF0000'), '--color-brand');
-  assert.equal(lookup('color', 'border-color', '#FF0000'), '--color-alert'); // le plus fréquent
+  assert.equal(lookup('color', 'background', '#FF0000'), '--color-alert'); // le plus fréquent pour la propriété
+  assert.equal(lookup('color', 'border-color', '#FF0000'), null); // deux tokens possibles : valeur gardée
+  assert.equal(lookup('color', 'border-color', '#00FF00'), '--color-ok'); // un seul : repli par valeur
   assert.equal(lookup('length', 'gap', '16px'), null);
   assert.equal(planLookup(plan, { 'space/': 'spacing/' })('length', 'padding', '16px'), '--spacing-4');
   assert.equal(applyPlan('a{color:#fff}', 'css', lookup).count, 0);
