@@ -216,6 +216,19 @@ const server = http.createServer(async (req, res) => {
     }
     a.relayCalls += 1;
     const origin = String(req.headers['x-ds-origin']);
+    // Agent du dépôt (G6) : routage ZDR exigé, proposition d'un token pour la valeur envoyée.
+    const messages = (body.messages ?? []) as { content?: string }[];
+    if (String(messages[0]?.content ?? '').startsWith('Tu nommes des tokens')) {
+      if ((body.provider as { zdr?: boolean } | undefined)?.zdr !== true) return send(400, { error: 'ZDR attendu.' });
+      const sent = JSON.parse(String(messages[1]?.content ?? '{}')) as { valeurs?: { valeur: string }[] };
+      const changes = (sent.valeurs ?? [])
+        .filter((v) => v.valeur === '11px')
+        .map(() => ({ op: 'add', key: 'space/card-gap', token: { $type: 'dimension', $collection: 'primitives', $values: { default: 11 } } }));
+      return send(200, {
+        choices: [{ message: { content: null, tool_calls: [{ function: { name: 'propose_changes', arguments: JSON.stringify({ reason: 'Marge des cartes.', changes }) } }] } }],
+        usage: { prompt_tokens: 10, completion_tokens: 3, cost: 0.00001 },
+      });
+    }
     // Réponse longue pour l'assistant : le fil doit défiler jusqu'au bout (recette du 2026-11-05).
     const detail = origin === 'assistant' ? '\n\n' + Array.from({ length: 25 }, (_, i) => `Détail ${i + 1} de la réponse.`).join('\n') : '';
     const reply = {

@@ -707,6 +707,31 @@ test('dépôt : nouveau projet depuis un dépôt GitHub, tokens repris, plan, br
   await expect(pr).toContainText('4 valeur(s) en dur remplacée(s)');
   await page.screenshot({ path: 'test-results/depot-pr.png', fullPage: false });
 
+  // G6 : l'agent nomme les valeurs sans token, après l'écran de consentement.
+  await page.getByRole('button', { name: 'Dépôt', exact: true }).click();
+  await panel.getByRole('button', { name: 'Demander à l’agent de nommer les tokens' }).click();
+  const consent = panel.getByRole('group', { name: 'Envoi à l’agent' });
+  await expect(consent).toContainText('src/components/Card.css');
+  await expect(consent).toContainText('ZDR');
+  await consent.getByText('Voir exactement ce qui part').click();
+  await expect(consent.locator('.repo-excerpts')).toContainText('.card');
+  await expect(consent.locator('.repo-excerpts')).toContainText('margin: 11px');
+  await page.screenshot({ path: 'test-results/depot-agent-consentement.png', fullPage: false });
+  // Annuler : rien ne part, retour au plan ; nouvel aperçu à chaque demande.
+  await consent.getByRole('button', { name: 'Annuler' }).click();
+  await expect(consent).toBeHidden();
+  await panel.getByRole('button', { name: 'Demander à l’agent de nommer les tokens' }).click();
+  await consent.getByRole('button', { name: /^Envoyer ces \d+ lignes à l’agent$/ }).click();
+  const agent = panel.getByLabel('Proposition de l’agent');
+  await expect(agent).toContainText('Marge des cartes.');
+  await expect(agent).toContainText('+ space/card-gap');
+  await agent.getByRole('button', { name: 'Mettre en brouillon' }).click();
+  await expect(panel).toBeHidden();
+  await expect(page.getByRole('status').filter({ hasText: 'de l’agent (dépôt) mis en brouillon' })).toBeVisible();
+  await validate(page);
+  const named = await (await page.request.get('/api/state', { headers })).json();
+  expect(named.set.tokens['space/card-gap']).toMatchObject({ $type: 'dimension', $values: { default: 11 } });
+
   await page.getByRole('button', { name: 'Réglages' }).click();
   await github.getByRole('button', { name: 'Déconnecter GitHub' }).click();
   await expect(github.getByRole('button', { name: 'Connecter GitHub' })).toBeEnabled();

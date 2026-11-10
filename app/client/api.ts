@@ -211,6 +211,17 @@ export const readProjectRepo = (mode: 'create' | 'attach') => request<RepoResult
 export const attachRepo = (repo: string, base: string, subdir: string) =>
   request<RepoResult>('repo', { action: 'attach', mode: 'attach', repo, base, subdir });
 export const getRepoPlan = () => request<RepoPlanSummary | null>('repo/plan');
+// G6 : aperçu exact de l'envoi à l'agent (rien ne part), puis envoi confirmé.
+export interface AgentPreview {
+  nonce: string;
+  values: { value: string; kind: 'color' | 'length' | 'font'; normalized: string; count: number }[];
+  excerpts: { file: string; line: number; selector: string | null; text: string; value: string }[];
+  files: { file: string; lines: number }[];
+  lines: number;
+}
+export const previewRepoAgent = () => request<AgentPreview>('repo/agent/preview', {});
+export const sendRepoAgent = (nonce: string) =>
+  request<{ reason: string; changes: Change[]; dropped: number }>('repo/agent/send', { nonce });
 // Lot 5 : styles d'un site lus sur le poste et proposition sur le jeu enregistré.
 export type ExtractResult = ExtractProposal & { inventory: SiteInventory };
 export const extractSite = (url: string) => request<ExtractResult>('extract', { url });

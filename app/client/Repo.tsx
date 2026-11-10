@@ -7,7 +7,10 @@ import {
   getGithub,
   getRepoPlan,
   githubAction,
+  previewRepoAgent,
   readProjectRepo,
+  sendRepoAgent,
+  type AgentPreview,
   type GithubRepo,
   type RepoPlanSummary,
   type RepoResult,
@@ -23,7 +26,10 @@ type Phase =
   | { status: 'error'; message: string }
   | { status: 'form'; repos: GithubRepo[] | null; reason: string | null }
   | { status: 'done'; result: RepoResult }
-  | { status: 'plan'; plan: RepoPlanSummary | null };
+  | { status: 'plan'; plan: RepoPlanSummary | null }
+  // G6 : écran de consentement, puis réponse de l'agent.
+  | { status: 'consent'; preview: AgentPreview; sending: boolean }
+  | { status: 'agent'; reason: string; changes: Change[]; dropped: number };
 
 const label = (c: Change) =>
   !('op' in c) ? `${c.key} (${c.mode}) → ${c.value}` : c.op === 'add' ? `+ ${c.key}` : c.op === 'remove' ? `− ${c.key}` : c.name;
@@ -41,7 +47,7 @@ export default function RepoPanel({
   // `create` : projet tout juste créé depuis un dépôt, lecture lancée tout de suite.
   start: 'create' | 'open';
   onConfig: (config: Config) => void;
-  onDraft: (changes: Change[]) => void;
+  onDraft: (changes: Change[], from?: string) => void;
   // Second brouillon : couleurs à plat → primitives de palette + tokens sémantiques.
   onSemantic: () => void;
   onClose: () => void;
@@ -68,6 +74,26 @@ export default function RepoPanel({
       setPhase({ status: 'error', message: (e as Error).message });
     }
   };
+  const askAgent = () => {
+    setPhase({ status: 'loading', what: 'Préparation des extraits (rien n’est envoyé)…' });
+    previewRepoAgent().then(
+      (preview) => setPhase({ status: 'consent', preview, sending: false }),
+      (e: Error) => setPhase({ status: 'error', message: e.message }),
+    );
+  };
+  const sendAgent = (preview: AgentPreview) => {
+    setPhase({ status: 'consent', preview, sending: true });
+    sendRepoAgent(preview.nonce).then(
+      (r) => setPhase({ status: 'agent', ...r }),
+      // Un aperçu ne sert qu'une fois : un nouvel essai repasse par le consentement.
+      (e: Error) => setPhase({ status: 'error', message: `${e.message} Pour réessayer, redemande à l’agent : nouvel aperçu, nouvelle confirmation.` }),
+    );
+  };
+  const backToPlan = () =>
+    getRepoPlan().then(
+      (plan) => setPhase({ status: 'plan', plan }),
+      (e: Error) => setPhase({ status: 'error', message: e.message }),
+    );
   useEffect(() => {
     if (start === 'create' && attached) return read('create');
     if (!attached) {
@@ -167,6 +193,7 @@ export default function RepoPanel({
           <div className="form-actions">
             <button onClick={() => void openForm()}>Changer de dépôt</button>
             <button onClick={onSemantic}>Proposer une couche sémantique</button>
+            {(phase.plan?.report.hardcoded.unmapped ?? 0) > 0 && <button onClick={askAgent}>Demander à l’agent de nommer les tokens</button>}
             <button className="primary" onClick={() => read('attach')}>
               Relire le dépôt
             </button>
@@ -174,6 +201,35 @@ export default function RepoPanel({
         </>
       )}
       {phase.status === 'done' && <Result result={phase.result} onDraft={onDraft} />}
+      {phase.status === 'consent' && (
+        <Consent preview={phase.preview} sending={phase.sending} onSend={() => sendAgent(phase.preview)} onCancel={() => void backToPlan()} />
+      )}
+      {phase.status === 'agent' && (
+        <div className="repo-agent" aria-label="Proposition de l’agent">
+          <p>{phase.reason}</p>
+          {phase.dropped > 0 && (
+            <p className="hint">{phase.dropped} changement(s) écarté(s) : seuls les ajouts de primitives aux valeurs envoyées sont gardés.</p>
+          )}
+          {phase.changes.length > 0 ? (
+            <>
+              <ul className="repo-files">
+                {phase.changes.map((c, i) => (
+                  <li key={i}>{label(c)}</li>
+                ))}
+              </ul>
+              <p className="hint">Après validation, « Relire le dépôt » rattache ces valeurs aux nouveaux tokens pour la PR.</p>
+            </>
+          ) : (
+            <p className="hint">Aucun token proposé.</p>
+          )}
+          <div className="form-actions">
+            <button onClick={() => void backToPlan()}>Retour</button>
+            <button className="primary" disabled={phase.changes.length === 0} onClick={() => onDraft(phase.changes, 'de l’agent (dépôt)')}>
+              Mettre en brouillon
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -344,6 +400,54 @@ function Summary({ report, tokens }: { report: RepoReport; tokens?: number }) {
         ))}
       </ul>
     </>
+  );
+}
+
+// Écran de consentement (G6) : ce qui part, d'où, par où ; confirmé à chaque fois.
+function Consent({ preview, sending, onSend, onCancel }: { preview: AgentPreview; sending: boolean; onSend: () => void; onCancel: () => void }) {
+  return (
+    <div className="repo-consent" role="group" aria-label="Envoi à l’agent">
+      <h3>Envoyer ces extraits à l’agent ?</h3>
+      <p>
+        {preview.values.length} valeur(s) sans token, {preview.lines} ligne(s) de {preview.files.length} fichier(s) : la ligne et l’en-tête
+        de son bloc (sélecteur) seulement, jamais un fichier entier. Fichiers <code>.env</code>, configs et lignes qui ressemblent à un secret
+        écartés.
+      </p>
+      <ul className="repo-files">
+        {preview.files.map((f) => (
+          <li key={f.file}>
+            <code>{f.file}</code> · {f.lines} ligne(s)
+          </li>
+        ))}
+      </ul>
+      <details>
+        <summary>Voir exactement ce qui part</summary>
+        <ul className="repo-excerpts">
+          {preview.excerpts.map((x) => (
+            <li key={`${x.file}:${x.line}`}>
+              <code>
+                {x.file}:{x.line}
+              </code>
+              {x.selector && <> · {x.selector}</>}
+              <pre>{x.text}</pre>
+            </li>
+          ))}
+        </ul>
+      </details>
+      <p className="hint">
+        Trajet : ton poste → serveur DS-Studio (rien conservé, seuls la consommation et le coût sont comptés) → OpenRouter, routé vers
+        des fournisseurs sans conservation des données (ZDR) seulement → modèle. Débité de tes crédits comme l’assistant ; si aucun fournisseur ZDR
+        n’est disponible pour le modèle, l’envoi échoue. La réponse arrive en brouillon, relue par diff.
+      </p>
+      <div className="form-actions">
+        <button onClick={onCancel} disabled={sending}>
+          Annuler
+        </button>
+        <button className="primary" onClick={onSend} disabled={sending}>
+          {sending ? 'Envoi…' : `Envoyer ces ${preview.lines} lignes à l’agent`}
+        </button>
+      </div>
+    </div>
   );
 }
 

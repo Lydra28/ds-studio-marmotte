@@ -10,6 +10,7 @@ import { projectSchema, type Config } from '../shared/project.js';
 import { Registry, newProjectSchema, withRepo } from './registry.js';
 import { cleanSubdir, readPlan, readProjectRepo, readRepoFiles } from './repo-read.js';
 import { Assistant, chatSchema } from './assistant.js';
+import { createRepoAgent } from './repo-agent.js';
 import { Wall, directionsRequestSchema, imageSchema, linkSchema } from './wall.js';
 import { readSite, type ReadSite } from './extract.js';
 import { proposeFromInventory } from '../shared/extract.js';
@@ -109,6 +110,8 @@ export async function createStudioServer(
           wall: new Wall(options.store.directory, {}),
         });
   const csrf = randomBytes(32).toString('hex');
+  // G6 : aperçus de l'envoi à l'agent en attente de confirmation (mémoire seule).
+  const repoAgent = createRepoAgent();
   // Accès GitHub de la PR : options de test, sinon la connexion de l'app (G5).
   const githubAccess = async (): Promise<GithubOptions> => {
     if (options.github) return options.github;
@@ -409,6 +412,27 @@ export async function createStudioServer(
           const snapshot = store.snapshot();
           const mode = b.mode === 'create' && snapshot.revision === 0 ? 'create' : 'attach';
           return send(200, { config: current, mode, ...(await readProjectRepo(g, store.directory, current.github, snapshot.set, mode)) });
+        }
+        if (url.pathname === '/api/repo/agent/preview') {
+          // G6, écran de consentement : extraits exacts qui partiraient, rien n'est envoyé.
+          const g = options.githubAuth;
+          if (!g) throw new StudioError('GitHub indisponible dans cette instance.', 409);
+          await g.token();
+          if (!assistant.status.enabled && assistant.status.reason === 'account')
+            throw new StudioError('Connecte ton compte DS-Studio (Réglages) pour demander à l’agent.', 503);
+          const plan = await readPlan(store.directory);
+          if (!plan || !config.github || plan.repo !== config.github.repo)
+            throw new StudioError('Relis le dépôt avant de demander à l’agent.', 409);
+          // Branche lue (le commit du plan n'est qu'un préfixe) : ligne changée depuis, sans la valeur → jamais envoyée.
+          const files = new Map((await readRepoFiles(g, plan.repo, plan.ref, plan.subdir)).map((f) => [f.path, f.text]));
+          return send(200, repoAgent.preview(store.directory, plan, files));
+        }
+        if (url.pathname === '/api/repo/agent/send') {
+          // G6 : envoi confirmé de l'aperçu montré, une seule fois ; sortie en brouillon côté client.
+          const { nonce } = z.object({ nonce: z.string().min(16).max(64) }).strict().parse(body);
+          // Réservé à Pro comme l'aperçu (abonnement résilié entre les deux : refusé).
+          if (!options.githubAuth?.status().pro) throw new StudioError('Agent du dépôt réservé à DS-Studio Pro.', 402);
+          return send(200, await repoAgent.send(store.directory, nonce, store.snapshot().set, (b) => assistant.relay(b)));
         }
         if (url.pathname === '/api/proposals') {
           const b = proposeSchema.parse(body);

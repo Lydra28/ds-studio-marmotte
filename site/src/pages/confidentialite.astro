@@ -25,6 +25,21 @@ import Draft from '../components/Draft.astro';
       Les questions à l’assistant et les images du Mur traversent le serveur DS-Studio vers le fournisseur du modèle
       (OpenRouter), sans être enregistrées par DS-Studio.
     </p>
+    <p>
+      Sur ta demande seulement, l’agent peut nommer les valeurs de ton dépôt GitHub restées sans token : l’application te
+      montre d’abord les extraits exacts (la ligne de code et l’en-tête de son bloc, jamais un fichier entier ; fichiers
+      <code>.env</code>, configurations et lignes qui ressemblent à un secret écartés) et rien ne part avant ta
+      confirmation, redemandée à chaque fois. Ces extraits suivent le même trajet, sans être enregistrés par DS-Studio ;
+      DS-Studio demande à OpenRouter de ne les router que vers des fournisseurs qui s’engagent à ne pas conserver les
+      données (ZDR) ; sans fournisseur de ce type, l’envoi échoue.
+    </p>
+    <h2>GitHub</h2>
+    <p>
+      La connexion GitHub (DS-Studio Pro) relie l’application à ton compte GitHub, sans passer par le serveur DS-Studio : les
+      jetons de connexion restent sur ton poste. L’application lit le dépôt que tu choisis en mémoire, sans rien exécuter, et
+      n’y écrit qu’une branche et une pull request quand tu acceptes une version. GitHub traite ces données selon ses
+      propres conditions, comme pour tout outil connecté à ton compte.
+    </p>
     <h2>Sous-traitants</h2>
     <ul>
       <li>Render (hébergement du serveur et de la base)</li>

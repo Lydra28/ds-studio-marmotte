@@ -2463,3 +2463,27 @@ dialog.diff .diff-summary {
   vertical-align: middle;
   border: 1px solid var(--c-line);
 }
+/* Envoi à l'agent (G6) : écran de consentement, extraits exacts. */
+.repo-consent,
+.repo-agent {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--c-line);
+}
+.repo-consent h3 {
+  margin: 0;
+}
+.repo-excerpts {
+  display: grid;
+  gap: 6px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 0;
+  list-style: none;
+}
+.repo-excerpts pre {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}

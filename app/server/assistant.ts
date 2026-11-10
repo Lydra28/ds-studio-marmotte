@@ -240,6 +240,10 @@ export class Assistant {
       usage: data.usage && { prompt: data.usage.prompt_tokens ?? 0, completion: data.usage.completion_tokens ?? 0 },
     };
   }
+  /** Appel direct au relais (agent du dépôt, G6) : même compte, même modèle, débité comme l'assistant, rien d'enregistré. */
+  relay(body: Record<string, unknown>) {
+    return callRelay(this.options, { ...body, model: this.options.model ?? DEFAULT_MODEL }, 'assistant');
+  }
   private async complete(
     context: { project: Project; name: string; set: TokenSet },
     messages: AssistantMessage[],

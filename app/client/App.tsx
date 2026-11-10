@@ -751,8 +751,8 @@ function Workspace({
           start={repoPanel}
           onConfig={setConfig}
           onClose={() => setRepoPanel(null)}
-          onDraft={(list) => {
-            draftChanges(list, 'lus dans le dépôt');
+          onDraft={(list, from) => {
+            draftChanges(list, from ?? 'lus dans le dépôt');
             setRepoPanel(null);
           }}
           onSemantic={() => {
