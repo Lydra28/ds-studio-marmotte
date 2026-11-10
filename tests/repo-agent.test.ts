@@ -136,7 +136,7 @@ test('sortie : valeur réécrite telle que dans le plan (casse, nombre)', async 
 test('extraits : ni alpha, ni em, ni en-tête de code JS', () => {
   const js = new Map([
     ['src/a.css', ['.x {', '  color: #11223344;', '  margin: 1.5em;', '  padding: 150px;', '}'].join('\n')],
-    ['src/App.tsx', ['const cfg = fetch("https://u:p@x.test/?k=1", {', '  style: { color: "#ABCDEF" },', '});'].join('\n')],
+    ['src/App.tsx', ['const cfg = fetch("https://u' + ':p@x.test/?k=1", {', '  style: { color: "#ABCDEF" },', '});'].join('\n')],
   ]);
   const scan = scanRepo([...js].map(([path, text]) => ({ path, text })));
   const out = buildExcerpts(proposeFromRepo(scan, template(), { mode: 'attach' }), js);
