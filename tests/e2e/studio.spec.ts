@@ -504,6 +504,29 @@ test('écrans d’exemple : la preview passe d’un écran à l’autre, brouill
   await page.getByRole('button', { name: 'Abandonner' }).click();
 });
 
+test('écrans d’exemple : projet aux noms de son dépôt, signalé au lieu d’un aperçu muet', async ({ page }) => {
+  // Jeu servi par le serveur remplacé dans la réponse seulement (rien d'écrit) :
+  // les noms d'un dépôt tiers, aucun nom du gabarit.
+  await page.route('**/api/state', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const response = await route.fetch();
+    const state = await response.json();
+    state.set.tokens = {
+      'salmon-pink': { $type: 'color', $collection: 'tokens', $values: { light: '#FF8F9C' } },
+      cultured: { $type: 'color', $collection: 'tokens', $values: { light: '#EDEDED' } },
+    };
+    await route.fulfill({ response, json: state });
+  });
+  await page.reload();
+  const preview = page.getByRole('region', { name: 'Preview en direct' });
+  await expect(preview.getByRole('note')).toContainText('lisent les noms du gabarit');
+  await expect(preview.getByLabel('Écran de la preview')).toHaveValue('ds');
+  await page.screenshot({ path: 'test-results/preview-noms-depot.png', fullPage: false });
+  await page.unroute('**/api/state');
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'Preview en direct' }).getByRole('note')).toHaveCount(0);
+});
+
 test('export code : CSS, Tailwind et JSON de l’état enregistré, téléchargement', async ({ page }) => {
   await page.getByRole('button', { name: 'Exporter' }).click();
   const dialog = page.getByRole('dialog', { name: 'Exporter le code' });

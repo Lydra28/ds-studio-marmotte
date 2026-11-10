@@ -4,7 +4,7 @@ import type { Config } from '../shared/project.js';
 import { getVersion, type VersionSummary } from './api.js';
 import { ChangesDialog, diffSummary } from './Panels.js';
 import { devices, SiteFrame, type Device } from './Site.js';
-import { previewSrc, ScreenPicker, type Screen } from './DesignSystem.js';
+import { PreviewGap, previewSrc, ScreenPicker, type Screen } from './DesignSystem.js';
 
 // Comparaison côte à côte : deux états du jeu (version acceptée, état
 // enregistré ou brouillon) rendus dans deux cadres identiques, défilement lié.
@@ -207,6 +207,7 @@ export default function CompareView({
       </div>
       <div className="site-view__head">
         <ScreenPicker value={content} onChange={setContent} site={!!site} label="Contenu comparé" />
+        {content !== 'site' && after && <PreviewGap set={after} site={!!site} />}
         <div className="devices" role="group" aria-label="Appareil">
           {(Object.keys(devices) as Device[]).map((d) => (
             <button key={d} aria-pressed={device === d} onClick={() => setDevice(d)}>

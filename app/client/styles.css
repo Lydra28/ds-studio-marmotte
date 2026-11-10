@@ -2487,3 +2487,12 @@ dialog.diff .diff-summary {
   white-space: pre-wrap;
   word-break: break-all;
 }
+
+/* Écrans d'exemple qui ne lisent pas les tokens du projet (lu dans un dépôt). */
+.preview-gap {
+  margin: 0 0 8px;
+}
+.site-view__head .preview-gap {
+  flex-basis: 100%;
+  margin: 0;
+}

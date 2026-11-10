@@ -3,7 +3,7 @@ import { setsByRevision, type State, type TokenSet } from '../shared/model.js';
 import type { Config } from '../shared/project.js';
 import type { VersionSummary } from './api.js';
 import { DsFrame } from './Compare.js';
-import { ScreenPicker, type Screen } from './DesignSystem.js';
+import { PreviewGap, ScreenPicker, type Screen } from './DesignSystem.js';
 import { sourceLabel } from './Panels.js';
 import { devices, SiteFrame, type Device } from './Site.js';
 
@@ -99,6 +99,7 @@ export default function TimelineView({
       <div className="site-view__head">
         <h2>Évolution</h2>
         <ScreenPicker value={content} onChange={setContent} site={!!site} label="Contenu rejoué" />
+        {content !== 'site' && set && <PreviewGap set={set} site={!!site} />}
         <div className="devices" role="group" aria-label="Appareil">
           {(Object.keys(devices) as Device[]).map((d) => (
             <button key={d} aria-pressed={device === d} onClick={() => setDevice(d)}>

@@ -209,6 +209,36 @@ export type Screen = (typeof screens)[number][0];
 const isScreen = (v: string | null): v is Screen => screens.some(([id]) => id === v);
 export const previewSrc = (screen: Screen) => (screen === 'ds' ? '/?preview=1' : `/?preview=1&screen=${screen}`);
 
+// Tokens lus par les écrans d'exemple : noms du gabarit. Un projet lu dans un
+// dépôt garde les noms de son code ; les écrans ne suivent alors pas ses tokens.
+export const PREVIEW_KEYS = [
+  'bg/canvas',
+  'bg/surface',
+  'bg/brand',
+  'text/primary',
+  'text/secondary',
+  'border/default',
+  'radius/control',
+  'space/md',
+  'font/size/body',
+  'font/family/base',
+];
+// Plus de la moitié manque (un token retiré à la main ou un dépôt qui reprend
+// une partie des noms du gabarit ne suffit pas).
+export const previewUnfit = (set: TokenSet) =>
+  PREVIEW_KEYS.filter((k) => !set.tokens[k]).length * 2 > PREVIEW_KEYS.length;
+
+export function PreviewGap({ set, site = false }: { set: TokenSet; site?: boolean }) {
+  if (!previewUnfit(set)) return null;
+  return (
+    <p className="hint preview-gap" role="note">
+      Les écrans d’exemple lisent les noms du gabarit (<code>bg/brand</code>, <code>text/primary</code>…), absents de
+      ce projet : ils ne suivent pas tes tokens. Tes tokens sont sur la planche.
+      {site ? ' Ton site avec tes tokens : « Site en direct ».' : ''}
+    </p>
+  );
+}
+
 // Choix du contenu d'un cadre : écrans d'exemple, et le site en direct s'il existe.
 export function ScreenPicker({
   value,

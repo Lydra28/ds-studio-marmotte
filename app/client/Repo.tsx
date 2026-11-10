@@ -186,7 +186,7 @@ export default function RepoPanel({
             <p className="hint">Dépôt rattaché, pas encore lu.</p>
           )}
           <p className="hint">
-            Couleurs du dépôt écrites à plat (<code>--canvas: #0B0B0C</code>) : DS-Studio peut proposer une palette de primitives et
+            Couleurs du dépôt écrites à plat (par exemple <code>--fond: #0B0B0C</code>) : DS-Studio peut proposer une palette de primitives et
             garder tes noms comme tokens sémantiques qui y renvoient. Second brouillon, relu par diff ; la PR réécrit alors tes
             variables.
           </p>

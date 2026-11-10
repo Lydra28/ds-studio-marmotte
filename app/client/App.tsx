@@ -47,7 +47,7 @@ import { proposeSemanticLayer } from '../shared/semantic.js';
 import RepoPanel from './Repo.js';
 import { SiteFrame, SiteFullscreen, type Device } from './Site.js';
 import { fontFamilies, loadFonts } from './fonts.js';
-import { previewSrc, ScreenPicker, type Screen } from './DesignSystem.js';
+import { PreviewGap, previewSrc, previewUnfit, ScreenPicker, type Screen } from './DesignSystem.js';
 import CompareView, { type Source } from './Compare.js';
 import TimelineView from './Timeline.js';
 import { ChangesDialog, Corrections, DiffDialog, ExportDialog, FigmaDialog, History } from './Panels.js';
@@ -279,11 +279,10 @@ function Workspace({
   };
   const [device, setDevice] = useState(1);
   // Preview latérale : un écran d'exemple du DS, ou le vrai site du projet.
-  const [previewScreen, setPreviewScreen] = useState<Screen | 'site'>('ds');
+  const [previewChoice, setPreviewScreen] = useState<Screen | 'site'>();
   const [siteFull, setSiteFull] = useState<Device>();
   const [sitePage, setSitePage] = useState<string>();
   const siteReady = !!(relay && config?.site);
-  const previewSite = siteReady && previewScreen === 'site';
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -350,6 +349,11 @@ function Workspace({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, drafts, structure, componentDrafts]);
+  // Écrans d'exemple qui ne lisent pas les tokens du projet (lu dans un dépôt) :
+  // le site en direct d'abord, tant que rien n'a été choisi. Décidé sur le jeu
+  // enregistré, pas sur le brouillon, pour ne pas basculer pendant l'édition.
+  const previewScreen = previewChoice ?? (siteReady && state && previewUnfit(state.set) ? 'site' : 'ds');
+  const previewSite = siteReady && previewScreen === 'site';
   const findings = useMemo(() => (draftSet ? runRules(draftSet) : []), [draftSet]);
   // Mascotte : couleur de marque du brouillon, fête des enregistrements.
   const mascotColor = useMemo(() => (draftSet ? brandColor(draftSet) : '#7C5CFF'), [draftSet]);
@@ -802,6 +806,7 @@ function Workspace({
                 ))}
               </div>
             </div>
+            {!previewSite && draftSet && <PreviewGap set={draftSet} site={siteReady} />}
             <div className="frame-wrap">
               {previewSite ? (
                 <SiteFrame
