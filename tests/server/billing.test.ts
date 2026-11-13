@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import test from 'node:test';
-import { CATALOG, handleEvent, setupCatalog, stripeWebhooks, type BillingClient } from '../../server/billing.js';
+import { CATALOG, handleEvent, isLiveKey, setupCatalog, stripeWebhooks, type BillingClient } from '../../server/billing.js';
 import { PRO_INCLUDED_CENTS } from '../../server/credits.js';
 import { connect, testApp, type TestApp } from './helpers.js';
 
@@ -393,4 +393,13 @@ test('site (lot 7) : retours Stripe vers les pages du site ; case des CGV seulem
   } finally {
     await consent.t.close();
   }
+});
+
+test('clé live : secrète ou restreinte ; une clé de test ou vide reste du test', () => {
+  assert.equal(isLiveKey('sk_live_x'), true);
+  assert.equal(isLiveKey('rk_live_x'), true, 'clé restreinte live : vrais paiements, jamais affichés « test »');
+  assert.equal(isLiveKey('sk_test_x'), false);
+  assert.equal(isLiveKey('rk_test_x'), false);
+  assert.equal(isLiveKey(''), false);
+  assert.equal(isLiveKey('pk_live_x'), false, 'clé publiable : jamais une clé serveur');
 });

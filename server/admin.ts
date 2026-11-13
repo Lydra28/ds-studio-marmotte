@@ -11,7 +11,7 @@
 // externe de la base Render). `keys` n'a pas besoin de base.
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
-import { setupCatalog, stripeClient, type BillingClient } from './billing.js';
+import { isLiveKey, setupCatalog, stripeClient, type BillingClient } from './billing.js';
 import { pgDb, type Db } from './db.js';
 import { addCredits } from './credits.js';
 import { generateKeys } from './license.js';
@@ -382,8 +382,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     }
     const key = process.env.STRIPE_SECRET_KEY;
     if (key) {
-      // Seul le préfixe est affiché : jamais la clé.
-      console.log(`Stripe en mode ${key.startsWith('sk_live_') ? 'LIVE' : 'test'}.`);
+      // Seul le mode est affiché : jamais la clé.
+      console.log(`Stripe en mode ${isLiveKey(key) ? 'LIVE' : 'test'}.`);
       billing = stripeClient(key);
     }
   } else if (argv[0] !== 'keys') {

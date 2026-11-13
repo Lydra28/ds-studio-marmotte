@@ -47,6 +47,8 @@ export function catalog(mode: BillingMode) {
     generationCents: GENERATION_CENTS,
   };
 }
+/** Clé live, secrète (`sk_live_`) ou restreinte (`rk_live_`) : vrais paiements. */
+export const isLiveKey = (key: string) => /^[sr]k_live_/.test(key);
 export const billingMode = (billing: Billing | undefined): BillingMode => (!billing ? 'off' : billing.live ? 'live' : 'test');
 /** Événements à cocher sur l'endpoint webhook du Dashboard (runbook server.md). */
 export const WEBHOOK_EVENTS = [
@@ -85,7 +87,7 @@ export interface Billing {
   client: BillingClient;
   /** Secret de signature de l'endpoint webhook (`whsec_…`), différent en test et en live. */
   webhookSecret: string;
-  /** Clé `sk_live_` : vrais paiements (lot 7). Absent : mode test. */
+  /** Clé live (`isLiveKey`) : vrais paiements (lot 7). Absent : mode test. */
   live?: boolean;
   /**
    * Case « J'accepte les conditions de vente » sur la page Stripe (lot 7).

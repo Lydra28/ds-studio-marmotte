@@ -6,7 +6,7 @@ import * as Sentry from '@sentry/node';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createApp } from './app.js';
-import { stripeClient } from './billing.js';
+import { isLiveKey, stripeClient } from './billing.js';
 import { memoryDb, migrate, pgDb, waitForDb } from './db.js';
 import { generateKeys, loadKeys, type LicenseKeys } from './license.js';
 import { consoleMailer, resendMailer } from './mail.js';
@@ -108,7 +108,7 @@ if (!openRouterKey) console.warn('OPENROUTER_API_KEY absente : relais OpenRouter
 const stripeKey = env.STRIPE_SECRET_KEY ?? '';
 const stripeWebhookSecret = env.STRIPE_WEBHOOK_SECRET ?? '';
 if (!stripeKey || !stripeWebhookSecret) console.warn('STRIPE_SECRET_KEY ou STRIPE_WEBHOOK_SECRET absente : paiement désactivé (503).');
-else console.log(`Stripe en mode ${stripeKey.startsWith('sk_live_') ? 'LIVE' : 'test'}.`);
+else console.log(`Stripe en mode ${isLiveKey(stripeKey) ? 'LIVE' : 'test'}.`);
 const siteUrl = env.SITE_URL ? env.SITE_URL.replace(/\/+$/, '') : undefined;
 const app = createApp({
   db,
@@ -120,7 +120,7 @@ const app = createApp({
       ? {
           client: stripeClient(stripeKey),
           webhookSecret: stripeWebhookSecret,
-          live: stripeKey.startsWith('sk_live_'),
+          live: isLiveKey(stripeKey),
           termsConsent: env.STRIPE_TERMS_CONSENT === '1',
         }
       : undefined,
