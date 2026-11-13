@@ -187,7 +187,7 @@ const server = http.createServer(async (req, res) => {
   if (route === 'GET /v1/billing/done') {
     // Page de retour de Stripe, ouverte dans un nouvel onglet par Réglages.
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-    return res.end('<!doctype html><title>Paiement simulé</title><p>Paiement enregistré (simulé). Retourne dans DS-Studio et clique « Actualiser ».</p>');
+    return res.end('<!doctype html><title>Paiement simulé</title><p>Paiement enregistré (simulé). Retourne dans DS-Studio : il se met à jour tout seul.</p>');
   }
   const token = (req.headers.authorization ?? '').replace(/^Bearer /, '');
   const a = sessions.get(token);
@@ -243,7 +243,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (route === 'POST /v1/billing/checkout') {
     if (body.kind === 'pro' && (a.gifted || a.plan === 'pro')) return send(409, { error: 'Déjà abonné à Pro : gère ton abonnement depuis le portail.' });
-    // Le paiement et son webhook sont simulés sur-le-champ : l'e2e vérifie l'affichage après « Actualiser ».
+    // Le paiement et son webhook sont simulés sur-le-champ : l'e2e vérifie l'actualisation automatique (recharge) et « Actualiser » (Pro, portail).
     a.customer = true;
     if (body.kind === 'pro') {
       a.plan = 'pro';

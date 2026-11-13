@@ -84,6 +84,29 @@ const SUBMIT: Record<Mode, string> = {
   reset: 'Changer le mot de passe',
 };
 
+// Après l'ouverture d'une page Stripe, le compte change par webhook côté
+// serveur : l'app relit le compte toutes les WATCH_EVERY_MS et dès que la
+// fenêtre reprend la main, pendant WATCH_MS, jusqu'au changement attendu
+// (watchDone). « Actualiser » reste là.
+export const WATCH_MS = 3 * 60_000;
+export const WATCH_EVERY_MS = 3000;
+export type WatchKind = 'credits' | 'pro' | 'portal';
+const billingKey = (a: AccountStatus | undefined) =>
+  a?.status === 'connected' ? JSON.stringify([a.plan, a.gifted, a.usage?.creditCents ?? null, a.subscription ?? null]) : '';
+// Fin de l'attente : seulement le changement que l'achat produit, pour qu'une
+// génération qui consomme des crédits pendant ce temps ne passe pas pour un
+// paiement. Session perdue : fin aussi (rien à annoncer).
+export function watchDone(kind: WatchKind, before: AccountStatus | undefined, a: AccountStatus) {
+  if (a.status !== 'connected') return true;
+  if (kind === 'pro') return a.plan === 'pro';
+  if (kind === 'portal') return JSON.stringify([a.plan, a.subscription ?? null]) !== JSON.stringify([before?.plan, before?.subscription ?? null]);
+  const was = before?.usage?.creditCents;
+  const now = a.usage?.creditCents;
+  // Solde inconnu au départ (hors ligne) : tout changement vaut paiement.
+  if (was === undefined) return billingKey(a) !== billingKey(before);
+  return now !== undefined && now > was;
+}
+
 function AccountSection({ account, onChange }: { account: AccountStatus | undefined; onChange: (a: AccountStatus) => void }) {
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
@@ -94,10 +117,64 @@ function AccountSection({ account, onChange }: { account: AccountStatus | undefi
   const [notice, setNotice] = useState('');
   // Dernière page Stripe demandée : lien de secours si le navigateur n'a rien ouvert.
   const [payUrl, setPayUrl] = useState('');
+  const [watch, setWatch] = useState<{ kind: WatchKind; before: AccountStatus | undefined; until: number } | null>(null);
+  useEffect(() => {
+    if (!watch) return;
+    let pending = false;
+    // Effet nettoyé (autre action, déconnexion, page quittée) : une réponse
+    // encore en route ne touche plus à rien.
+    let cancelled = false;
+    const poll = async () => {
+      if (pending || cancelled) return;
+      if (Date.now() > watch.until) {
+        setWatch(null);
+        setNotice(
+          watch.kind === 'portal'
+            ? 'Abonnement inchangé pour l’instant : si tu viens de le modifier, clique Actualiser dans un moment.'
+            : 'Pas encore de changement sur ton compte : clique Actualiser dans un moment.',
+        );
+        return;
+      }
+      pending = true;
+      try {
+        const r = await accountAction({ action: 'refresh' });
+        if (cancelled || !watchDone(watch.kind, watch.before, r.account)) return;
+        onChange(r.account);
+        setWatch(null);
+        setPayUrl('');
+        const a = r.account;
+        // Session perdue entre-temps : rien à annoncer, le formulaire de connexion revient.
+        if (a.status !== 'connected') return;
+        setNotice(
+          watch.kind === 'portal'
+            ? 'Abonnement mis à jour.'
+            : watch.kind === 'pro'
+              ? 'Paiement reçu : Pro actif.'
+              : a.usage
+                ? `Paiement reçu : crédits ${euros(a.usage.creditCents)}.`
+                : 'Paiement reçu.',
+        );
+      } catch {
+        // Réseau coupé : on réessaie au prochain tour.
+      } finally {
+        pending = false;
+      }
+    };
+    const timer = setInterval(() => void poll(), WATCH_EVERY_MS);
+    const onFocus = () => void poll();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [watch]);
   const run = async (action: AccountAction, fields = false, buy?: { kind: 'pro' | 'credits'; pack?: Pack }) => {
     setBusy(true);
     setError('');
     setNotice('');
+    // « Actualiser » pendant l'attente ne l'arrête pas ; toute autre action, si.
+    if (action !== 'refresh') setWatch(null);
     try {
       const r = await accountAction(fields ? { action, email: email || undefined, password: password || undefined, code: code || undefined } : { action, ...buy });
       onChange(r.account);
@@ -107,10 +184,12 @@ function AccountSection({ account, onChange }: { account: AccountStatus | undefi
         // Page Stripe dans le navigateur : l'app installée ouvre les liens externes dehors (desktop/main.mjs).
         setPayUrl(r.url);
         window.open(r.url, '_blank', 'noopener');
+        // Base de comparaison : le compte que le serveur vient de rendre, pas celui affiché (peut-être relu il y a longtemps).
+        setWatch({ kind: action === 'portal' ? 'portal' : buy?.kind === 'pro' ? 'pro' : 'credits', before: r.account, until: Date.now() + WATCH_MS });
         setNotice(
           action === 'portal'
-            ? 'Portail d’abonnement ouvert dans ton navigateur. Après un changement, reviens ici et clique Actualiser.'
-            : 'Page de paiement ouverte dans ton navigateur. Après le paiement, reviens ici et clique Actualiser.',
+            ? 'Portail d’abonnement ouvert dans ton navigateur. Ton compte se met à jour ici tout seul après un changement (pendant 3 minutes).'
+            : 'Page de paiement ouverte dans ton navigateur. Ton compte se met à jour ici tout seul après le paiement (pendant 3 minutes).',
         );
       } else setPayUrl('');
       if (action === 'signup') setMode('login');
@@ -183,7 +262,7 @@ function AccountSection({ account, onChange }: { account: AccountStatus | undefi
         {!a.gifted && a.catalog && (
           <div className="billing">
             <p className="hint">
-              Le paiement se fait sur une page Stripe dans ton navigateur. Après le paiement, reviens ici et clique Actualiser.
+              Le paiement se fait sur une page Stripe dans ton navigateur ; l’app guette ensuite ton compte pendant 3 minutes.
               {a.catalog.mode === 'test' ? ' Paiements de test : aucune carte réelle débitée.' : ''}
             </p>
             <div className="form-actions">

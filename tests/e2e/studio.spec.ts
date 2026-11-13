@@ -226,13 +226,12 @@ test('facturation : compte gratuit, génération offerte puis 402, recharge, Pro
   await expect(panel.getByRole('alert')).toContainText('Réglages → Compte');
   await panel.getByRole('button', { name: 'Effacer' }).click();
   await panel.getByRole('button', { name: 'Fermer l’assistant' }).click();
-  // Recharge : la page de paiement s'ouvre dans un nouvel onglet ; le solde apparaît après Actualiser.
+  // Recharge : la page de paiement s'ouvre dans un nouvel onglet ; le solde se met à jour tout seul (webhook simulé, relecture auto).
   await page.getByRole('button', { name: 'Réglages' }).click();
   const [topup] = await Promise.all([page.waitForEvent('popup'), account.getByRole('button', { name: 'Recharger 5 €' }).click()]);
   expect(topup.url()).toContain('/v1/billing/done?s=ok');
   await topup.close();
-  await expect(account.getByRole('status')).toContainText('reviens ici et clique Actualiser');
-  await account.getByRole('button', { name: 'Actualiser' }).click();
+  await expect(account.getByRole('status')).toContainText('Paiement reçu : crédits 5,00 €.', { timeout: 15_000 });
   await expect(account).toContainText('5,00 €');
   await expect(account).not.toContainText('génération offerte');
   // Pro : palier et inclus affichés après Actualiser, bouton remplacé par le portail.
