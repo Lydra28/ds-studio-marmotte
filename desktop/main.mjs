@@ -148,14 +148,32 @@ async function installUpdate() {
   autoUpdater.quitAndInstall();
 }
 
-// Captures du Mur des DA : fenêtre cachée, session à part (aucun cookie de l'atelier).
+// Fenêtres cachées (captures du Mur, lecture des styles) : un site tiers s'y
+// charge, dans une session à part (aucun cookie de l'atelier). Electron accorde
+// toute permission à une session sans gestionnaire et laisse `window.open`
+// créer une fenêtre : ici rien n'est accordé, rien ne se télécharge, aucune
+// fenêtre fille (revue du 2026-11-13, n° 3).
+const CAPTURE_PARTITION = 'ds-capture';
+function lockCaptureSession() {
+  const captures = session.fromPartition(CAPTURE_PARTITION);
+  captures.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
+  captures.setPermissionCheckHandler(() => false);
+  captures.setDevicePermissionHandler(() => false);
+  captures.on('will-download', (event) => event.preventDefault());
+  // Toute page de cette session, fenêtre fille comprise si une garde sautait.
+  app.on('web-contents-created', (_event, contents) => {
+    if (contents.session === captures) contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  });
+}
+
+// Captures du Mur des DA.
 async function capture(url) {
   if (!/^https?:\/\//.test(url)) throw new Error('Lien http(s) attendu.');
   const page = new BrowserWindow({
     show: false,
     width: 1280,
     height: 800,
-    webPreferences: { partition: 'ds-capture', sandbox: true, contextIsolation: true, nodeIntegration: false, offscreen: true },
+    webPreferences: { partition: CAPTURE_PARTITION, sandbox: true, contextIsolation: true, nodeIntegration: false, offscreen: true },
   });
   try {
     await Promise.race([page.loadURL(url), new Promise((_, reject) => setTimeout(() => reject(new Error('Site trop lent.')), 20_000))]);
@@ -177,7 +195,7 @@ async function extract(url, script) {
     width: 1280,
     height: 800,
     useContentSize: true,
-    webPreferences: { partition: 'ds-capture', sandbox: true, contextIsolation: true, nodeIntegration: false, offscreen: true },
+    webPreferences: { partition: CAPTURE_PARTITION, sandbox: true, contextIsolation: true, nodeIntegration: false, offscreen: true },
   });
   const late = (ms, message) => new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms));
   const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -362,6 +380,7 @@ else {
     session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) =>
       callback(permission === 'clipboard-sanitized-write'),
     );
+    lockCaptureSession();
     Menu.setApplicationMenu(menu());
     const projects =
       process.env.DS_STUDIO_PROJECTS || (await readSettings()).projects || (await chooseProjects('Quitter'));

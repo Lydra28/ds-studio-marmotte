@@ -46,6 +46,15 @@ export const SESSION_DAYS = 30;
 export const VERIFY_HOURS = 24;
 export const RESET_HOURS = 1;
 export const COOKIE = 'ds_session';
+// Freins des mails (revue du 2026-11-13, n° 9) : sans eux, une boucle sur
+// /resend, /forgot ou /signup remplit la boîte d'un tiers et vide le quota
+// d'envoi, donc plus aucune confirmation de compte.
+/** Délai entre deux mails du même type (confirmation, code) pour un compte. */
+export const MAIL_GAP_SECONDS = 60;
+/** Comptes créés par heure depuis une même adresse IP (une salle de classe derrière une seule box passe). */
+export const SIGNUPS_PER_IP_PER_HOUR = 30;
+/** Comptes créés par heure, tous clients confondus : filet si l'adresse IP est falsifiée (revoir quand une heure normale dépasse 100 inscriptions). */
+export const SIGNUPS_PER_HOUR = 300;
 
 const emailSchema = z
   .string()
@@ -124,16 +133,34 @@ export function authRoutes(deps: Deps) {
     return rows[0];
   }
 
-  async function issueEmailToken(accountId: string, purpose: 'verify' | 'reset') {
+  const lifetime = (purpose: 'verify' | 'reset') => (purpose === 'verify' ? hours(VERIFY_HOURS) : hours(RESET_HOURS));
+  async function issueEmailToken(accountId: string, purpose: 'verify' | 'reset', on: Pick<Deps['db'], 'query'> = db) {
     const token = newToken();
-    const ttl = purpose === 'verify' ? hours(VERIFY_HOURS) : hours(RESET_HOURS);
-    await db.query('INSERT INTO email_tokens (token_hash, account_id, purpose, expires_at) VALUES ($1, $2, $3, $4)', [
+    await on.query('INSERT INTO email_tokens (token_hash, account_id, purpose, expires_at) VALUES ($1, $2, $3, $4)', [
       sha256(token),
       accountId,
       purpose,
-      new Date(now().getTime() + ttl),
+      new Date(now().getTime() + lifetime(purpose)),
     ]);
     return token;
+  }
+
+  // Jeton d'un mail redemandé : émis seulement si aucun du même type n'est
+  // parti pour ce compte depuis MAIL_GAP_SECONDS, sinon `null` (aucun mail).
+  // Dernière émission lue sur l'expiration du dernier jeton (émission + durée
+  // de vie), sans colonne de plus ; compte verrouillé le temps du contrôle :
+  // une rafale en parallèle n'obtient qu'un jeton.
+  async function issueSpaced(accountId: string, purpose: 'verify' | 'reset') {
+    return db.transaction(async (tx) => {
+      await tx.query('SELECT id FROM accounts WHERE id = $1 FOR UPDATE', [accountId]);
+      const { rows } = await tx.query<{ last: Date | string | null }>(
+        'SELECT max(expires_at) AS last FROM email_tokens WHERE account_id = $1 AND purpose = $2',
+        [accountId, purpose],
+      );
+      const last = rows[0]?.last;
+      if (last != null && now().getTime() - (new Date(last).getTime() - lifetime(purpose)) < MAIL_GAP_SECONDS * 1000) return null;
+      return issueEmailToken(accountId, purpose, tx);
+    });
   }
 
   // Jeton de mail valide (bon usage, non consommé, non expiré) → compte ; le marque utilisé.
@@ -149,8 +176,7 @@ export function authRoutes(deps: Deps) {
     return row.account_id;
   }
 
-  async function sendVerification(account: { id: string; email: string }) {
-    const token = await issueEmailToken(account.id, 'verify');
+  async function sendVerification(account: { id: string; email: string }, token: string) {
     // Site en ligne : page de confirmation du site (POST /verify) ; sinon la page minimale de l'API.
     const link = deps.siteUrl ? `${deps.siteUrl}/compte/verifier/?token=${token}` : `${deps.publicUrl}/v1/auth/verify?token=${token}`;
     await deps.mailer.send({
@@ -171,24 +197,67 @@ export function authRoutes(deps: Deps) {
     return { token, expiresAt };
   }
 
+  // Mail en échec : son jeton est retiré, pour que la demande suivante n'attende pas la minute.
+  const sendOrForget = async (token: string, send: () => Promise<void>) => {
+    try {
+      await send();
+    } catch (e) {
+      await db.query('DELETE FROM email_tokens WHERE token_hash = $1', [sha256(token)]);
+      throw e;
+    }
+  };
+
   const auth = new Hono();
+
+  // Inscriptions récentes par adresse IP, et dernier signalement du plafond global.
+  // Adresse lue dans `CF-Connecting-IP`, jamais `X-Forwarded-For` (que le
+  // client écrit lui-même). Fiable une fois le secret d'origine en refus
+  // (app.ts : une requête directe n'arrive plus ici) ; avant, falsifiable par
+  // l'URL onrender.com, le plafond global reste le filet. Pas de compteur
+  // commun aux requêtes sans secret : une règle Cloudflare absente ou fausse
+  // pendant le premier temps bloquerait toutes les inscriptions.
+  // shortcut: en mémoire, exact pour une seule instance Render (revoir avant plusieurs instances).
+  const signupsByIp = new Map<string, number[]>();
+  let capReportedAt = 0;
+  const clientIp = (c: Context) => c.req.header('cf-connecting-ip') ?? 'inconnue';
 
   auth.post('/signup', async (c) => {
     const data = await body(c, z.object({ email: emailSchema, password: passwordSchema }));
     if (await accountByEmail(data.email)) throw new ApiError('Un compte existe déjà avec cette adresse. Connecte-toi ou utilise « mot de passe oublié ».', 409);
+    // Par adresse IP d'abord : un seul poste ne ferme pas les inscriptions aux autres.
+    const ip = clientIp(c);
+    const since = now().getTime() - hours(1);
+    const mine = (signupsByIp.get(ip) ?? []).filter((at) => at > since);
+    if (mine.length >= SIGNUPS_PER_IP_PER_HOUR) throw new ApiError('Trop d’inscriptions depuis cette connexion : réessaie dans une heure.', 429);
+    // Puis tous clients confondus : qui remplit ce plafond (adresses falsifiées)
+    // ferme les inscriptions une heure, ce qui reste moins grave que des mails
+    // envoyés sans borne ; signalé (Sentry) au premier refus de l'heure.
+    const recent = await db.query<{ n: number }>('SELECT count(*)::int AS n FROM accounts WHERE created_at > $1', [new Date(since)]);
+    if (recent.rows[0].n >= SIGNUPS_PER_HOUR) {
+      if (capReportedAt <= since) {
+        capReportedAt = now().getTime();
+        console.warn(`Inscriptions : plafond de ${SIGNUPS_PER_HOUR} par heure atteint, inscriptions refusées.`);
+        deps.report?.(new Error(`Inscriptions : plafond de ${SIGNUPS_PER_HOUR} par heure atteint`));
+      }
+      throw new ApiError('Trop d’inscriptions en ce moment : réessaie dans quelques minutes.', 429);
+    }
     const { rows } = await db.query<{ id: string }>(
       'INSERT INTO accounts (email, password_hash, created_at, last_active_at) VALUES ($1, $2, $3, $3) RETURNING id',
       [data.email, await hashPassword(data.password), now()],
     );
-    await sendVerification({ id: rows[0].id, email: data.email });
+    // Mémoire bornée : les adresses sans inscription dans l'heure sont oubliées.
+    if (signupsByIp.size > 10_000) for (const [key, list] of signupsByIp) if (!list.some((at) => at > since)) signupsByIp.delete(key);
+    signupsByIp.set(ip, [...mine, now().getTime()]);
+    await sendVerification({ id: rows[0].id, email: data.email }, await issueEmailToken(rows[0].id, 'verify'));
     return c.json({ ok: true, message: 'Compte créé : un mail de confirmation vient de partir.' }, 201);
   });
 
   auth.post('/resend', async (c) => {
     const { email } = await body(c, z.object({ email: emailSchema }));
     const account = await accountByEmail(email);
-    if (account && !account.email_verified_at) await sendVerification(account);
-    return c.json({ ok: true, message: 'Si un compte non confirmé existe à cette adresse, un nouveau mail vient de partir.' });
+    const token = account && !account.email_verified_at ? await issueSpaced(account.id, 'verify') : null;
+    if (account && token) await sendOrForget(token, () => sendVerification(account, token));
+    return c.json({ ok: true, message: 'Si un compte non confirmé existe à cette adresse, un nouveau mail vient de partir (un par minute au plus).' });
   });
 
   const verify = async (token: string) => {
@@ -239,15 +308,15 @@ export function authRoutes(deps: Deps) {
   auth.post('/forgot', async (c) => {
     const { email } = await body(c, z.object({ email: emailSchema }));
     const account = await accountByEmail(email);
-    if (account) {
-      const token = await issueEmailToken(account.id, 'reset');
-      await deps.mailer.send({
+    const token = account ? await issueSpaced(account.id, 'reset') : null;
+    if (account && token) {
+      await sendOrForget(token, () => deps.mailer.send({
         to: account.email,
         subject: 'DS-Studio : nouveau mot de passe',
         text: `Bonjour,\n\nPour choisir un nouveau mot de passe DS-Studio, utilise ce code dans l’application (valable ${RESET_HOURS} h) :\n${token}\n\nSi tu n’es pas à l’origine de cette demande, ignore ce mail : rien ne change.`,
-      });
+      }));
     }
-    return c.json({ ok: true, message: 'Si un compte existe à cette adresse, un mail vient de partir.' });
+    return c.json({ ok: true, message: 'Si un compte existe à cette adresse, un mail vient de partir (un par minute au plus).' });
   });
 
   auth.post('/reset', async (c) => {

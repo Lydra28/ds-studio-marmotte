@@ -344,7 +344,7 @@
     // colle le lien du fichier ouvert ; si le projet a déjà une cible, il peut
     // aussi confirmer que c'est celle-ci.
     if (!file.key)
-      html += `<div class="row"><label for="file-url">Lien de ce fichier (Partager → Copier le lien)</label></div><input id="file-url" placeholder="https://www.figma.com/design/…" autocomplete="off"><button id="identify">Identifier ce fichier</button>`;
+      html += `<div class="row"><label for="file-url">Lien de ce fichier (Partager → Copier le lien)</label></div><input id="file-url" placeholder="https://www.figma.com/design/…" autocomplete="off"><div class="row"><input type="checkbox" id="confirm-identify"><label for="confirm-identify">Ce lien est bien celui du fichier ouvert ici</label></div><button id="identify">Identifier ce fichier</button>`;
     if (target && !file.key)
       html += `<div class="row"><input type="checkbox" id="confirm-link"><label for="confirm-link">Ce fichier est bien la cible de ${esc(p.name)}</label></div><button id="link">Lier ce fichier au projet</button>`;
     const owner = state.projects.find((x) => x.figma && x.figma.fileKey === file.key);
@@ -417,6 +417,8 @@
       $('identify').onclick = act('target', () => {
         const url = $('file-url').value.trim();
         if (!url) return setError('Colle le lien de ce fichier (Partager → Copier le lien) avant de l’identifier.');
+        // Même garde que « Lier » : le lien d'un autre fichier ferait passer celui-ci pour la cible.
+        if (!$('confirm-identify').checked) return setError('Coche la confirmation avant d’identifier ce fichier.');
         send({ type: 'link-file', fileKey: url });
       });
     if ($('link'))

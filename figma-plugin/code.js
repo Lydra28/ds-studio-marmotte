@@ -48,16 +48,28 @@ figma.ui.onmessage = async (msg) => {
         throw new Error('Lien Figma attendu : https://www.figma.com/design/<fichier>/… (Partager → Copier le lien). Rien n’a été modifié.');
       figma.root.setPluginData(LINK, key);
       figma.ui.postMessage({ type: 'file', file: fileInfo() });
-    } else if (msg.type === 'transfer') figma.ui.postMessage({ type: 'transferred', report: await transfer(msg.payload, msg.known) });
+    } else if (msg.type === 'transfer') figma.ui.postMessage({ type: 'transferred', report: await transfer(msg.payload, await receipt(msg.known)) });
     else if (msg.type === 'read-components') figma.ui.postMessage({ type: 'components', raw: await readComponents() });
     else if (msg.type === 'read-selection') figma.ui.postMessage({ type: 'selection', selection: await readSelection() });
-    else if (msg.type === 'check') figma.ui.postMessage({ type: 'check', foreign: await foreign(msg.collections, msg.page, msg.known) });
-    else if (msg.type === 'reset-plan') figma.ui.postMessage({ type: 'reset-plan', plan: await resetPlan(msg.target, msg.known) });
-    else if (msg.type === 'reset') figma.ui.postMessage({ type: 'reset-done', removed: await reset(msg.target, msg.known) });
+    else if (msg.type === 'check') figma.ui.postMessage({ type: 'check', foreign: await foreign(msg.collections, msg.page, await receipt(msg.known)) });
+    else if (msg.type === 'reset-plan') figma.ui.postMessage({ type: 'reset-plan', plan: await resetPlan(msg.target, await receipt(msg.known)) });
+    else if (msg.type === 'reset') figma.ui.postMessage({ type: 'reset-done', removed: await reset(msg.target, await receipt(msg.known)) });
   } catch (e) {
     figma.ui.postMessage({ type: 'error', message: e && e.message ? e.message : String(e) });
   }
 };
+
+// Le reçu de transfert de l'atelier (`known`) vaut pour le fichier que Figma
+// identifie lui-même. Fichier lié à la main (lien collé, plugin Community) :
+// sa clé n'est qu'une déclaration, le reçu ne compte que si DS-Studio a déjà
+// laissé sa marque dans ce document. Sinon le lien de la cible, collé dans un
+// autre fichier, ferait écrire puis supprimer dans les collections d'un autre
+// DS (revue du 2026-11-13, n° 12).
+async function receipt(known) {
+  if (!known) return false;
+  if (figma.fileKey) return true;
+  return figma.root.children.some(owned) || (await figma.variables.getLocalVariableCollectionsAsync()).some(owned);
+}
 
 function guardFile(target, project) {
   const file = fileInfo();

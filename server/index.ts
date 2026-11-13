@@ -110,6 +110,17 @@ const stripeWebhookSecret = env.STRIPE_WEBHOOK_SECRET ?? '';
 if (!stripeKey || !stripeWebhookSecret) console.warn('STRIPE_SECRET_KEY ou STRIPE_WEBHOOK_SECRET absente : paiement désactivé (503).');
 else console.log(`Stripe en mode ${isLiveKey(stripeKey) ? 'LIVE' : 'test'}.`);
 const siteUrl = env.SITE_URL ? env.SITE_URL.replace(/\/+$/, '') : undefined;
+// Secret d'origine (revue du 2026-11-13, n° 9) : même valeur que l'en-tête
+// ajouté par la règle Cloudflare ; ORIGIN_SECRET_ENFORCE=1 refuse les requêtes
+// sans lui (second temps, après vérification par /v1/health).
+const originSecret = env.ORIGIN_SECRET ?? '';
+if (originSecret && originSecret.length < 32) {
+  console.error('ORIGIN_SECRET trop court (moins de 32 caractères) : arrêt.');
+  process.exit(1);
+}
+const enforceOrigin = env.ORIGIN_SECRET_ENFORCE === '1';
+if (!originSecret) console.warn(`ORIGIN_SECRET absent : accès direct à l'origine non contrôlé${enforceOrigin ? ' (ORIGIN_SECRET_ENFORCE ignoré)' : ''}.`);
+else console.log(`Secret d'origine : ${enforceOrigin ? 'requêtes sans lui refusées' : 'requêtes sans lui notées, servies'}.`);
 const app = createApp({
   db,
   mailer,
@@ -130,6 +141,7 @@ const app = createApp({
   // Rétractations (server/withdrawal.ts) : adresse de contact publique des mentions légales par défaut.
   adminEmail: env.ADMIN_EMAIL || 'aubertromain85@gmail.com',
   version,
+  originSecret: originSecret ? { value: originSecret, enforce: enforceOrigin } : undefined,
   report: sentryDsn ? (err) => Sentry.captureException(err) : undefined,
 });
 const server = serve({ fetch: app.fetch, port, hostname: '0.0.0.0' }, () => {

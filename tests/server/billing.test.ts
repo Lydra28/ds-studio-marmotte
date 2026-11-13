@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import test from 'node:test';
-import { CATALOG, handleEvent, isLiveKey, setupCatalog, stripeWebhooks, type BillingClient } from '../../server/billing.js';
+import { CATALOG, handleEvent, isLiveKey, setupCatalog, stripeWebhooks, WEBHOOK_EVENTS, type BillingClient } from '../../server/billing.js';
 import { PRO_INCLUDED_CENTS } from '../../server/credits.js';
 import { connect, testApp, type TestApp } from './helpers.js';
 
@@ -97,6 +97,7 @@ test('facturation : Checkout recharge puis Pro, client Stripe créé une fois ; 
     assert.equal(session.params.success_url, 'http://server.test/v1/billing/done?s=ok');
     assert.equal(session.params.cancel_url, 'http://server.test/v1/billing/done?s=cancel');
     assert.equal(session.params.locale, 'fr');
+    assert.deepEqual(session.params.allowed_payment_method_types, ['card'], 'carte seule, jamais un paiement différé');
     assert.equal('stripeCustomerId' in (await me(t, token)), false, 'identifiant client jamais rendu à l’app');
 
     const pro = await t.api('/v1/billing/checkout', { json: { kind: 'pro' }, token });
@@ -104,6 +105,7 @@ test('facturation : Checkout recharge puis Pro, client Stripe créé une fois ; 
     assert.equal(stripe.only('customers.create').length, 1, 'client Stripe réutilisé');
     const proSession = stripe.only('checkout.sessions.create')[1];
     assert.equal(proSession.params.mode, 'subscription');
+    assert.deepEqual(proSession.params.allowed_payment_method_types, ['card']);
     assert.equal(proSession.params.customer, session.params.customer, 'même client Stripe');
     assert.deepEqual(proSession.params.subscription_data, { metadata: { account_id: accountId } });
     assert.equal((proSession.params.line_items as { price: string }[])[0].price, [...stripe.prices.values()].find((p) => p.lookup_key === 'pro_monthly')!.id);
@@ -392,6 +394,89 @@ test('site (lot 7) : retours Stripe vers les pages du site ; case des CGV seulem
     assert.match(text, /Je garde 14 jours pour me rétracter/);
   } finally {
     await consent.t.close();
+  }
+});
+
+// Revue du 2026-11-13, n° 5 : Stripe ne garantit pas l'ordre des événements ;
+// une livraison rejouée après la résiliation ne redonne plus Pro.
+test('webhook : événements arrivés après la résiliation du même abonnement ignorés ; un nouvel abonnement passe', async () => {
+  const { t } = await billingApp();
+  try {
+    const token = await connect(t, user);
+    await t.db.query("UPDATE accounts SET stripe_customer_id = 'cus_o', stripe_subscription_id = 'sub_o', plan = 'pro', subscription_status = 'active', monthly_included_cents = $2 WHERE email = $1", [user.email, PRO_INCLUDED_CENTS]);
+    assert.equal((await webhook(t, event('customer.subscription.deleted', { id: 'sub_o', customer: 'cus_o', status: 'canceled' }))).body.handled, 'new');
+    const free = async (what: string) => {
+      const m = await me(t, token);
+      assert.deepEqual([m.plan, m.tier, m.subscription?.status, m.usage.includedLeftCents], ['free', 'free', 'canceled', 0], what);
+      assert.equal((await t.api('/v1/license', { token, method: 'POST' })).body.tier, 'free', what);
+    };
+    await free('après la résiliation');
+
+    for (const status of ['active', 'past_due', 'trialing', 'incomplete'])
+      assert.equal((await webhook(t, event('customer.subscription.updated', { id: 'sub_o', customer: 'cus_o', status, cancel_at_period_end: true }))).body.handled, 'ignored', status);
+    await free('`updated` en retard');
+    assert.equal((await webhook(t, event('invoice.paid', { customer: 'cus_o', subscription: 'sub_o' }))).body.handled, 'ignored');
+    assert.equal(
+      (await webhook(t, event('checkout.session.completed', { id: 'cs_vieux', mode: 'subscription', payment_status: 'paid', amount_total: 999, currency: 'eur', client_reference_id: null, customer: 'cus_o', subscription: 'sub_o', metadata: null }))).body.handled,
+      'ignored',
+    );
+    await free('facture et session en retard');
+    assert.equal(Number((await t.db.query<{ n: string | number }>('SELECT count(*) AS n FROM purchases')).rows[0].n), 1, 'session payée : achat rétractable enregistré, sans redonner Pro');
+    // Un état terminé reste appliqué (idempotent).
+    assert.equal((await webhook(t, event('customer.subscription.updated', { id: 'sub_o', customer: 'cus_o', status: 'canceled' }))).body.handled, 'new');
+
+    // Réabonnement : un autre abonnement, dans un ordre ou dans l'autre.
+    assert.equal((await webhook(t, event('customer.subscription.updated', { id: 'sub_n', customer: 'cus_o', status: 'active' }))).body.handled, 'new');
+    assert.equal((await webhook(t, event('invoice.paid', { customer: 'cus_o', subscription: 'sub_n' }))).body.handled, 'new');
+    const m = await me(t, token);
+    assert.deepEqual([m.plan, m.subscription?.status, m.usage.includedLeftCents], ['pro', 'active', PRO_INCLUDED_CENTS]);
+
+    // Le compte suit `sub_n`, en cours : rien de l'ancien `sub_o` ne le rétrograde ni ne reprend sa place.
+    for (const late of [
+      event('customer.subscription.updated', { id: 'sub_o', customer: 'cus_o', status: 'canceled' }),
+      event('customer.subscription.updated', { id: 'sub_o', customer: 'cus_o', status: 'active' }),
+      event('invoice.paid', { customer: 'cus_o', subscription: 'sub_o' }),
+    ])
+      assert.equal((await webhook(t, late)).body.handled, 'ignored', late.type);
+    await webhook(t, event('customer.subscription.deleted', { id: 'sub_o', customer: 'cus_o', status: 'canceled' }));
+    const kept = await t.db.query<{ plan: string; subscription_status: string; stripe_subscription_id: string }>('SELECT plan, subscription_status, stripe_subscription_id FROM accounts');
+    assert.deepEqual(kept.rows[0], { plan: 'pro', subscription_status: 'active', stripe_subscription_id: 'sub_n' });
+
+    // Résiliation reçue sans identifiant connu sur le compte : l'abonnement est noté, sa facture rejouée reste ignorée.
+    await t.db.query("UPDATE accounts SET stripe_subscription_id = NULL WHERE email = $1", [user.email]);
+    await webhook(t, event('customer.subscription.deleted', { id: 'sub_n', customer: 'cus_o', status: 'canceled' }));
+    assert.equal((await webhook(t, event('invoice.paid', { customer: 'cus_o', subscription: 'sub_n' }))).body.handled, 'ignored');
+    assert.equal((await me(t, token)).plan, 'free');
+  } finally {
+    await t.close();
+  }
+});
+
+// Revue du 2026-11-13, n° 6 : Pro seulement une fois le paiement encaissé ;
+// un paiement différé crédite quand il arrive.
+test('webhook : abonnement non payé sans Pro ; paiement différé crédité à `async_payment_succeeded`, une seule fois', async () => {
+  const { t } = await billingApp();
+  try {
+    const token = await connect(t, user);
+    const accountId = (await t.db.query<{ id: string }>('SELECT id FROM accounts')).rows[0].id;
+    const sub = { id: 'cs_sepa_pro', mode: 'subscription', amount_total: 999, currency: 'eur', client_reference_id: accountId, customer: 'cus_s', subscription: 'sub_s', metadata: null };
+    assert.equal((await webhook(t, event('checkout.session.completed', { ...sub, payment_status: 'unpaid' }))).body.handled, 'ignored');
+    assert.equal((await me(t, token)).plan, 'free', 'pas de Pro avant l’encaissement');
+    assert.equal((await webhook(t, event('checkout.session.async_payment_succeeded', { ...sub, payment_status: 'paid' }))).body.handled, 'new');
+    const pro = await me(t, token);
+    assert.deepEqual([pro.plan, pro.usage.includedLeftCents], ['pro', PRO_INCLUDED_CENTS]);
+
+    const pack = { id: 'cs_sepa_pack', mode: 'payment', amount_total: 500, currency: 'eur', client_reference_id: accountId, customer: 'cus_s', subscription: null, metadata: null };
+    assert.equal((await webhook(t, event('checkout.session.completed', { ...pack, payment_status: 'unpaid' }))).body.handled, 'ignored');
+    assert.equal((await me(t, token)).creditCents, 1);
+    assert.equal((await webhook(t, event('checkout.session.async_payment_succeeded', { ...pack, payment_status: 'paid' }))).body.handled, 'new');
+    assert.equal((await webhook(t, event('checkout.session.async_payment_succeeded', { ...pack, payment_status: 'paid' }))).body.handled, 'new', 'autre événement, même session');
+    assert.equal((await me(t, token)).creditCents, 501, 'crédité une fois');
+    const purchases = await t.db.query<{ kind: string }>('SELECT kind FROM purchases ORDER BY id');
+    assert.deepEqual(purchases.rows.map((p) => p.kind), ['pro', 'credits'], 'achats rétractables enregistrés une fois');
+    assert.ok(WEBHOOK_EVENTS.includes('checkout.session.async_payment_succeeded'));
+  } finally {
+    await t.close();
   }
 });
 

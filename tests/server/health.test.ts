@@ -8,12 +8,56 @@ test('serveur : /v1/health répond avec la version et le schéma de la base', as
   try {
     const health = await t.api('/v1/health');
     assert.equal(health.status, 200);
-    assert.deepEqual(health.body, { ok: true, version: 'test', schema: '7', at: '2026-10-31T12:00:00.000Z' });
+    assert.deepEqual(health.body, { ok: true, version: 'test', schema: '7', at: '2026-10-31T12:00:00.000Z', origin: 'off', guard: 'off' });
     const missing = await t.api('/v1/nulle-part');
     assert.equal(missing.status, 404);
     assert.equal(missing.body.error, 'Route inconnue.');
   } finally {
     await t.close();
+  }
+});
+
+// Revue du 2026-11-13, n° 9 : l'URL onrender.com contourne Cloudflare. Le
+// secret d'origine que Cloudflare ajoute distingue les deux chemins ; premier
+// temps noté seulement, second temps refusé, /v1/health toujours ouvert.
+test('serveur : secret d’origine, noté puis refusé, /v1/health ouvert et seul exempté', async () => {
+  const secret = 'secret-de-test-assez-long-pour-l-exemple';
+  const via = (ip: string, value = secret) => ({ 'x-ds-origin-secret': value, 'cf-connecting-ip': ip });
+  const signup = (t: Awaited<ReturnType<typeof testApp>>, n: number, headers: Record<string, string>) =>
+    t.api('/v1/auth/signup', { json: { email: `origine-${n}@example.com`, password: 'mot-de-passe-solide-1' }, headers });
+
+  // Premier temps : la vérification se lit dans /v1/health ; une requête sans
+  // le secret (règle Cloudflare absente ou fausse) est servie comme avant, et
+  // chacun garde son propre compteur d'inscriptions.
+  const journal = await testApp({ originSecret: { value: secret, enforce: false } });
+  try {
+    assert.deepEqual([(await journal.api('/v1/health', { headers: via('1.1.1.1') })).body.origin, (await journal.api('/v1/health')).body.origin], ['ok', 'bad']);
+    assert.equal((await journal.api('/v1/health', { headers: via('1.1.1.1', 'faux') })).body.origin, 'bad');
+    assert.equal((await journal.api('/v1/health')).body.guard, 'journal');
+    assert.equal((await signup(journal, 0, { 'cf-connecting-ip': '10.0.0.1' })).status, 201, 'sans secret : servi');
+    assert.equal((await signup(journal, 1, via('2.2.2.2', 'faux'))).status, 201, 'secret faux : servi');
+    assert.equal((await signup(journal, 2, via('2.2.2.2'))).status, 201);
+  } finally {
+    await journal.close();
+  }
+
+  // Second temps : sans le secret, 403 partout sauf /v1/health.
+  const refus = await testApp({ originSecret: { value: secret, enforce: true } });
+  try {
+    assert.equal((await refus.api('/v1/health')).status, 200);
+    assert.equal((await refus.api('/v1/health')).body.guard, 'refus');
+    const direct = await refus.api('/v1/me');
+    assert.equal(direct.status, 403);
+    assert.match(String(direct.body.error), /Accès direct refusé/);
+    assert.equal((await refus.api('/v1/billing/webhook', { method: 'POST', body: '{}' })).status, 403);
+    assert.equal((await refus.api('/v1/me', { method: 'OPTIONS', headers: { origin: 'https://design-system-studio.fr' } })).status, 403, 'préflight direct refusé');
+    // Seul /v1/health est exempté, au caractère près ; le reste n'existe pas.
+    assert.equal((await refus.api('/v1/health/')).status, 403);
+    assert.equal((await refus.api('/V1/me')).status, 404);
+    assert.equal((await signup(refus, 0, via('3.3.3.3'))).status, 201, 'par Cloudflare : servi');
+    assert.equal((await refus.api('/v1/me', { headers: via('3.3.3.3') })).status, 401, 'par Cloudflare : jusqu’au contrôle du compte');
+  } finally {
+    await refus.close();
   }
 });
 

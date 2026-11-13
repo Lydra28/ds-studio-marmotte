@@ -1,5 +1,6 @@
 // Types et erreurs partagés par les modules du serveur (évite les imports
 // circulaires entre app.ts et les routes).
+import { createHash, timingSafeEqual } from 'node:crypto';
 import type { Billing } from './billing.js';
 import type { Db } from './db.js';
 import type { LicenseKeys } from './license.js';
@@ -30,7 +31,25 @@ export interface Deps {
   adminEmail?: string;
   /** Version affichée par /v1/health (paquet + commit déployé). */
   version: string;
+  /**
+   * Secret d'origine (revue du 2026-11-13, n° 9) : Cloudflare l'ajoute à chaque
+   * requête (en-tête `ORIGIN_HEADER`) ; sans lui, la requête est venue en direct
+   * par l'URL onrender.com. Absent : contrôle éteint. `enforce` faux (premier
+   * temps) : noté dans les journaux, requête servie ; vrai : 403.
+   */
+  originSecret?: { value: string; enforce: boolean };
   now?: () => Date;
+}
+
+export const ORIGIN_HEADER = 'x-ds-origin-secret';
+/** `off` : pas de secret configuré ; `ok` : en-tête juste (passé par Cloudflare) ; `bad` : absent ou faux. */
+export function originCheck(deps: Pick<Deps, 'originSecret'>, header: string | undefined): 'off' | 'ok' | 'bad' {
+  if (!deps.originSecret) return 'off';
+  if (!header) return 'bad';
+  // Comparaison à temps constant, sur des empreintes de même longueur.
+  const a = createHash('sha256').update(header).digest();
+  const b = createHash('sha256').update(deps.originSecret.value).digest();
+  return timingSafeEqual(a, b) ? 'ok' : 'bad';
 }
 
 export class ApiError extends Error {

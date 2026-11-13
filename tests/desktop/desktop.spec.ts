@@ -91,6 +91,40 @@ test('app desktop : ouvre l’atelier, un projet, puis rend le port en quittant'
     // Rien d'autre que l'atelier dans la fenêtre (file: : refusé sans ouvrir de navigateur).
     await page.evaluate(() => (location.href = 'file:///'));
     await expect(page).toHaveURL(new RegExp(`^http://127\.0\.0\.1:${PORT}/`));
+    // Fenêtres cachées du Mur et de l'extraction (session `ds-capture`) : un
+    // site tiers s'y charge. Aucune permission, aucune fenêtre fille (revue du
+    // 2026-11-13, n° 3 : sans gestionnaire, Electron accorde tout). Page de
+    // l'atelier : contexte sûr, comme un site en https.
+    const hidden = await app.evaluate(async ({ BrowserWindow }, url) => {
+      const before = BrowserWindow.getAllWindows().length;
+      const view = new BrowserWindow({ show: false, webPreferences: { partition: 'ds-capture', sandbox: true, offscreen: true } });
+      try {
+        await view.loadURL(url);
+        const js = (code: string) => view.webContents.executeJavaScript(code, true) as Promise<unknown>;
+        return {
+          notification: await js('Notification.requestPermission()'),
+          camera: await js("navigator.permissions.query({ name: 'camera' }).then((p) => p.state)"),
+          popup: await js("window.open('about:blank') === null"),
+          windows: BrowserWindow.getAllWindows().length - before - 1,
+          // Les deux appels qu'utilisent `capture` et `extract` de main.mjs (`capturePage`,
+          // `executeJavaScript` ci-dessus) marchent dans la session verrouillée ; les
+          // fonctions elles-mêmes, qui exigent une adresse publique, restent à la recette.
+          captured: !(await view.webContents.capturePage()).isEmpty(),
+          // Téléchargement : annulé par la session avant tout dialogue.
+          download: await new Promise<string>((resolve) => {
+            const late = setTimeout(() => resolve('aucun événement'), 5000);
+            view.webContents.session.once('will-download', (event) => {
+              clearTimeout(late);
+              resolve(event.defaultPrevented ? 'annulé' : 'accepté');
+            });
+            view.webContents.downloadURL(url);
+          }),
+        };
+      } finally {
+        view.destroy();
+      }
+    }, `http://127.0.0.1:${PORT}/`);
+    expect(hidden).toEqual({ notification: 'denied', camera: 'denied', popup: true, windows: 0, captured: true, download: 'annulé' });
   } finally {
     await app.close();
   }

@@ -22,9 +22,16 @@ export interface AssistantMessage {
   proposal?: { reason: string; changes: Change[] };
   usage?: { prompt: number; completion: number };
 }
+/** Longueur gardée d'un message de la conversation, en caractères. */
+export const MAX_MESSAGE_CHARS = 20_000;
+const CUT = '\n\n(Réponse coupée : trop longue pour être gardée.)';
+// Un message plus long est coupé, à l'écriture comme à la relecture : refusé à
+// la relecture seule, il rendait toute la conversation illisible (revue du
+// 2026-11-13, n° 11), y compris celles déjà enregistrées ainsi.
+const clip = (text: string) => (text.length > MAX_MESSAGE_CHARS ? text.slice(0, MAX_MESSAGE_CHARS - CUT.length) + CUT : text);
 const messageSchema = z.object({
   role: z.enum(['user', 'assistant']),
-  content: z.string().max(20_000),
+  content: z.string().transform(clip),
   date: z.string(),
   proposal: z.object({ reason: z.string(), changes: z.array(changeSchema) }).optional(),
   usage: z.object({ prompt: z.number(), completion: z.number() }).optional(),
@@ -284,6 +291,7 @@ export class Assistant {
     if (data.choices?.[0]?.finish_reason === 'length' && !reply.proposal)
       reply.content = '(Réponse coupée : le modèle a dépassé sa longueur maximale. Demande une correction à la fois.)';
     if (!reply.content && !reply.proposal) reply.content = '(Pas de réponse du modèle, deux fois de suite : reformule ou renvoie la question.)';
+    reply.content = clip(reply.content);
     return reply;
   }
 }

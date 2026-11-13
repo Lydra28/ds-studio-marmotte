@@ -247,3 +247,28 @@ test('plugin : fichier identifié par son lien collé, sans figma.fileKey (plugi
   f.figma.fileKey = KEY;
   assert.match((await f.send({ type: 'link-file', fileKey: KEY })).message, /liaison inutile/);
 });
+
+// Revue du 2026-11-13, n° 12 : le lien de la cible collé dans un autre fichier
+// ne suffit plus à faire écrire dans ses collections ni à les supprimer.
+test('plugin : fichier lié à la main, le reçu de transfert ne vaut que si DS-Studio y a déjà écrit', async () => {
+  const f = await load();
+  f.figma.fileKey = undefined; // plugin Community
+  const names = payload.collections.map((c) => c.name);
+  const foreign = f.collection('Tokens'); // DS du fichier, écrit à la main
+  f.page(PAGE);
+  await f.send({ type: 'link-file', fileKey: 'https://www.figma.com/design/' + KEY + '/Autre-fichier' });
+
+  // Reçu de l'atelier pour cette clé, mais rien de DS-Studio dans ce document : refus maintenus.
+  assert.match((await f.send({ type: 'check', collections: names, page: PAGE, known: true })).foreign, /sa propre collection « Tokens »/);
+  const refused = await f.send({ type: 'transfer', payload, known: true });
+  assert.equal(refused.type, 'error');
+  assert.match(refused.message, /Transfert refusé/);
+  assert.equal(foreign.getPluginData('dsStudio'), '', 'collection du fichier jamais marquée');
+  const plan = (await f.send({ type: 'reset-plan', target, known: true })).plan;
+  assert.deepEqual([plan.collections, plan.page], [[], null], 'rien à supprimer : rien n’est à DS-Studio');
+
+  // DS-Studio a déjà écrit dans ce document (marque) : le reçu compte de nouveau.
+  f.collection('Primitives').setPluginData('dsStudio', '1');
+  assert.equal((await f.send({ type: 'check', collections: names, page: PAGE, known: true })).foreign, null);
+  assert.equal((await f.send({ type: 'transfer', payload, known: true })).type, 'transferred');
+});

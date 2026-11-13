@@ -76,9 +76,18 @@ export default function AssistantPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [drafted, setDrafted] = useState<Set<string>>(new Set());
+  // Lecture de la conversation en échec : « Effacer » reste le seul recours.
+  const [unreadable, setUnreadable] = useState(false);
   const log = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    getAssistant().then(setState).catch((e) => setError(e.message));
+    getAssistant()
+      .then(setState)
+      .catch((e) => {
+        setError(e.message);
+        // Seulement le fichier illisible (message de `Assistant.history`) : une
+        // coupure de réseau ne doit pas offrir d'effacer une conversation saine.
+        setUnreadable(/Conversation illisible/.test(e.message));
+      });
   }, []);
   // Défilement du seul journal (scrollIntoView faisait aussi sauter la page) :
   // le début de la dernière bulle en haut, pour lire une longue réponse d'abord.
@@ -120,8 +129,18 @@ export default function AssistantPanel({
         </div>
         <div className="assistant-tools">
           <button
-            onClick={() => resetAssistant().then((r) => setState((s) => s && { ...s, messages: r.messages }))}
-            disabled={busy || !state?.messages.length}
+            // Conversation illisible (lecture en échec) : effacer reste possible, puis on relit.
+            onClick={() =>
+              resetAssistant()
+                .then(getAssistant)
+                .then((s) => {
+                  setState(s);
+                  setError('');
+                  setUnreadable(false);
+                })
+                .catch((e) => setError(e.message))
+            }
+            disabled={busy || (state ? !state.messages.length : !unreadable)}
             title="Nouvelle conversation"
           >
             Effacer

@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Assistant, DEFAULT_MODEL, askSchema, parseProposal, selectionFindings } from '../app/server/assistant.js';
+import { Assistant, DEFAULT_MODEL, MAX_MESSAGE_CHARS, askSchema, parseProposal, selectionFindings } from '../app/server/assistant.js';
 import { tokenSetSchema } from '../app/shared/model.js';
 import { projectSchema } from '../app/shared/project.js';
 import { FAKE_TOKEN, fakeAccount, type FakeCall } from './fake-account.js';
@@ -203,4 +203,26 @@ test('assistant du plugin Figma : texte seulement, sélection envoyée si coché
 
   const empty = new Assistant(dir, { account: await fakeAccount(fake({ content: '' }), dir) });
   await assert.rejects(() => empty.ask(askSchema.parse({ message: '?' }), context), /Réponse vide/);
+});
+
+// Revue du 2026-11-13, n° 11 : une réponse plus longue que la limite de
+// relecture rendait la conversation illisible ; elle est coupée, et une
+// conversation déjà enregistrée ainsi se relit.
+test('assistant : réponse trop longue coupée, conversation déjà trop longue relue', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ds-assistant-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const long = new Assistant(dir, { account: await fakeAccount(fake({ content: 'a'.repeat(MAX_MESSAGE_CHARS + 5000) }), dir) });
+  const [, reply] = await long.chat('Détaille tout', context);
+  assert.equal(reply.content.length, MAX_MESSAGE_CHARS);
+  assert.match(reply.content, /Réponse coupée : trop longue/);
+  assert.equal((await long.history()).length, 2, 'conversation relue après la réponse longue');
+  assert.equal((await long.chat('Et ensuite ?', context)).length, 2, 'question suivante acceptée');
+
+  // Fichier écrit avant la correction : message hors limite déjà sur le disque.
+  await writeFile(path.join(dir, 'assistant.json'), JSON.stringify([{ role: 'assistant', content: 'b'.repeat(MAX_MESSAGE_CHARS + 1), date: new Date().toISOString() }]));
+  const healed = await long.history();
+  assert.equal(healed.length, 1);
+  assert.equal(healed[0].content.length, MAX_MESSAGE_CHARS);
+  await long.reset();
+  assert.equal((await long.history()).length, 0);
 });

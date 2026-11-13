@@ -53,6 +53,8 @@ export const billingMode = (billing: Billing | undefined): BillingMode => (!bill
 /** Événements à cocher sur l'endpoint webhook du Dashboard (runbook server.md). */
 export const WEBHOOK_EVENTS = [
   'checkout.session.completed',
+  // Moyen de paiement différé (prélèvement SEPA…) : le paiement arrive après la session.
+  'checkout.session.async_payment_succeeded',
   'invoice.paid',
   'invoice.payment_failed',
   'customer.subscription.updated',
@@ -138,6 +140,13 @@ export async function setupCatalog(client: BillingClient, out: (line: string) =>
 const SUBSCRIPTION_ENDED = new Set(['canceled', 'unpaid', 'incomplete_expired']);
 const SUBSCRIPTION_LIVE = new Set(['active', 'trialing', 'past_due']);
 const unixDate = (s: number | null | undefined) => (typeof s === 'number' ? new Date(s * 1000) : null);
+// Condition SQL : le compte ne suit pas un AUTRE abonnement encore en cours
+// que celui du paramètre `param`. Après un réabonnement, un événement en
+// retard de l'ancien abonnement (résiliation, facture) ne doit ni rétrograder
+// le compte ni reprendre sa place ; un abonnement terminé, lui, laisse passer
+// le suivant.
+const followsNoOther = (param: string) =>
+  `(stripe_subscription_id IS NULL OR stripe_subscription_id = ${param} OR subscription_status IS NULL OR subscription_status NOT IN ('active', 'trialing', 'past_due'))`;
 
 async function accountByCustomer(tx: Tx, customer: Ref) {
   const id = idOf(customer);
@@ -147,14 +156,21 @@ async function accountByCustomer(tx: Tx, customer: Ref) {
 }
 
 // Abonnement payé (première fois ou renouvellement) : Pro, crédits inclus
-// remis, période d'inclus repartie de maintenant.
+// remis, période d'inclus repartie de maintenant. Faux si cet abonnement est
+// déjà résilié sur le compte : Stripe ne garantit pas l'ordre des événements,
+// et un abonnement résilié ne redevient jamais actif (revue du 2026-11-13,
+// n° 5 : un `invoice.paid` rejoué après la résiliation redonnait Pro). Faux
+// aussi si le compte suit un autre abonnement encore en cours.
 async function startPro(tx: Tx, accountId: string, customer: Ref, subscription: Ref, now: Date) {
-  await tx.query(
+  const { rows } = await tx.query(
     `UPDATE accounts SET stripe_customer_id = COALESCE(stripe_customer_id, $2), stripe_subscription_id = COALESCE($3, stripe_subscription_id),
        plan = 'pro', subscription_status = 'active', monthly_included_cents = $4, included_since = $5, cancel_at_period_end = false
-     WHERE id = $1`,
+     WHERE id = $1 AND (subscription_status IS DISTINCT FROM 'canceled' OR stripe_subscription_id IS DISTINCT FROM $3)
+       AND ($3::text IS NULL OR ${followsNoOther('$3')})
+     RETURNING id`,
     [accountId, idOf(customer), idOf(subscription), PRO_INCLUDED_CENTS, now],
   );
+  return rows.length === 1;
 }
 
 /**
@@ -174,7 +190,9 @@ export async function handleEvent(db: Db, event: WebhookEvent, now: Date): Promi
       return 'ignored' as const;
     };
 
-    if (event.type === 'checkout.session.completed') {
+    // `async_payment_succeeded` : même session, payée après coup ; les
+    // références `checkout:<session>` empêchent de créditer deux fois.
+    if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
       const s = event.data.object as {
         id: string;
         mode: string;
@@ -192,9 +210,13 @@ export async function handleEvent(db: Db, event: WebhookEvent, now: Date): Promi
       accountId ??= await accountByCustomer(tx, s.customer);
       if (!accountId) return ignore('compte introuvable');
       if (s.mode === 'subscription') {
-        await startPro(tx, accountId, s.customer, s.subscription, now);
+        // Paiement encore en attente : Pro viendra avec `invoice.paid` ou `async_payment_succeeded`.
+        if (s.payment_status !== 'paid' && s.payment_status !== 'no_payment_required') return ignore(`paiement ${s.payment_status}`);
+        // Achat enregistré d'abord : payé, il ouvre le droit de rétractation
+        // même si l'abonnement est déjà résilié quand la session arrive.
         if (s.payment_status === 'paid' && s.currency === 'eur' && s.amount_total && s.amount_total > 0)
           await recordPurchase(tx, { accountId, kind: 'pro', ref: `checkout:${s.id}`, amountCents: s.amount_total, now });
+        if (!(await startPro(tx, accountId, s.customer, s.subscription, now))) return ignore('abonnement déjà résilié');
         return 'new';
       }
       if (s.mode !== 'payment') return ignore(`mode ${s.mode}`);
@@ -216,8 +238,9 @@ export async function handleEvent(db: Db, event: WebhookEvent, now: Date): Promi
       if (!accountId) return ignore('client inconnu');
       const subscription = idOf(inv.parent?.subscription_details?.subscription) ?? idOf(inv.subscription);
       if (!subscription) return ignore('facture sans abonnement');
-      if (event.type === 'invoice.paid') await startPro(tx, accountId, inv.customer, subscription, now);
-      else await tx.query("UPDATE accounts SET subscription_status = 'past_due' WHERE id = $1 AND plan = 'pro'", [accountId]);
+      if (event.type === 'invoice.paid') {
+        if (!(await startPro(tx, accountId, inv.customer, subscription, now))) return ignore('abonnement déjà résilié');
+      } else await tx.query("UPDATE accounts SET subscription_status = 'past_due' WHERE id = $1 AND plan = 'pro'", [accountId]);
       return 'new';
     }
 
@@ -237,7 +260,9 @@ export async function handleEvent(db: Db, event: WebhookEvent, now: Date): Promi
       if (event.type === 'customer.subscription.deleted') {
         // Un ancien abonnement supprimé après un nouveau ne rétrograde pas le compte.
         await tx.query(
-          `UPDATE accounts SET plan = 'free', subscription_status = 'canceled', monthly_included_cents = 0, cancel_at_period_end = false, current_period_end = $3
+          // L'abonnement résilié est noté sur le compte : ses événements en retard seront reconnus.
+          `UPDATE accounts SET plan = 'free', subscription_status = 'canceled', monthly_included_cents = 0, cancel_at_period_end = false, current_period_end = $3,
+             stripe_subscription_id = $2
            WHERE id = $1 AND (stripe_subscription_id IS NULL OR stripe_subscription_id = $2)`,
           [accountId, sub.id, periodEnd],
         );
@@ -247,13 +272,18 @@ export async function handleEvent(db: Db, event: WebhookEvent, now: Date): Promi
       // Résiliation programmée : le portail (API 2025+) pose une date `cancel_at` (fin de période)
       // et laisse `cancel_at_period_end` à false ; vu en production le 2026-11-03. Les deux formes valent.
       const scheduled = Boolean(sub.cancel_at_period_end) || typeof sub.cancel_at === 'number';
-      await tx.query(
+      // Abonnement déjà résilié sur le compte : seul un état terminé le touche
+      // encore, jamais un « actif » arrivé en retard (même garde que startPro).
+      const { rows } = await tx.query(
         `UPDATE accounts SET stripe_subscription_id = $2, subscription_status = $3, cancel_at_period_end = $4, current_period_end = $5,
            plan = CASE WHEN $6::boolean THEN 'free' WHEN $7::boolean THEN 'pro' ELSE plan END,
            monthly_included_cents = CASE WHEN $6::boolean THEN 0 ELSE monthly_included_cents END
-         WHERE id = $1`,
+         WHERE id = $1 AND ($6::boolean OR subscription_status IS DISTINCT FROM 'canceled' OR stripe_subscription_id IS DISTINCT FROM $2)
+           AND ${followsNoOther('$2')}
+         RETURNING id`,
         [accountId, sub.id, sub.status, scheduled, periodEnd, ended, SUBSCRIPTION_LIVE.has(sub.status)],
       );
+      if (rows.length === 0) return ignore('abonnement déjà résilié, ou autre abonnement en cours sur le compte');
       return 'new';
     }
 
@@ -314,6 +344,10 @@ export function billingRoutes(deps: Deps) {
       customer,
       client_reference_id: me.id,
       line_items: [{ price: await priceId(client, key), quantity: 1 }],
+      // Carte seule (choix de Romain, 2026-11-13) : paiement encaissé tout de
+      // suite, jamais différé (SEPA, etc.), quels que soient les moyens
+      // activés dans le Dashboard (filtre de l'API endive ; Apple Pay et Google Pay restent des cartes).
+      allowed_payment_method_types: ['card'],
       success_url: back.ok,
       cancel_url: back.cancel,
       locale: 'fr',

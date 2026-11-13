@@ -153,6 +153,7 @@ export class AccountClient {
     if (init.origin) headers['x-ds-origin'] = init.origin;
     if (init.keepalive) headers['x-ds-keepalive'] = '1';
     let response: Response;
+    let text: string;
     try {
       response = await (this.options.fetch ?? fetch)(this.apiUrl + route, {
         method: init.method ?? (init.json !== undefined ? 'POST' : 'GET'),
@@ -160,6 +161,9 @@ export class AccountClient {
         body: init.json !== undefined ? JSON.stringify(init.json) : undefined,
         signal: AbortSignal.timeout(init.timeoutMs ?? 15_000),
       });
+      // Corps lu ici aussi : une réponse coupée en cours de lecture (réseau
+      // instable) est une panne de réseau comme une autre.
+      text = await response.text();
     } catch {
       this.online = false;
       this.message = OFFLINE;
@@ -167,7 +171,6 @@ export class AccountClient {
     }
     this.online = true;
     this.message = null;
-    const text = await response.text();
     let body: Record<string, unknown> = {};
     try {
       body = text ? (JSON.parse(text) as Record<string, unknown>) : {};
@@ -230,8 +233,11 @@ export class AccountClient {
         await this.save();
       }
     } catch (e) {
-      // Hors ligne ou session perdue : déjà noté par `api`.
-      if (!(e instanceof StudioError)) throw e;
+      // Hors ligne ou session perdue : déjà noté par `api`. Toute autre erreur
+      // (écriture d'`account.json` refusée…) est journalisée, jamais relancée :
+      // la minuterie appelle `refresh` sans l'attendre, et un rejet non géré
+      // arrêtait le serveur local (revue du 2026-11-13, n° 10).
+      if (!(e instanceof StudioError)) console.error('Compte : rafraîchissement en échec.', e);
     }
     return this.status();
   }

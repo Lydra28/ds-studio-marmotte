@@ -200,3 +200,54 @@ test('compte : bienvenue, achats (URL Stripe transmise), passage Pro vu sans att
   await assert.rejects(account.login(user.email, user.password), /incorrect/);
   assert.equal((await account.login(user.email, 'nouveau-mot-de-passe-1')).status, 'connected');
 });
+
+// Revue du 2026-11-13, n° 10 : une réponse coupée pendant la lecture du corps
+// (réseau instable) faisait rejeter `refresh`, appelé sans attente par la
+// minuterie : rejet non géré, serveur local arrêté.
+test('compte : réponse coupée en cours de lecture = hors ligne, `refresh` ne rejette jamais', async (t) => {
+  const srv = await testApp();
+  const dir = await mkdtemp(path.join(tmpdir(), 'ds-account-'));
+  t.after(async () => {
+    await srv.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+  let cut = false;
+  const fetchImpl = (async (url: RequestInfo | URL, init?: RequestInit) => {
+    if (!cut) return srv.app.request(String(url), init);
+    // En-têtes reçus, corps interrompu : ce que rend `fetch` quand la connexion tombe.
+    return new Response(new ReadableStream({ start: (c) => c.error(new TypeError('terminated')) }), { status: 200 });
+  }) as typeof fetch;
+  const account = await AccountClient.open({ dir, apiUrl: 'http://server.test', publicKey: srv.keys.publicKeyPem, fetch: fetchImpl, now: srv.now });
+  await account.signup(user.email, user.password);
+  await srv.api('/v1/auth/verify', { json: { token: lastToken(srv.mailer, user.email) } });
+  await account.login(user.email, user.password);
+  assert.equal(account.status().online, true);
+
+  cut = true;
+  const status = await account.refresh();
+  assert.equal(status.status, 'connected', 'session gardée');
+  assert.equal(status.online, false);
+  assert.match(status.message ?? '', /./, 'message hors ligne pour Réglages');
+  assert.deepEqual(account.enabled(), { enabled: false, reason: 'offline' });
+  await assert.rejects(account.relay({ messages: [{ role: 'user', content: 'ok' }] }, 'assistant'), (e: Error & { status?: number }) => {
+    assert.equal(e.status, 502, 'panne de réseau annoncée, pas une erreur interne');
+    return true;
+  });
+
+  // Écriture d'`account.json` impossible (dossier disparu) : journalisée, jamais relancée.
+  cut = false;
+  await srv.db.query('UPDATE accounts SET gifted = true WHERE email = $1', [user.email]);
+  await rm(dir, { recursive: true, force: true });
+  await writeFile(dir, 'un fichier à la place du dossier');
+  const errors: unknown[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => void errors.push(args);
+  try {
+    const after = await account.refresh();
+    assert.equal(after.online, true);
+  } finally {
+    console.error = original;
+    await rm(dir, { force: true });
+  }
+  assert.equal(errors.length, 1, 'échec d’écriture journalisé une fois');
+});
