@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { accountChanged, ACCOUNT_HASH, Avatar, FigmaMark, GithubMark, GlassBadge } from './Chrome.js';
+import { accountChanged, ACCOUNT_HASH, Avatar, FigmaMark, GithubMark, GlassBadge, WELCOME_HASH } from './Chrome.js';
 import {
   accountAction,
   desktopAction,
@@ -108,7 +108,16 @@ export function watchDone(kind: WatchKind, before: AccountStatus | undefined, a:
   return now !== undefined && now > was;
 }
 
-function AccountSection({ account, onChange }: { account: AccountStatus | undefined; onChange: (a: AccountStatus) => void }) {
+// `compact` : formulaire seul, sans titre ni texte d'introduction (pop-in d'accueil).
+export function AccountSection({
+  account,
+  onChange,
+  compact = false,
+}: {
+  account: AccountStatus | undefined;
+  onChange: (a: AccountStatus) => void;
+  compact?: boolean;
+}) {
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -332,12 +341,19 @@ function AccountSection({ account, onChange }: { account: AccountStatus | undefi
     );
   }
   return (
-    <section className="settings-block" aria-labelledby="s-account">
-      <h2 id="s-account">Compte</h2>
-      <p className="hint">
-        Un compte DS-Studio active l’assistant et le Mur des DA. Tes projets restent sur cet ordinateur : seuls la doctrine, les
-        tokens et les images que tu envoies au modèle passent par le serveur.
-      </p>
+    <section
+      className={compact ? 'account-compact' : 'settings-block'}
+      {...(compact ? { 'aria-label': 'Connexion au compte' } : { 'aria-labelledby': 's-account' })}
+    >
+      {!compact && (
+        <>
+          <h2 id="s-account">Compte</h2>
+          <p className="hint">
+            Un compte DS-Studio active l’assistant et le Mur des DA. Tes projets restent sur cet ordinateur : seuls la doctrine,
+            les tokens et les images que tu envoies au modèle passent par le serveur.
+          </p>
+        </>
+      )}
       {account?.message && (
         <p className="message error" role="alert">
           {account.message}
@@ -550,10 +566,17 @@ function GithubSection({ tier }: { tier: string | undefined }) {
 export function AccountPage({ onBack }: { onBack: () => void }) {
   const [account, setAccount] = useState<AccountStatus>();
   const [error, setError] = useState('');
-  useEffect(() => {
+  const load = () => {
+    setError('');
     getAccount()
       .then(setAccount)
       .catch((e) => setError((e as Error).message));
+  };
+  // Relu aussi quand un autre écran change le compte (pop-in, GitHub).
+  useEffect(() => {
+    load();
+    window.addEventListener('ds-account', load);
+    return () => window.removeEventListener('ds-account', load);
   }, []);
   return (
     <div className="home settings">
@@ -567,13 +590,22 @@ export function AccountPage({ onBack }: { onBack: () => void }) {
         </div>
       </header>
       {error && (
-        <p className="message error" role="alert">
-          {error}
-        </p>
+        <div className="settings-grid settings-grid--single">
+          <p className="message error" role="alert">
+            {error}
+          </p>
+          <div className="form-actions">
+            <button onClick={load}>Réessayer</button>
+          </div>
+        </div>
       )}
+      {!account && !error && <p className="home-loading">Chargement du compte…</p>}
       {account && (
         <div className="settings-grid settings-grid--single">
           <AccountSection account={account} onChange={setAccount} />
+          <p className="hint">
+            <a href={WELCOME_HASH}>Revoir la présentation</a> : compte, GitHub et plugin Figma en trois étapes.
+          </p>
         </div>
       )}
     </div>
@@ -657,7 +689,6 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
             <h2 id="s-figma" className="with-mark">
               <FigmaMark size={18} />
               Plugin Figma
-              <GlassBadge>Bientôt disponible</GlassBadge>
             </h2>
             <p className="hint">
               Le plugin transfère la version acceptée dans ton fichier Figma et renvoie tes composants ici. Le code
@@ -674,9 +705,18 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
                 </button>
               </div>
             ) : (
-              <p className="hint" aria-live="polite">
-                Version <span className="mono">{settings.app.version}</span> · {updateLabel(settings.update)}
-              </p>
+              <>
+                <p className="hint" aria-live="polite">
+                  Version <span className="mono">{settings.app.version}</span> · {updateLabel(settings.update)}
+                </p>
+                {canUpdate && (
+                  <div className="form-actions">
+                    <button disabled={busy || status === 'checking' || status === 'downloading'} onClick={() => void act('check-update')}>
+                      Rechercher une mise à jour
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </section>
           {/* Pour le support et les cas rares : replié. */}
@@ -706,18 +746,11 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
               <dd>{on(settings.services.github, 'Par ta connexion GitHub', 'GitHub non connecté')}</dd>
             </dl>
             <p className="hint">Tes projets restent sur cet ordinateur. Rien n’est envoyé ailleurs sans ton action.</p>
-            {(canUpdate || (settings.desktop && settings.projects)) && (
+            {settings.desktop && settings.projects && (
               <div className="form-actions">
-                {canUpdate && (
-                  <button disabled={busy || status === 'checking' || status === 'downloading'} onClick={() => void act('check-update')}>
-                    Rechercher une mise à jour
-                  </button>
-                )}
-                {settings.desktop && settings.projects && (
-                  <button disabled={busy} onClick={() => void act('choose-projects')}>
-                    Changer de dossier…
-                  </button>
-                )}
+                <button disabled={busy} onClick={() => void act('choose-projects')}>
+                  Changer de dossier…
+                </button>
               </div>
             )}
           </details>

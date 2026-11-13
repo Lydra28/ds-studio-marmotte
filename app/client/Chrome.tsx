@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { getAccount, getGithub, type AccountStatus, type GithubStatus } from './api.js';
 
 // Habillage commun (cadrage navigation et UX du 2026-11-14) : logos GitHub et
@@ -53,44 +53,25 @@ export function GlassBadge({ children }: { children: ReactNode }) {
   return <span className="glass-badge">{children}</span>;
 }
 
-// Compte relu au montage, au retour sur la fenêtre et après chaque changement
-// annoncé par `accountChanged()` (connexion, achat, déconnexion).
+// Compte et GitHub relus au montage, au retour sur la fenêtre et après chaque
+// changement annoncé par `accountChanged()` (connexion, achat, déconnexion).
+// Réponses arrivées dans le désordre : seule la dernière demande compte.
 const EVENT = 'ds-account';
 export const accountChanged = () => window.dispatchEvent(new Event(EVENT));
-export function useAccount() {
-  const [account, setAccount] = useState<AccountStatus>();
+function useLive<T>(read: () => Promise<T>) {
+  const [value, setValue] = useState<T>();
   useEffect(() => {
     let live = true;
-    const load = () =>
-      getAccount()
-        .then((a) => live && setAccount(a))
-        .catch(() => {
-          /* Hors ligne : le bouton reste neutre. */
-        });
-    void load();
-    window.addEventListener(EVENT, load);
-    window.addEventListener('focus', load);
-    return () => {
-      live = false;
-      window.removeEventListener(EVENT, load);
-      window.removeEventListener('focus', load);
-    };
-  }, []);
-  return account;
-}
-
-// État GitHub relu au montage, au retour sur la fenêtre et après `accountChanged()`.
-export function useGithub() {
-  const [github, setGithub] = useState<GithubStatus>();
-  useEffect(() => {
-    let live = true;
-    const load = () =>
-      getGithub()
-        .then((g) => live && setGithub(g))
+    let last = 0;
+    const load = () => {
+      const n = ++last;
+      read()
+        .then((v) => live && n === last && setValue(v))
         .catch(() => {
           /* Hors ligne : l'état d'avant reste. */
         });
-    void load();
+    };
+    load();
     window.addEventListener(EVENT, load);
     window.addEventListener('focus', load);
     return () => {
@@ -99,17 +80,30 @@ export function useGithub() {
       window.removeEventListener('focus', load);
     };
   }, []);
-  return github;
+  return value;
 }
+export const useAccount = () => useLive<AccountStatus>(getAccount);
+export const useGithub = () => useLive<GithubStatus>(getGithub);
 
 export const ACCOUNT_HASH = '#/compte';
 export const SETTINGS_HASH = '#/reglages';
+export const WELCOME_HASH = '#/bienvenue';
 export const openAccount = () => {
   location.hash = ACCOUNT_HASH.slice(1);
 };
 export const openSettings = () => {
   location.hash = SETTINGS_HASH.slice(1);
 };
+// Projet neuf : où il s'ouvre et quelle lecture se lance (dépôt G3, site lot 5).
+export function rememberStart(slug: string, from: { repo?: boolean; site?: string }) {
+  try {
+    sessionStorage.setItem(`ds-start:${slug}`, from.site || from.repo ? 'board' : 'wall');
+    if (from.repo) sessionStorage.setItem(`ds-repo:${slug}`, 'create');
+    else if (from.site) sessionStorage.setItem(`ds-extract:${slug}`, from.site);
+  } catch {
+    /* Facultatif : sinon la planche s'ouvre. */
+  }
+}
 
 // Avatar : initiale de l'adresse en police pixel, silhouette sans compte.
 export function Avatar({ account, large = false }: { account: AccountStatus | undefined; large?: boolean }) {
@@ -134,45 +128,68 @@ export function AppLinks() {
       <button
         className="icon-btn account-btn"
         onClick={openAccount}
-        aria-label="Compte"
+        aria-label={connected ? `Compte, ${account.email}${pro ? ', Pro' : ''}` : 'Compte, se connecter'}
         title={connected ? `${account.email}${pro ? ' · Pro' : ''}` : 'Se connecter'}
       >
         <Avatar account={account} />
-        {pro && <GlassBadge>Pro</GlassBadge>}
+        {pro && <span aria-hidden="true"><GlassBadge>Pro</GlassBadge></span>}
       </button>
     </div>
   );
 }
 
-// Menu des actions rangées : s'ouvre au clic, se ferme au clic dehors, à
-// Échap ou après une action.
+// Menu des actions rangées (motif « menu bouton » de l'ARIA) : s'ouvre au
+// clic ou au clavier, flèches haut / bas, Début / Fin ; se ferme au clic
+// dehors, à Échap, à Tab ou après une action, et rend le focus au bouton.
 export function MoreMenu({ items }: { items: { label: string; onSelect: () => void }[] }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const close = (focus = true) => {
+    setOpen(false);
+    if (focus) button.current?.focus();
+  };
   useEffect(() => {
     if (!open) return;
     const away = (e: MouseEvent) => {
       if (!root.current?.contains(e.target as Node)) setOpen(false);
     };
-    const esc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
     document.addEventListener('mousedown', away);
-    document.addEventListener('keydown', esc);
-    return () => {
-      document.removeEventListener('mousedown', away);
-      document.removeEventListener('keydown', esc);
-    };
+    return () => document.removeEventListener('mousedown', away);
   }, [open]);
+  const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    const list = [...(root.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [])];
+    const at = list.indexOf(document.activeElement as HTMLButtonElement);
+    const move = (j: number) => {
+      e.preventDefault();
+      list[(j + list.length) % list.length]?.focus();
+    };
+    if (e.key === 'ArrowDown') move(at + 1);
+    else if (e.key === 'ArrowUp') move(at - 1);
+    else if (e.key === 'Home') move(0);
+    else if (e.key === 'End') move(list.length - 1);
+    else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+    } else if (e.key === 'Tab') setOpen(false);
+  };
   return (
-    <div className="more" ref={root}>
+    <div className="more" ref={root} onKeyDown={open ? onKey : undefined}>
       <button
+        ref={button}
         className="icon-btn"
         aria-label="Plus d’actions"
         title="Plus d’actions"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
       >
         <MoreIcon />
       </button>
@@ -183,8 +200,9 @@ export function MoreMenu({ items }: { items: { label: string; onSelect: () => vo
               key={it.label}
               autoFocus={i === 0}
               role="menuitem"
+              tabIndex={-1}
               onClick={() => {
-                setOpen(false);
+                close();
                 it.onSelect();
               }}
             >

@@ -24,6 +24,8 @@ const previewVar = (page: Page, name: string) =>
     .evaluate((el, n) => el.style.getPropertyValue(n), name);
 
 test.beforeEach(async ({ page }) => {
+  // Pop-in d'accueil déjà passée : elle a son propre test (« onboarding »).
+  await page.addInitScript(() => localStorage.setItem('ds-onboarding', '1'));
   await page.goto('/#/p/marmotte');
   await expect(page.locator('.bar .project')).toHaveText('Marmotte');
   // Au lancement, toutes les sections de la planche sont repliées.
@@ -103,7 +105,7 @@ test('réglages : version, dossier et services affichés, aucune valeur de secre
   await page.getByRole('button', { name: '← Retour' }).click();
   await expect(page.locator('.bar .project')).toHaveText('Marmotte');
   // Compte (avatar) : le formulaire de connexion, sur sa propre page.
-  await page.getByRole('button', { name: 'Compte', exact: true }).click();
+  await page.getByRole('button', { name: /^Compte,/ }).click();
   await expect(page).toHaveURL(/#\/compte$/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Compte');
   await expect(page.getByRole('form', { name: 'Compte DS-Studio' })).toBeVisible();
@@ -117,7 +119,7 @@ test('réglages : version, dossier et services affichés, aucune valeur de secre
 
 test('compte : connexion sur la page Compte, Pro (offert) et usage affichés, assistant actif par le relais, déconnexion', async ({ page }) => {
   // Faux serveur DS-Studio de scripts/e2e-server.mjs (tests/e2e/fake-api.ts) : jamais le vrai.
-  await page.getByRole('button', { name: 'Compte', exact: true }).click();
+  await page.getByRole('button', { name: /^Compte,/ }).click();
   const form = page.getByRole('form', { name: 'Compte DS-Studio' });
   await form.getByLabel('Adresse mail').fill('associe@example.com');
   await form.getByLabel('Mot de passe').fill('mauvais');
@@ -142,7 +144,7 @@ test('compte : connexion sur la page Compte, Pro (offert) et usage affichés, as
   // L'assistant répond, par le relais du serveur, avec le compte connecté.
   await page.getByRole('button', { name: '← Retour' }).click();
   await expect(page.locator('.bar .project')).toHaveText('Marmotte');
-  await expect(page.getByRole('button', { name: 'Compte', exact: true })).toContainText('Pro');
+  await expect(page.getByRole('button', { name: 'Compte, associe@example.com, Pro' })).toBeVisible();
   await page.getByRole('button', { name: 'Ouvrir l’assistant' }).click();
   const panel = page.getByRole('complementary', { name: 'Assistant' });
   await expect(panel.getByLabel('Message à l’assistant')).toBeEnabled();
@@ -169,7 +171,7 @@ test('compte : connexion sur la page Compte, Pro (offert) et usage affichés, as
   await panel.getByRole('button', { name: 'Effacer' }).click();
   await panel.getByRole('button', { name: 'Fermer l’assistant' }).click();
   // Déconnexion : le formulaire revient, l'assistant se grise de nouveau.
-  await page.getByRole('button', { name: 'Compte', exact: true }).click();
+  await page.getByRole('button', { name: /^Compte,/ }).click();
   await page.getByRole('button', { name: 'Se déconnecter' }).click();
   await expect(form).toBeVisible();
   expect((await (await page.request.get('/api/account')).json()).status).toBe('none');
@@ -217,8 +219,70 @@ test('github : réservé à Pro, connexion par code contre le faux GitHub, dép�
   await expect(form).toBeVisible();
 });
 
+test('onboarding : pop-in au premier lancement, compte, GitHub, Figma, passable et rouvrable', async ({ context }) => {
+  // Nouvel onglet sans le drapeau « pop-in passée » du beforeEach ; état final
+  // des motions (mouvement réduit) pour des captures stables.
+  test.setTimeout(45_000);
+  const page = await context.newPage();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  await page.evaluate(() => localStorage.removeItem('ds-onboarding'));
+  await page.reload();
+  const dialog = page.getByRole('dialog', { name: 'Ton compte DS-Studio' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('button', { name: /^Étape \d sur 3/ })).toHaveCount(3);
+  await page.screenshot({ path: 'test-results/onboarding-compte.png' });
+  // Étapes consultables sans compte : GitHub demande d'abord le compte.
+  await dialog.getByRole('button', { name: 'Suivant' }).click();
+  await expect(page.getByRole('dialog', { name: 'Ton dépôt GitHub' })).toContainText('Connecte d’abord ton compte');
+  await page.getByRole('button', { name: 'Retour' }).click();
+  const form = dialog.getByRole('form', { name: 'Compte DS-Studio' });
+  await form.getByLabel('Adresse mail').fill('associe@example.com');
+  await form.getByLabel('Mot de passe').fill('mot-de-passe-de-test');
+  await form.getByRole('button', { name: 'Se connecter' }).click();
+  await expect(dialog.getByRole('status')).toContainText('associe@example.com');
+  await dialog.getByRole('button', { name: 'Étape 2 sur 3 : GitHub' }).click();
+  const gh = page.getByRole('dialog', { name: 'Ton dépôt GitHub' });
+  const popup = page.waitForEvent('popup');
+  await gh.getByRole('button', { name: 'Continuer avec GitHub' }).click();
+  await expect(gh.getByLabel('Code GitHub')).toHaveText('E2E0-CODE');
+  await (await popup).close();
+  await expect(gh).toContainText('Connecté en tant que dev-e2e', { timeout: 15_000 });
+  await expect(gh.getByLabel('Dépôt à ouvrir')).toHaveValue('dev-e2e/site-vitrine');
+  await expect(gh.getByRole('button', { name: 'Créer le projet depuis ce dépôt' })).toBeEnabled();
+  await page.screenshot({ path: 'test-results/onboarding-github.png' });
+  await gh.getByRole('button', { name: 'Suivant' }).click();
+  const figma = page.getByRole('dialog', { name: /Le plugin Figma/ });
+  await expect(figma).toContainText('Bientôt disponible');
+  await expect(figma.locator('code.pair')).not.toBeEmpty();
+  await page.screenshot({ path: 'test-results/onboarding-figma.png' });
+  await figma.getByRole('button', { name: 'C’est parti' }).click();
+  await expect(figma).toBeHidden();
+  // Accueil : bouton GitHub et confirmation de connexion ; plus de pop-in au rechargement.
+  await expect(page.getByRole('button', { name: 'Nouveau projet depuis un dépôt' })).toBeVisible();
+  await expect(page.getByText('Connecté en tant que')).toContainText('dev-e2e');
+  await page.screenshot({ path: 'test-results/accueil-github.png' });
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'DS-Studio', level: 1 })).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  // Rouvrable depuis la page Compte, fermée par Échap.
+  await page.getByRole('button', { name: /^Compte,/ }).click();
+  await page.getByRole('link', { name: 'Revoir la présentation' }).click();
+  await expect(page.getByRole('dialog', { name: 'Ton compte DS-Studio' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page).not.toHaveURL(/bienvenue/);
+  // Nettoyage pour les tests suivants : GitHub puis compte déconnectés.
+  await page.getByRole('button', { name: 'Réglages' }).click();
+  await page.getByRole('region', { name: 'GitHub' }).getByRole('button', { name: 'Déconnecter GitHub' }).click();
+  await page.getByRole('link', { name: /associe@example\.com/ }).click();
+  await page.getByRole('button', { name: 'Se déconnecter' }).click();
+  await expect(page.getByRole('form', { name: 'Compte DS-Studio' })).toBeVisible();
+  await page.close();
+});
+
 test('facturation : compte gratuit, génération offerte puis 402, recharge, Pro, portail (faux Stripe, URL dans un nouvel onglet)', async ({ page }) => {
-  await page.getByRole('button', { name: 'Compte', exact: true }).click();
+  await page.getByRole('button', { name: /^Compte,/ }).click();
   const form = page.getByRole('form', { name: 'Compte DS-Studio' });
   await form.getByLabel('Adresse mail').fill('libre@example.com');
   await form.getByLabel('Mot de passe').fill('mot-de-passe-de-test');
@@ -246,7 +310,7 @@ test('facturation : compte gratuit, génération offerte puis 402, recharge, Pro
   await panel.getByRole('button', { name: 'Effacer' }).click();
   await panel.getByRole('button', { name: 'Fermer l’assistant' }).click();
   // Recharge : la page de paiement s'ouvre dans un nouvel onglet ; le solde se met à jour tout seul (webhook simulé, relecture auto).
-  await page.getByRole('button', { name: 'Compte', exact: true }).click();
+  await page.getByRole('button', { name: /^Compte,/ }).click();
   const [topup] = await Promise.all([page.waitForEvent('popup'), account.getByRole('button', { name: 'Recharger 5 €' }).click()]);
   expect(topup.url()).toContain('/v1/billing/done?s=ok');
   await topup.close();
@@ -671,7 +735,7 @@ test('dépôt : nouveau projet depuis un dépôt GitHub, tokens repris, plan, br
   // Connexion Pro puis GitHub contre les faux serveurs ; archive fictive de
   // `dev-e2e/site-vitrine` (tests/e2e/fake-api.ts). Aucun réseau.
   test.setTimeout(60_000);
-  await page.getByRole('button', { name: 'Compte', exact: true }).click();
+  await page.getByRole('button', { name: /^Compte,/ }).click();
   const form = page.getByRole('form', { name: 'Compte DS-Studio' });
   await form.getByLabel('Adresse mail').fill('associe@example.com');
   await form.getByLabel('Mot de passe').fill('mot-de-passe-de-test');
@@ -688,11 +752,14 @@ test('dépôt : nouveau projet depuis un dépôt GitHub, tokens repris, plan, br
   await (await popup).close();
   await expect(github).toContainText('dev-e2e', { timeout: 15_000 });
 
+  // Accueil : bouton GitHub (connecté) → formulaire avec le dépôt choisi et le nom repris.
   await page.goto('/');
-  await page.getByRole('button', { name: /Nouveau projet/ }).click();
+  await expect(page.getByText('Connecté en tant que')).toContainText('dev-e2e');
+  await page.getByRole('button', { name: 'Nouveau projet depuis un dépôt' }).click();
   const create = page.getByRole('form', { name: 'Nouveau projet' });
+  await expect(create.getByLabel('Dépôt GitHub (facultatif)')).toHaveValue('dev-e2e/site-vitrine');
+  await expect(create.getByLabel('Nom')).toHaveValue('site-vitrine');
   await create.getByLabel('Nom').fill('Depuis un dépôt');
-  await create.getByLabel('Dépôt GitHub (facultatif)').selectOption('dev-e2e/site-vitrine');
   await create.getByRole('button', { name: 'Créer le projet' }).click();
   await expect(page).toHaveURL(/#\/p\/depuis-un-depot$/);
 

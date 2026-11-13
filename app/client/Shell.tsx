@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { createProject, getGithub, githubAction, listProjects, type GithubRepo, type ProjectSummary } from './api.js';
-import { ACCOUNT_HASH, AppLinks, SETTINGS_HASH } from './Chrome.js';
+import { ACCOUNT_HASH, AppLinks, GithubMark, GlassBadge, rememberStart, SETTINGS_HASH, useAccount, useGithub, WELCOME_HASH } from './Chrome.js';
+import { Onboarding, onboardingSeen, type Step } from './Onboarding.js';
 
 // Route dans le hash : `#/p/<projet>` ouvre un projet, `#/reglages` les
 // réglages de l'application, `#/compte` le compte, sinon l'accueil.
@@ -198,14 +199,36 @@ export function SectionBar({
   );
 }
 
-export function Home({ onOpen }: { onOpen: (slug?: string) => void }) {
+// Création : `#/nouveau` (formulaire complet) ou `#/nouveau/depot` (depuis
+// un dépôt GitHub, bouton GitHub de l'accueil).
+const NEW_REPO_HASH = '#/nouveau/depot';
+const creatingOf = (hash: string) => (hash === '#/nouveau' ? 'blank' : hash === NEW_REPO_HASH ? 'repo' : null);
+
+export function Home({ onOpen, plugin }: { onOpen: (slug?: string) => void; plugin: string | null }) {
   const { projects, error } = useProjects();
-  const [creating, setCreating] = useState(location.hash === '#/nouveau');
+  const account = useAccount();
+  const github = useGithub();
+  const [creating, setCreating] = useState(() => creatingOf(location.hash));
+  // Pop-in d'accueil : rouverte par `#/bienvenue` (page Compte), ouverte d'office
+  // au premier lancement, ou à l'étape GitHub par le bouton GitHub.
+  const [welcome, setWelcome] = useState<Step | null>(() => (location.hash === WELCOME_HASH ? 'account' : null));
   useEffect(() => {
-    const on = () => setCreating(location.hash === '#/nouveau');
+    const on = () => {
+      setCreating(creatingOf(location.hash));
+      if (location.hash === WELCOME_HASH) setWelcome('account');
+    };
     window.addEventListener('hashchange', on);
     return () => window.removeEventListener('hashchange', on);
   }, []);
+  const status = account?.status;
+  useEffect(() => {
+    if (status === 'none' && !onboardingSeen()) setWelcome((w) => w ?? 'account');
+  }, [status]);
+  const closeWelcome = () => {
+    setWelcome(null);
+    if (location.hash === WELCOME_HASH) location.replace('#/');
+  };
+  const linked = !!github?.pro && github.status === 'connected';
   // Le plus récemment modifié d'abord : c'est celui qu'on rouvre.
   const sorted = projects && [...projects].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return (
@@ -219,6 +242,29 @@ export function Home({ onOpen }: { onOpen: (slug?: string) => void }) {
           <h1>DS-Studio</h1>
           <p className="home-lead">Un atelier par projet : essais en direct, règles, versions, transfert Figma.</p>
         </div>
+        {github && (
+          <div className="home-github">
+            <button
+              className="github-btn"
+              onClick={() => (linked ? (location.hash = NEW_REPO_HASH.slice(1)) : setWelcome('github'))}
+            >
+              <GithubMark size={18} />
+              {linked ? 'Nouveau projet depuis un dépôt' : 'Connecter GitHub'}
+              {!github.pro && <GlassBadge>Pro</GlassBadge>}
+            </button>
+            <p className={`home-github-state${linked ? ' is-on' : ''}`}>
+              {linked ? (
+                <>
+                  Connecté en tant que <strong className="mono">{github.login}</strong>
+                </>
+              ) : github.status === 'pending' ? (
+                'Connexion GitHub en attente…'
+              ) : (
+                'GitHub non connecté'
+              )}
+            </p>
+          </div>
+        )}
       </header>
       <div className="home-section-head">
         <h2>Projets</h2>
@@ -261,7 +307,18 @@ export function Home({ onOpen }: { onOpen: (slug?: string) => void }) {
           </button>
         </li>
       </ul>
-      {creating && <NewProject onCreated={onOpen} onCancel={() => onOpen()} />}
+      {creating && <NewProject key={creating} fromRepo={creating === 'repo'} onCreated={onOpen} onCancel={() => onOpen()} />}
+      {welcome && (
+        <Onboarding
+          start={welcome}
+          plugin={plugin}
+          onClose={closeWelcome}
+          onProject={(slug) => {
+            setWelcome(null);
+            onOpen(slug);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -300,7 +357,16 @@ function Cover({ cover }: { cover: ProjectSummary['cover'] }) {
   );
 }
 
-function NewProject({ onCreated, onCancel }: { onCreated: (slug: string) => void; onCancel: () => void }) {
+function NewProject({
+  fromRepo = false,
+  onCreated,
+  onCancel,
+}: {
+  // Depuis le bouton GitHub de l'accueil : le dépôt d'abord, le nom en découle.
+  fromRepo?: boolean;
+  onCreated: (slug: string) => void;
+  onCancel: () => void;
+}) {
   const [name, setName] = useState('');
   const [doctrine, setDoctrine] = useState('');
   const [ideas, setIdeas] = useState('');
@@ -317,7 +383,13 @@ function NewProject({ onCreated, onCancel }: { onCreated: (slug: string) => void
     getGithub()
       .then((g) => (g.pro && g.status === 'connected' ? githubAction('repos') : null))
       .then((r) => {
-        if (live && r?.repos) setRepos(r.repos);
+        if (live && r?.repos) {
+          setRepos(r.repos);
+          if (fromRepo && r.repos[0]) {
+            setRepo(r.repos[0].fullName);
+            setName((n) => n || (r.repos![0].fullName.split('/')[1] ?? ''));
+          }
+        }
       })
       .catch(() => {
         /* Facultatif : le formulaire reste sans dépôt. */
@@ -355,13 +427,7 @@ function NewProject({ onCreated, onCancel }: { onCreated: (slug: string) => void
       // Projet neuf : il s'ouvre sur le Mur des DA, première étape du parcours ;
       // depuis un site (lot 5) ou un dépôt (G3), sur la planche avec la lecture
       // lancée (le dépôt prime : ses tokens sont déclarés, ceux du site devinés).
-      try {
-        sessionStorage.setItem(`ds-start:${slug}`, site || chosen ? 'board' : 'wall');
-        if (chosen) sessionStorage.setItem(`ds-repo:${slug}`, 'create');
-        else if (site) sessionStorage.setItem(`ds-extract:${slug}`, site);
-      } catch {
-        /* Facultatif : sinon la planche s'ouvre. */
-      }
+      rememberStart(slug, { repo: !!chosen, site });
       onCreated(slug);
     } catch (err) {
       setError((err as Error).message);
@@ -371,7 +437,7 @@ function NewProject({ onCreated, onCancel }: { onCreated: (slug: string) => void
   };
   return (
     <form className="new-project" onSubmit={submit} aria-label="Nouveau projet">
-      <h2>Nouveau projet</h2>
+      <h2>{fromRepo ? 'Nouveau projet depuis un dépôt' : 'Nouveau projet'}</h2>
       <label>
         Nom
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Atelier céramique" autoFocus />

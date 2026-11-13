@@ -77,6 +77,8 @@ const luminance = (hex: string) => {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 };
+// Logo de l'app (même grille), pour l'apparition tramée de l'onboarding.
+export const LOGO = { body: BODY, eyes: FACES.idle.eyes, mouth: FACES.idle.mouth };
 const rects = (list: Rect[], fill: string, className?: string) =>
   list.map(([x, y, w, h]) => <rect key={`${x}-${y}-${w}`} className={className} x={x} y={y} width={w} height={h} fill={fill} />);
 

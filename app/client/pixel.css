@@ -1168,7 +1168,7 @@ dialog.diff th {
   right: -7px;
   bottom: -3px;
   padding: 0 5px;
-  font-size: 9px;
+  font-size: 10px;
   line-height: 14px;
   background:
     linear-gradient(135deg, rgb(189 255 46 / 0.4), rgb(46 107 255 / 0.32)),
@@ -1187,7 +1187,7 @@ dialog.diff th {
   border-color: var(--c-line-strong);
   background: rgb(255 255 255 / 0.05);
 }
-.brand-btn.is-off {
+.top .actions > button.brand-btn.is-off:not(.primary):not(.count) {
   color: var(--c-soft);
   border-style: dashed;
 }
@@ -1384,6 +1384,405 @@ dialog.diff th {
     animation: none;
   }
   .details summary::before {
+    transition: none;
+  }
+}
+
+/* Bouton aux couleurs de GitHub (accueil, pop-in) : fond GitHub, logo blanc. */
+.github-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: var(--r-ctl);
+  font-weight: 600;
+  font-size: 14px;
+}
+:where(body:not(.preview-body)) .github-btn {
+  background: #24292f;
+  color: #ffffff;
+  border-color: rgb(255 255 255 / 0.16);
+}
+:where(body:not(.preview-body)) .github-btn:hover:not(:disabled) {
+  background: #32383f;
+  color: #ffffff;
+  border-color: rgb(255 255 255 / 0.3);
+}
+:where(body:not(.preview-body)) .github-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+.home-github {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+  flex: none;
+}
+.home-github-state {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--c-muted);
+}
+.home-github-state::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--c-line-strong);
+}
+.home-github-state.is-on {
+  color: var(--c-soft);
+}
+.home-github-state.is-on::before {
+  background: var(--c-accent);
+}
+@media (max-width: 760px) {
+  .home-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .home-github {
+    justify-items: start;
+  }
+}
+
+/* Pop-in d'accueil : panneau en verre sur l'accueil flouté. */
+dialog.onboarding {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 0;
+  border: 1px solid var(--glass-line);
+  border-radius: 16px;
+  color: var(--c-text);
+  background:
+    radial-gradient(120% 80% at 100% 0%, rgb(189 255 46 / 0.12), transparent 60%),
+    radial-gradient(100% 80% at 0% 100%, rgb(46 107 255 / 0.14), transparent 60%),
+    rgb(14 16 19 / 0.86);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 24px 60px rgb(0 0 0 / 0.55);
+}
+dialog.onboarding::backdrop {
+  background: rgb(7 8 10 / 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.onb-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+}
+.onb-panel {
+  animation: onb-next 0.22s ease-out;
+}
+.onb-panel--back {
+  animation-name: onb-back;
+}
+@keyframes onb-next {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+@keyframes onb-back {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+}
+.onb-stage {
+  display: grid;
+  place-items: center;
+  height: 188px;
+  border-bottom: 1px solid var(--glass-line);
+  background-image: radial-gradient(var(--c-dots) 1px, transparent 1.2px);
+  background-size: 8px 8px;
+}
+.onb-body {
+  padding: 24px 28px 8px;
+}
+.onb-body h2 {
+  margin: 0 0 8px;
+  font-family: var(--f-title);
+  font-weight: 400;
+  font-size: 24px;
+  letter-spacing: -0.02em;
+}
+.onb-body h2.with-mark {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.onb-lead {
+  margin: 0 0 18px;
+  color: var(--c-soft);
+  line-height: 1.5;
+}
+.onb-action {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+.onb-action .hint,
+.onb-body .hint {
+  margin: 0;
+}
+.onb-pro {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--c-soft);
+  font-size: 13px;
+}
+.onb-pro a,
+.settings a {
+  color: var(--c-text);
+  text-underline-offset: 3px;
+}
+.onb-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-ctl);
+  background: rgb(255 255 255 / 0.03);
+  color: var(--c-soft);
+}
+.onb-done strong {
+  color: var(--c-text);
+  font-weight: 500;
+}
+.onb-repo {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+.onb-repo label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--c-muted);
+}
+.onb-repo select {
+  padding: 8px 10px;
+  font-size: 14px;
+}
+.onb-list {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+  color: var(--c-soft);
+  line-height: 1.5;
+}
+.account-compact .account-tabs {
+  margin-bottom: 12px;
+}
+.account-compact .account-form {
+  display: grid;
+  gap: 10px;
+}
+.account-compact .account-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--c-muted);
+}
+.onb-foot {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 28px 22px;
+}
+.onb-foot > :last-child {
+  justify-self: end;
+}
+.onb-foot > :first-child {
+  justify-self: start;
+}
+:where(body:not(.preview-body)) .onb-foot > button:first-child:disabled {
+  visibility: hidden;
+}
+.onb-next {
+  color: var(--c-text);
+  border-color: var(--c-line-strong);
+}
+.onb-dots {
+  display: flex;
+  gap: 8px;
+}
+:where(body:not(.preview-body)) .onb-dot {
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--c-line-strong);
+  transition:
+    background-color 0.15s ease-out,
+    width 0.2s ease-out;
+}
+:where(body:not(.preview-body)) .onb-dot:hover:not(:disabled) {
+  background: var(--c-muted);
+}
+:where(body:not(.preview-body)) .onb-dot[aria-current='step'] {
+  width: 22px;
+  background: var(--c-accent);
+}
+
+/* Motion Compte : logo tramé pixel par pixel (état final = logo entier). */
+.onb-logo {
+  width: 112px;
+  height: 112px;
+  filter: drop-shadow(0 0 24px rgb(189 255 46 / 0.25));
+}
+.onb-logo rect {
+  animation: onb-px 0.01s steps(1) var(--d) both;
+}
+@keyframes onb-px {
+  from {
+    opacity: 0;
+  }
+}
+.onb-logo__mouth {
+  animation: onb-face 0.2s steps(1) 1.15s both;
+}
+.onb-logo__eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation:
+    onb-face 0.2s steps(1) 1.15s both,
+    onb-blink 3.2s steps(1) 2s infinite;
+}
+@keyframes onb-face {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes onb-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.2);
+  }
+}
+
+/* Motion GitHub : curseur, clic, coche, en boucle de 3,2 s. */
+.onb-gh,
+.onb-fig {
+  width: 300px;
+  height: 175px;
+}
+.onb-gh__win {
+  fill: var(--c-panel);
+  stroke: var(--c-line-strong);
+  stroke-width: 0.5;
+}
+.onb-gh__bar {
+  fill: var(--c-raised);
+}
+.onb-gh__cursor {
+  transform: translate(78px, 38px);
+  animation: onb-cursor 3.2s steps(12) infinite;
+}
+@keyframes onb-cursor {
+  0% {
+    transform: translate(104px, 62px);
+  }
+  35%,
+  100% {
+    transform: translate(78px, 38px);
+  }
+}
+.onb-gh__btn {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: onb-press 3.2s steps(1) infinite;
+}
+@keyframes onb-press {
+  40% {
+    transform: scale(0.94);
+  }
+  47% {
+    transform: scale(1);
+  }
+}
+.onb-gh__check {
+  animation: onb-check 3.2s steps(1) infinite;
+}
+@keyframes onb-check {
+  0%,
+  48% {
+    opacity: 0;
+  }
+  49%,
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Motion Figma : trois tokens sautent de l'atelier au fichier Figma. */
+.onb-fig__slot {
+  fill: var(--c-raised);
+}
+.onb-fig__chip {
+  transform: translate(74px, 0);
+  opacity: 0;
+  animation: onb-chip 3.2s steps(10) calc(var(--k) * 0.25s) infinite;
+}
+@keyframes onb-chip {
+  0%,
+  10% {
+    transform: translate(0, 0);
+    opacity: 1;
+  }
+  55%,
+  100% {
+    transform: translate(74px, 0);
+    opacity: 0;
+  }
+}
+.onb-fig__row {
+  fill: var(--c-soft);
+  animation: onb-row 3.2s steps(1) calc(var(--k) * 0.25s) infinite;
+}
+@keyframes onb-row {
+  0%,
+  54% {
+    fill: var(--c-raised);
+  }
+  55%,
+  100% {
+    fill: var(--c-soft);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .onb-panel,
+  .onb-logo rect,
+  .onb-logo__eyes,
+  .onb-logo__mouth,
+  .onb-gh__cursor,
+  .onb-gh__btn,
+  .onb-gh__check,
+  .onb-fig__chip,
+  .onb-fig__row {
+    animation: none;
+  }
+  :where(body:not(.preview-body)) .onb-dot {
     transition: none;
   }
 }

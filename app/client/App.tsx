@@ -115,7 +115,7 @@ export default function App() {
   if (page === 'account') return <AccountPage onBack={back} />;
   // Instance fixe (--project=) : pas d'accueil, son unique projet s'ouvre.
   const slug = route ?? (boot.multi ? undefined : boot.fallback);
-  if (!slug) return <Home onOpen={go} />;
+  if (!slug) return <Home onOpen={go} plugin={boot.plugin} />;
   setProject(slug);
   return (
     <Workspace
@@ -588,7 +588,7 @@ function Workspace({
               setView('board');
               setRepoPanel('open');
             }}
-            title={githubLive ? 'Lire le dépôt GitHub du projet' : 'Connecter GitHub (Réglages → Connexions)'}
+            title={githubLive ? 'Lire le dépôt GitHub du projet' : 'Connecter GitHub (Réglages, section GitHub)'}
           >
             <GithubMark />
             {githubLive ? 'GitHub' : 'Connecter GitHub'}
