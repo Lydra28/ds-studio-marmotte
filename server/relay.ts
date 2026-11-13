@@ -224,10 +224,10 @@ export function relayRoutes(deps: Deps) {
       );
     }
     // Un autre appel court déjà et n'est pas encore débité : un second ne
-    // passe que si la source débitée garde de la marge. Compte offert (créé
-    // par l'administration, jamais débité) : deux à la fois, le plafond
-    // journalier ne peut être dépassé que d'un appel.
-    if (slot.others() > 0 && charged !== 'gift') {
+    // passe que si la source débitée garde de la marge. Compte offert : jamais
+    // débité, donc jamais deux à la fois (seul le plafond journalier le borne).
+    if (slot.others() > 0) {
+      if (charged === 'gift') throw new ApiError(BUSY, 429);
       const margin = charged === 'pro' ? me.monthlyIncludedCents - usage.includedUsedCents : me.creditCents;
       if (margin < PARALLEL_MARGIN_CENTS) throw new ApiError(BUSY_LOW, 429);
     }

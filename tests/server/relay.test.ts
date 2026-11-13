@@ -322,10 +322,9 @@ test('relais : appels lancés ensemble → un seul sans marge, deux avec, place 
     assert.deepEqual(statuses(await burst(3, 2)), [200, 200, 429]);
     await t.db.query('UPDATE accounts SET monthly_included_cents = 50, credit_cents = 500 WHERE email = $1', [user.email]);
     assert.deepEqual(statuses(await burst(3, 1)), [200, 429, 429], 'inclus presque épuisé : un seul, même avec des crédits');
-    // Compte offert : jamais débité, deux à la fois (le plafond journalier ne
-    // peut être dépassé que d'un appel), pas trois.
+    // Compte offert : jamais débité, donc jamais deux à la fois (seul le plafond journalier le borne).
     await t.db.query('UPDATE accounts SET gifted = true WHERE email = $1', [user.email]);
-    assert.deepEqual(statuses(await burst(3, 2)), [200, 200, 429]);
+    assert.deepEqual(statuses(await burst(3, 1)), [200, 429, 429]);
     // Retour en gratuit sous la marge pour la suite : un seul appel à la fois.
     await t.db.query("UPDATE accounts SET gifted = false, plan = 'free', credit_cents = 50 WHERE email = $1", [user.email]);
 
