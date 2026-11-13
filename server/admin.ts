@@ -6,6 +6,7 @@
 //   npm run admin -- credit <mail> <centimes> ajoute (négatif : retire) des crédits, centimes d'euro (lot 4)
 //   npm run admin -- stripe-setup            produits et prix Stripe par lookup_key (STRIPE_SECRET_KEY : test ou live)
 //   npm run admin -- delete-account <mail> [confirmer]  suppression sur demande (RGPD) ; sans « confirmer », dit ce qui partirait
+//   npm run admin -- stripe-test-reset [confirmer]      fin du mode test Stripe, juste après les clés live ; sans « confirmer », aperçu
 // Base : `DATABASE_URL` (server/.env en local ; depuis le poste, l'URL
 // externe de la base Render). `keys` n'a pas besoin de base.
 import { randomUUID } from 'node:crypto';
@@ -19,7 +20,7 @@ import { deleteAccount, deletionPreview } from './retention.js';
 
 /** Plafond journalier d'un compte offert, centimes de dollar de coût réel (3,17 € par mois au pire). */
 export const GIFT_DAILY_CAP_CENTS = 10;
-const USAGE = 'Usage : npm run admin -- keys | grant <mail> | cap <mail> <centimes> | usage <mail> | credit <mail> <centimes> | stripe-setup | delete-account <mail> [confirmer]';
+const USAGE = 'Usage : npm run admin -- keys | grant <mail> | cap <mail> <centimes> | usage <mail> | credit <mail> <centimes> | stripe-setup | stripe-test-reset [confirmer] | delete-account <mail> [confirmer]';
 
 interface Row {
   id: string;
@@ -160,6 +161,84 @@ export async function adjustCredits(db: Pick<Db, 'query'>, accountId: string, de
   return after.rows[0]?.credit_cents ?? null;
 }
 
+// Fin du mode test Stripe, juste après les clés live dans Render : les comptes gardent
+// sinon un client et un abonnement de test (« No such customer » en live), un
+// Pro et des crédits achetés en test, et des achats de test rétractables.
+// Comptes non supprimés seulement (un compte anonymisé ne bouge plus) ;
+// grand livre jamais effacé : les crédits achetés sont retirés par un
+// mouvement admin à ce motif (à 0 si le solde est déjà dépensé, pour
+// marquer le passage) ; un passage suivant ne regarde que les recharges
+// d'après ce mouvement (relancer ne retire rien de plus). Refus
+// dès qu'un achat live existe : le live a commencé, et toute recharge
+// d'avant est alors de test (les crédits ne sont pas typés au grand livre).
+// Pas avant les clés live : un webhook de test accepté ensuite recréerait
+// client, Pro et achat de test.
+export const STRIPE_TEST_RESET_NOTE = 'fin du mode test Stripe';
+const TEST_PURCHASE = `p.ref LIKE 'checkout:cs\\_test\\_%'`;
+
+export interface StripeTestResetPlan {
+  livePurchases: number;
+  accounts: { id: string; email: string; stripe: boolean; pro: boolean; boughtCents: number; removeCents: number }[];
+  testPurchases: number;
+}
+
+export async function stripeTestResetPlan(db: Pick<Db, 'query'>): Promise<StripeTestResetPlan> {
+  const live = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM purchases p WHERE p.ref LIKE 'checkout:cs\\_live\\_%'`);
+  // Crédits achetés encore au solde : recharges moins rétractations depuis le
+  // dernier retrait de cette commande, jamais plus que le solde.
+  const { rows } = await db.query<{ id: string; email: string; plan: 'free' | 'pro'; credit_cents: number; stripe: boolean; bought: number }>(
+    `SELECT * FROM (
+       SELECT a.id, a.email, a.plan, a.credit_cents,
+              (a.stripe_customer_id IS NOT NULL OR a.stripe_subscription_id IS NOT NULL OR a.subscription_status IS NOT NULL
+               OR a.current_period_end IS NOT NULL OR a.included_since IS NOT NULL OR a.cancel_at_period_end OR a.plan = 'pro'
+               OR EXISTS (SELECT 1 FROM purchases p WHERE p.account_id = a.id AND ${TEST_PURCHASE})) AS stripe,
+              COALESCE((SELECT SUM(c.delta_cents) FROM credit_events c
+                         WHERE c.account_id = a.id AND c.reason IN ('topup', 'withdrawal')
+                           AND c.id > COALESCE((SELECT max(r.id) FROM credit_events r
+                                                 WHERE r.account_id = a.id AND r.reason = 'admin' AND r.ref LIKE $1), 0)), 0)::int AS bought
+         FROM accounts a
+        WHERE a.deleted_at IS NULL) x
+      WHERE stripe OR bought > 0
+      ORDER BY email`,
+    ['admin:%:' + STRIPE_TEST_RESET_NOTE],
+  );
+  const purchases = await db.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM purchases p JOIN accounts a ON a.id = p.account_id WHERE a.deleted_at IS NULL AND ${TEST_PURCHASE}`,
+  );
+  return {
+    livePurchases: live.rows[0].n,
+    accounts: rows.map((r) => ({ id: r.id, email: r.email, stripe: r.stripe, pro: r.plan === 'pro', boughtCents: r.bought, removeCents: Math.max(0, Math.min(r.credit_cents, r.bought)) })),
+    testPurchases: purchases.rows[0].n,
+  };
+}
+
+export async function stripeTestReset(db: Db, now: Date): Promise<StripeTestResetPlan | { error: string }> {
+  return db.transaction(async (tx) => {
+    // Comptes verrouillés puis plan relu : un appel débité entre l'aperçu et
+    // la confirmation, ou pendant, ne fait jamais passer le solde sous zéro.
+    await tx.query('SELECT id FROM accounts WHERE deleted_at IS NULL FOR UPDATE');
+    const plan = await stripeTestResetPlan(tx);
+    if (plan.livePurchases > 0) return { error: `${plan.livePurchases} achat(s) live au registre : le mode live a commencé, rien n’est remis à zéro.` };
+    for (const a of plan.accounts) {
+      await tx.query(
+        `UPDATE accounts SET stripe_customer_id = NULL, stripe_subscription_id = NULL, subscription_status = NULL,
+                current_period_end = NULL, cancel_at_period_end = false, included_since = NULL, plan = 'free',
+                monthly_included_cents = 0
+          WHERE id = $1`,
+        [a.id],
+      );
+      const ref = `admin:${randomUUID()}:${STRIPE_TEST_RESET_NOTE}`;
+      if (a.removeCents > 0) await addCredits(tx, { accountId: a.id, deltaCents: -a.removeCents, reason: 'admin', ref, now });
+      // Solde déjà dépensé : marqueur à 0 (addCredits refuse 0), sinon un geste
+      // admin fait plus tard serait repris à la relance.
+      else if (a.boughtCents > 0)
+        await tx.query(`INSERT INTO credit_events (account_id, delta_cents, reason, ref, created_at) VALUES ($1, 0, 'admin', $2, $3)`, [a.id, ref, now]);
+    }
+    await tx.query(`DELETE FROM purchases p USING accounts a WHERE a.id = p.account_id AND a.deleted_at IS NULL AND ${TEST_PURCHASE}`);
+    return plan;
+  });
+}
+
 export async function runAdmin(db: Db | null, argv: string[], out: (line: string) => void, now = new Date(), billing: BillingClient | null = null): Promise<number> {
   const [command, email, value] = argv;
   if (command === 'stripe-setup') {
@@ -169,6 +248,31 @@ export async function runAdmin(db: Db | null, argv: string[], out: (line: string
     }
     await setupCatalog(billing, out);
     return 0;
+  }
+  if (command === 'stripe-test-reset') {
+    if (!db) {
+      out('DATABASE_URL manquante (server/.env ou environnement) : impossible d’administrer.');
+      return 1;
+    }
+    // Ici `email` est le mot de confirmation : stripe-test-reset [confirmer].
+    const confirmed = email === 'confirmer';
+    const result = confirmed ? await stripeTestReset(db, now) : await stripeTestResetPlan(db);
+    if ('error' in result) {
+      out(result.error);
+      return 1;
+    }
+    if (!confirmed && result.livePurchases > 0) {
+      out(`${result.livePurchases} achat(s) live au registre : le mode live a commencé, rien ne sera remis à zéro.`);
+      return 1;
+    }
+    const verb = confirmed ? '' : ' (aperçu)';
+    for (const a of result.accounts) {
+      const parts = [a.stripe && 'identifiants Stripe de test effacés', a.pro && 'Pro de test retiré', a.removeCents > 0 ? `crédits achetés en test retirés ${euros(a.removeCents)}` : a.boughtCents > 0 && 'crédits achetés en test déjà dépensés'];
+      out(`${a.email}${verb} : ${parts.filter(Boolean).join(', ')}.`);
+    }
+    out(`${result.accounts.length} compte(s), ${result.testPurchases} achat(s) de test ${confirmed ? 'retirés' : 'à retirer'} du registre de rétractation.`);
+    if (!confirmed) out('Pour appliquer : npm run admin -- stripe-test-reset confirmer');
+    return confirmed ? 0 : 1;
   }
   if (command === 'keys') {
     const keys = generateKeys();
