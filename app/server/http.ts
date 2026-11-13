@@ -178,7 +178,7 @@ export async function createStudioServer(
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader(
       'Content-Security-Policy',
-      `default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'${options.dev ? ' ws://127.0.0.1:*' : ''}; frame-src 'self'${options.relayPort ? ` http://*.localhost:${options.relayPort}` : ''}; frame-ancestors 'self'; base-uri 'none'; form-action 'self'`,
+      `default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'${options.dev ? ' ws://127.0.0.1:*' : ''}; frame-src 'self'${options.relayPort ? ` http://*.localhost:${options.relayPort}` : ''}; frame-ancestors 'self'; base-uri 'none'; form-action 'self'`,
     );
     try {
       // Plugin Figma : origine `null`, protégé par son code d'appairage (plugin.ts).
@@ -520,6 +520,7 @@ export async function createStudioServer(
             '.js': 'text/javascript; charset=utf-8',
             '.css': 'text/css; charset=utf-8',
             '.svg': 'image/svg+xml',
+            '.woff2': 'font/woff2',
           } as Record<string, string>
         )[ext] ?? 'application/octet-stream',
       );

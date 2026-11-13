@@ -1,32 +1,54 @@
-/* Tokens de la DA « Atelier 8-bit » (2026-10-28) : seule source, partagée
-   par l'app (importée par pixel.css) et le site vitrine (site/, lot 7).
-   Couleurs --c-*, polices --f-*, coins en escalier --px (1 pixel d'art =
-   4 px d'écran). Polices Google : Geist, Geist Mono, Pixelify Sans, Silkscreen. */
+/* Tokens de la DA « Atelier acide » (refonte du 2026-11-13, cadrage
+   cadrage/2026-11-13-cadrage-refonte-da.md) : seule source, partagée par
+   l'app (importée par pixel.css) et le site vitrine (site/, lot 7).
+   Couleurs --c-*, polices --f-*, rayons --r-*, verre --glass-*, coins en
+   escalier --px (réservés aux accents). Polices : Instrument Sans (texte et
+   libellés, Google), Geist Mono (valeurs, Google), Departure Mono (titres et
+   chiffres, OFL 1.1, fichier à côté : fonts/, embarqué par Vite dans
+   /assets/ pour l'app comme pour le site). */
+@font-face {
+  font-family: 'Departure Mono';
+  src: url('./fonts/DepartureMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 :root {
-  --c-bg: #0b0b0c;
-  --c-panel: #151517;
-  --c-raised: #1f1f22;
-  --c-line: #2a2a2e;
-  --c-text: #f2f1ec;
-  --c-soft: #c9c7bf;
-  --c-muted: #9a9890;
-  --c-accent: #e8ff3a;
-  --c-on-accent: #0b0b0c;
-  --c-warn: #ff7a00;
-  --c-warn-bg: #24160a;
-  --c-draft: #e8ff3a;
-  --c-draft-bg: #1b1d0e;
-  --c-ok: #8ee05a;
-  --c-error: #ff4d1a;
-  --c-heat-1: #ffd60a;
-  --c-heat-2: #ffaa00;
-  --c-heat-3: #ff7a00;
-  --c-heat-4: #ff4d1a;
-  --c-heat-5: #e5251b;
-  --c-dots: #1d1d21;
-  --f-text: 'Geist', 'Segoe UI', system-ui, sans-serif;
-  --f-label: 'Silkscreen', 'Geist Mono', ui-monospace, monospace;
-  --f-title: 'Pixelify Sans', 'Silkscreen', 'Geist', sans-serif;
+  --c-bg: #07080a;
+  --c-panel: #0e1013;
+  --c-raised: #15181d;
+  --c-line: #232830;
+  --c-line-strong: #343b46;
+  --c-text: #f3f4ef;
+  --c-soft: #c4c9d0;
+  --c-muted: #8e96a1;
+  --c-accent: #bdff2e;
+  --c-accent-dim: rgb(189 255 46 / 0.14);
+  --c-on-accent: #07080a;
+  --c-info: #2e6bff;
+  --c-info-bg: rgb(46 107 255 / 0.14);
+  --c-warn: #ff6a1f;
+  --c-warn-bg: #241308;
+  --c-draft: #ff6a1f;
+  --c-draft-bg: #1f1209;
+  --c-ok: #bdff2e;
+  --c-error: #ff3d5a;
+  --c-heat-1: #bdff2e;
+  --c-heat-2: #d6f531;
+  --c-heat-3: #ffc23a;
+  --c-heat-4: #ff8a2a;
+  --c-heat-5: #ff6a1f;
+  --c-dots: #161a20;
+  /* Cadre neutre autour de l'aperçu du projet : ni acide ni verre. */
+  --c-frame: #0b0c0e;
+  --f-text: 'Instrument Sans', 'Segoe UI', system-ui, sans-serif;
+  --f-label: 'Instrument Sans', 'Segoe UI', system-ui, sans-serif;
+  --f-title: 'Departure Mono', 'Geist Mono', ui-monospace, monospace;
   --c-mono: 'Geist Mono', ui-monospace, 'Cascadia Code', Consolas, monospace;
+  --r-panel: 10px;
+  --r-ctl: 8px;
+  --glass-bg: rgb(14 16 19 / 0.72);
+  --glass-line: rgb(255 255 255 / 0.08);
+  --glass-blur: blur(18px) saturate(140%);
   --px: polygon(0 4px, 4px 4px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px));
 }

@@ -1,67 +1,101 @@
-/* ---------- DA « Atelier 8-bit » (2026-10-28) ----------
-   Couche chargée après styles.css. 1 pixel d'art = 4 px d'écran (la règle des
-   multiples de 4 de l'atelier) : coins en escalier, aucun arrondi, un seul
-   accent (Signal), gamme « chaleur » pour les états. Pixelify Sans (titres),
-   Silkscreen (étiquettes, boutons), Geist (texte), Geist Mono (valeurs).
-   La preview et le site en direct gardent les couleurs du projet. */
+/* ---------- DA « Atelier acide » (refonte du 2026-11-13) ----------
+   Couche chargée après styles.css. Outil premium et lisible : Instrument Sans
+   pour tout ce qui se lit et se clique, Departure Mono (pixel) pour les titres
+   et les chiffres, un seul acide (lime) pour l'action, la sélection et le
+   validé. Coins arrondis partout, coins en escalier (--px) sur les accents
+   seulement ; verre sur ce qui flotte au-dessus du travail. Signature : la
+   trame acide sous la barre du haut. La preview et le site en direct gardent
+   les couleurs du projet, dans un cadre neutre. */
 @import './da.css';
 :root {
   font-family: var(--f-text);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
 }
 body.preview-body {
   font-family: system-ui, sans-serif;
 }
+:where(body:not(.preview-body)) ::selection {
+  background: var(--c-accent);
+  color: var(--c-on-accent);
+}
 :where(body:not(.preview-body)) :focus-visible {
-  outline: 2px solid var(--c-accent);
+  outline: 2px solid var(--c-info);
   outline-offset: 2px;
 }
 
-/* Boutons : étiquettes Silkscreen en capitales, aucun arrondi (jamais dans la preview). */
+/* Contrôles : libellés lisibles, phrase normale, rayon --r-ctl (jamais dans la preview). */
 :where(body:not(.preview-body)) button,
 :where(body:not(.preview-body)) select,
 :where(body:not(.preview-body)) input,
 :where(body:not(.preview-body)) textarea {
-  border-radius: 0;
+  border-radius: var(--r-ctl);
 }
 :where(body:not(.preview-body)) button {
   font-family: var(--f-label);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--c-soft);
   background: transparent;
-  transition: transform 0.12s steps(3);
+  border-color: var(--c-line);
+  transition:
+    color 0.15s ease-out,
+    background-color 0.15s ease-out,
+    border-color 0.15s ease-out,
+    transform 0.12s ease-out;
 }
 :where(body:not(.preview-body)) button:hover:not(:disabled) {
-  border-color: var(--c-text);
+  color: var(--c-text);
+  border-color: var(--c-line-strong);
+  background: var(--c-raised);
 }
 :where(body:not(.preview-body)) button:active:not(:disabled) {
-  transform: translateY(2px);
+  transform: translateY(1px);
 }
+/* L'action principale : lime plein, coins pixel, la seule de l'écran. */
 button.primary,
 .draft-bar button.primary {
   background: var(--c-accent);
   border-color: var(--c-accent);
+  border-radius: 0;
   color: var(--c-on-accent);
+  font-weight: 600;
   clip-path: var(--px);
-  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.22);
-  padding: 9px 16px 11px;
+  box-shadow: inset 0 -3px 0 rgb(0 0 0 / 0.2);
+  padding: 8px 16px 10px;
 }
-button.primary:hover:not(:disabled) {
-  border-color: var(--c-accent);
-  transform: translateY(2px);
-  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.22);
+:where(body:not(.preview-body)) button.primary:hover:not(:disabled) {
+  background: #cfff5c;
+  border-color: #cfff5c;
+  color: var(--c-on-accent);
+}
+:where(body:not(.preview-body)) button.primary:disabled {
+  opacity: 1;
+  background: var(--c-raised);
+  border-color: var(--c-line);
+  color: var(--c-muted);
+  box-shadow: none;
 }
 .devices {
-  gap: 0;
+  gap: 2px;
+  padding: 2px;
   border: 1px solid var(--c-line);
+  border-radius: var(--r-ctl);
+  background: var(--c-bg);
 }
 .devices button {
   border: 0;
-  border-radius: 0;
+  border-radius: 6px;
+  font-family: var(--c-mono);
+  font-size: 12px;
+  padding: 3px 9px;
 }
 .devices button[aria-pressed='true'] {
-  background: var(--c-text);
-  color: var(--c-bg);
+  background: var(--c-raised);
+  color: var(--c-text);
+  box-shadow: inset 0 0 0 1px var(--c-line-strong);
 }
 :where(body:not(.preview-body)) input,
 :where(body:not(.preview-body)) select,
@@ -69,15 +103,53 @@ button.primary:hover:not(:disabled) {
   background: var(--c-bg);
   border-color: var(--c-line);
 }
+:where(body:not(.preview-body)) input:hover,
+:where(body:not(.preview-body)) select:hover,
+:where(body:not(.preview-body)) textarea:hover {
+  border-color: var(--c-line-strong);
+}
 code,
 .mono,
 .rev {
   font-family: var(--c-mono);
 }
 
-/* Coquille : barre du haut dans l'ordre du travail, frise de versions, sous-barre des sections. */
+/* Coquille : barre du haut en verre (le travail défile dessous), trame acide
+   en signature, frise de versions, sous-barre des sections. */
 .top {
-  background: rgba(11, 11, 12, 0.94);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--glass-line);
+}
+/* Trame acide : un dégradé lime tramé en damier de 2 px, comme un fondu 1-bit. */
+.top::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 4px;
+  background: linear-gradient(90deg, var(--c-accent) 0%, rgb(189 255 46 / 0.55) 22%, transparent 58%);
+  -webkit-mask: conic-gradient(#000 25%, transparent 0 50%, #000 0 75%, transparent 0) 0 0 / 2px 2px;
+  mask: conic-gradient(#000 25%, transparent 0 50%, #000 0 75%, transparent 0) 0 0 / 2px 2px;
+  pointer-events: none;
+}
+/* Actions secondaires de la barre : discrètes, sans contour, l'acide reste à l'action principale. */
+.top .actions {
+  gap: 4px;
+  align-items: center;
+}
+.top .actions > button:not(.primary):not(.count) {
+  border-color: transparent;
+  color: var(--c-soft);
+  padding: 6px 10px;
+}
+.top .actions > .primary {
+  margin-left: 8px;
+}
+.top .actions > .count {
+  margin-right: 8px;
 }
 .brand {
   align-items: center;
@@ -85,12 +157,17 @@ code,
 }
 .brand .logo {
   font-family: var(--f-title);
-  font-weight: 700;
-  font-size: 18px;
+  font-weight: 400;
+  font-size: 15px;
   text-transform: none;
-  letter-spacing: 0;
+  letter-spacing: -0.02em;
   border: 0;
   padding: 0;
+  color: var(--c-accent);
+  background: none;
+}
+:where(body:not(.preview-body)) .brand .logo:hover:not(:disabled) {
+  background: none;
   color: var(--c-text);
 }
 .brand .logo:disabled {
@@ -103,8 +180,9 @@ code,
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 2px 10px;
+  padding: 3px 10px;
   border: 1px solid var(--c-line);
+  border-radius: var(--r-ctl);
   cursor: pointer;
 }
 .project-pick:not(.is-fixed)::after {
@@ -119,7 +197,7 @@ code,
   border-color: var(--c-text);
 }
 .project-pick:focus-within {
-  outline: 2px solid var(--c-accent);
+  outline: 2px solid var(--c-info);
   outline-offset: 2px;
 }
 .project-pick.is-fixed {
@@ -169,31 +247,49 @@ code,
 .section-bar ol button {
   font-family: var(--f-text);
   font-size: 13px;
+  font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
   white-space: nowrap;
-  color: var(--c-soft);
+  color: var(--c-muted);
   border: 0;
-  border-bottom: 4px solid transparent;
-  padding: 6px 10px 4px;
+  border-radius: var(--r-ctl);
+  padding: 6px 10px;
   display: flex;
   gap: 8px;
   align-items: baseline;
+  position: relative;
 }
-.steps button:hover:not(:disabled),
-.section-bar ol button:hover:not(:disabled) {
+:where(body:not(.preview-body)) .steps button:hover:not(:disabled),
+:where(body:not(.preview-body)) .section-bar ol button:hover:not(:disabled) {
   color: var(--c-text);
-  background: var(--c-raised);
+  background: rgb(255 255 255 / 0.04);
 }
 .steps button[aria-current='page'] {
   color: var(--c-text);
-  font-weight: 600;
-  border-bottom-color: var(--c-accent);
+  background: rgb(255 255 255 / 0.06);
 }
-.nav-num {
-  font-family: var(--c-mono);
-  font-size: 11px;
-  color: var(--c-muted);
+/* Étape courante : un pixel lime devant le nom. */
+.steps button[aria-current='page']::before {
+  content: '';
+  align-self: center;
+  width: 6px;
+  height: 6px;
+  background: var(--c-accent);
+}
+/* Les sections de la planche se nomment ; leur numéro n'apprend rien (pas de
+   01 / 02). Le parcours de l'accueil garde les siens jusqu'à son lot. Sous-barre :
+   masqué à l'œil seulement, le nom accessible du bouton reste inchangé. */
+.fold .nav-num {
+  display: none;
+}
+.section-bar .nav-num {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .stairs {
   display: flex;
@@ -221,25 +317,38 @@ code,
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 20px;
-  border-top: 1px solid var(--c-line);
+  padding: 4px 20px 6px;
+  border-top: 1px solid var(--glass-line);
+}
+.section-bar ol {
+  gap: 2px;
 }
 .section-bar ol button {
-  padding: 8px 10px 6px;
+  padding: 5px 10px;
+  font-size: 13px;
 }
 .section-bar ol button[aria-current='location'] {
   color: var(--c-text);
-  border-bottom-color: var(--c-accent);
+}
+/* Section à l'écran : soulignée d'un trait lime au ras de la barre. */
+.section-bar ol button[aria-current='location']::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 2px;
+  background: var(--c-accent);
 }
 .section-bar .fold-all {
   margin-left: auto;
   white-space: nowrap;
   border: 0;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--c-muted);
-  padding: 6px 4px;
+  padding: 5px 8px;
 }
-.section-bar .fold-all:hover:not(:disabled) {
+:where(body:not(.preview-body)) .section-bar .fold-all:hover:not(:disabled) {
   color: var(--c-text);
 }
 
@@ -264,28 +373,34 @@ code,
   text-align: left;
   cursor: pointer;
 }
+/* Flèche pixel : 4 carrés de 2 px, lime ouverte, grise repliée. */
 .board h2 .fold::before {
   content: '';
   flex: none;
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   background: var(--c-accent);
-  clip-path: polygon(0 0, 100% 0, 50% 100%);
-}
-.board h2 .nav-num {
-  font-size: 13px;
+  clip-path: polygon(0 0, 100% 0, 100% 25%, 87.5% 25%, 87.5% 50%, 75% 50%, 75% 75%, 62.5% 75%, 62.5% 100%, 37.5% 100%, 37.5% 75%, 25% 75%, 25% 50%, 12.5% 50%, 12.5% 25%, 0 25%);
+  transition: transform 0.15s ease-out;
 }
 .board section.is-folded .fold::before {
   background: var(--c-muted);
-  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  transform: rotate(-90deg);
 }
 .board section.is-folded {
-  padding-block: 14px;
+  padding-block: 16px;
 }
 .board section.is-folded h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 17px;
   color: var(--c-soft);
+}
+:where(body:not(.preview-body)) .board h2 .fold:hover:not(:disabled) {
+  background: none;
+  color: var(--c-text);
+}
+.board section.is-folded:hover {
+  border-color: var(--c-line-strong);
 }
 .fold-body {
   margin-top: 4px;
@@ -353,18 +468,25 @@ code,
 
 .brand .project {
   font-family: var(--f-title);
-  font-weight: 700;
-  font-size: 22px;
+  font-weight: 400;
+  font-size: 18px;
+  letter-spacing: -0.02em;
 }
 .rev {
   border: 1px solid var(--c-line);
-  border-radius: 0;
+  border-radius: 6px;
   padding: 1px 6px;
+  font-size: 12px;
+  color: var(--c-muted);
 }
+/* Pastilles d'état : chiffre en mono, coins pixel (un accent). */
 .count {
   font-family: var(--f-label);
-  font-size: 11px;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  border: 0;
   border-radius: 0;
   clip-path: var(--px);
   padding: 5px 10px;
@@ -373,9 +495,22 @@ code,
   background: var(--c-warn);
   color: var(--c-on-accent);
 }
+:where(body:not(.preview-body)) button.count.warn:hover:not(:disabled) {
+  background: #ff8a4a;
+  color: var(--c-on-accent);
+}
 .count.ok {
-  background: var(--c-raised);
-  color: var(--c-ok);
+  background: var(--c-accent-dim);
+  color: var(--c-accent);
+}
+.count.ok::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 7px;
+  vertical-align: 1px;
+  background: currentColor;
 }
 .layout,
 .site-view {
@@ -383,7 +518,7 @@ code,
   background-size: 8px 8px;
 }
 
-/* Planche : cartes à filet, titres pixel, nuanciers en escalier. */
+/* Planche : panneaux sobres à rayon --r-panel, titres pixel, nuanciers. */
 .board section,
 .preview,
 .corrections,
@@ -391,52 +526,72 @@ code,
 .project-card,
 dialog.diff,
 .drawer {
-  border-radius: 0;
+  border-radius: var(--r-panel);
+}
+.board section,
+.corrections {
+  background: var(--c-panel);
+  border-color: var(--c-line);
 }
 .board h2,
 .corrections h2 {
   font-family: var(--f-title);
-  font-weight: 700;
-  font-size: 26px;
-  letter-spacing: 0;
+  font-weight: 400;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 .board h3,
 .ramp h3 {
   font-family: var(--f-label);
-  font-weight: 400;
-  font-size: 12px;
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--c-muted);
 }
 .swatch .chip,
 .swatch .editor input[type='color'],
 .swatch .editor input[type='color']::-webkit-color-swatch,
 .chip {
-  border-radius: 0;
-}
-.swatch .chip,
-.swatch .editor input[type='color'] {
-  clip-path: var(--px);
+  border-radius: 6px;
 }
 .swatch.is-draft {
-  outline: 2px dashed var(--c-accent);
+  outline: 2px dashed var(--c-draft);
   outline-offset: 2px;
   background: transparent;
+}
+/* Aperçu : cadre neutre, sans acide ni verre, pour ne pas concurrencer le projet. */
+.preview {
+  background: var(--c-frame);
+  border-color: var(--c-line);
 }
 .preview-head > span:first-child {
   font-family: var(--f-label);
   font-size: 12px;
-  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--c-muted);
+}
+.frame-wrap {
+  border-radius: 8px;
+  border-color: var(--c-line);
+  background: var(--c-frame);
 }
 .corrections li {
-  border-left: 4px solid var(--c-warn);
-  border-radius: 0;
+  border-left: 0;
+  border-radius: var(--r-ctl);
+  box-shadow: inset 0 0 0 1px rgb(255 106 31 / 0.35);
 }
+/* Barre du brouillon : flotte au-dessus du travail, en verre. */
 .draft-bar {
-  border-radius: 0;
-  clip-path: var(--px);
-  border-color: var(--c-accent);
+  border-radius: var(--r-panel);
+  border-color: rgb(255 106 31 / 0.45);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
 }
 .message {
-  border-radius: 0;
+  border-radius: var(--r-ctl);
 }
 
 /* Accueil : bandeau, parcours, cartes de couverture aux couleurs du projet. */
@@ -736,16 +891,17 @@ dialog.diff h2 {
 /* Sélecteur d'écran (preview, Comparer, Évolution) : étiquette pixel. */
 .screen-pick {
   font-family: var(--f-label);
-  font-size: 12px;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--c-text);
-  background: var(--c-panel);
+  background: var(--c-bg);
   border: 1px solid var(--c-line);
-  padding: 6px 8px;
+  border-radius: var(--r-ctl);
+  padding: 5px 8px;
   min-height: 32px;
 }
 .screen-pick:hover {
-  border-color: var(--c-text);
+  border-color: var(--c-line-strong);
 }
 
 /* Export du code : onglets de format, code défilant. */
@@ -796,7 +952,7 @@ dialog.diff h2 {
   background-size: 4px 4px;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--c-muted);
+  background: var(--c-line-strong);
   border: 3px solid var(--c-bg);
   box-shadow:
     inset -2px -2px 0 rgba(0, 0, 0, 0.45),
