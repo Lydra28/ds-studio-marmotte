@@ -1,6 +1,5 @@
 ---
 import Base from '../layouts/Base.astro';
-import Draft from '../components/Draft.astro';
 import { euros, loadCatalog } from '../lib/site';
 
 const c = await loadCatalog();
@@ -9,7 +8,6 @@ const c = await loadCatalog();
 <Base title="Conditions de vente">
   <div class="prose">
     <h1>Conditions générales de vente</h1>
-    <Draft />
     <h2>1. Objet</h2>
     <p>
       Ces conditions régissent la vente, par Romain Aubert, entrepreneur individuel (voir les <a href="/mentions-legales/">mentions légales</a>), de
