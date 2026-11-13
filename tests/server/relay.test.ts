@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { DEFAULT_RELAY_MODEL, RELAY_MODELS } from '../../server/relay.js';
+import { DEFAULT_RELAY_MODEL, MAX_COMPLETION_TOKENS, MAX_SPEC_CHARS, PARALLEL_MARGIN_CENTS, RELAY_MODELS } from '../../server/relay.js';
 import { completion, connect, testApp, type TestApp } from './helpers.js';
 
 const HOUR = 3600_000;
@@ -33,7 +33,7 @@ test('relais : modèle imposé, réponse OpenRouter telle quelle, usage compté 
     const sent = t.openRouter.calls[0];
     assert.equal(sent.body.model, DEFAULT_RELAY_MODEL, 'modèle hors liste remplacé');
     assert.equal(sent.body.stream, false, 'non streamé en V0');
-    assert.equal(sent.body.max_tokens, 10, 'le reste du corps passe');
+    assert.equal(sent.body.max_tokens, 10, 'un plafond de sortie plus bas que celui du serveur passe');
     assert.equal('stream_options' in sent.body, false);
     assert.equal(sent.headers.authorization, 'Bearer test-key', 'clé du serveur, jamais celle du client');
     assert.equal(sent.headers['x-title'], 'DS-Studio');
@@ -201,8 +201,8 @@ test('relais : coût absent de la réponse → estimé par les prix publics, sin
 });
 
 // Maintien (2026-11-04) : réponse 200 tout de suite, espaces d'attente, puis
-// la réponse OpenRouter ou `{ error, status }` ; client parti → rien compté.
-test('relais avec maintien : attente envoyée avant la réponse, échec dans le corps, client parti sans rien compter', async () => {
+// la réponse OpenRouter ou `{ error, status }` ; client parti → appel fini et compté.
+test('relais avec maintien : attente envoyée avant la réponse, échec dans le corps, client parti compté quand même', async () => {
   const t = await testApp();
   try {
     const token = await connect(t, user);
@@ -245,7 +245,8 @@ test('relais avec maintien : attente envoyée avant la réponse, échec dans le 
     assert.equal((JSON.parse(await (await post()).text()) as { status: number }).status, 502);
     assert.equal((await events(t)).rows.length, 1, 'échecs non comptés');
 
-    // Client parti avant la réponse : appel arrêté, rien compté.
+    // Client parti avant la réponse : l'appel va à son terme et il est compté
+    // (OpenRouter le facture ; l'arrêter rendait une génération gratuite).
     const hang = later();
     t.openRouter.state.reply = () => hang.promise;
     const gone = await post();
@@ -253,12 +254,187 @@ test('relais avec maintien : attente envoyée avant la réponse, échec dans le 
     await goneReader.read();
     await goneReader.cancel();
     hang.resolve(completion());
-    await new Promise((r) => setTimeout(r, 50));
-    assert.equal((await events(t)).rows.length, 1, 'génération abandonnée non comptée');
+    for (let i = 0; i < 500 && (await events(t)).rows.length < 2; i++) await new Promise((r) => setTimeout(r, 10));
+    assert.equal((await events(t)).rows.length, 2, 'génération abandonnée par le client comptée');
 
     // Sans l'en-tête (app rc.9 et avant) : réponse simple, statuts inchangés.
     t.openRouter.state.reply = () => Response.json({ error: { message: 'down' } }, { status: 500 });
     assert.equal((await chat(t, token)).status, 502);
+  } finally {
+    await t.close();
+  }
+});
+
+// Revue du 2026-11-13, n° 1 : le solde est lu avant l'appel et débité après ;
+// des appels lancés ensemble ne passent plus tous sur le même solde.
+test('relais : appels lancés ensemble → un seul sans marge, deux avec, place rendue à chaque fin', async () => {
+  const t = await testApp();
+  try {
+    const token = await connect(t, user);
+    // Attend un fait, pas une durée ; échoue au bout de 5 s.
+    const until = async (ready: () => boolean | Promise<boolean>, what = 'condition') => {
+      for (let i = 0; i < 500; i++) {
+        if (await ready()) return;
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      assert.fail(`délai dépassé : ${what}`);
+    };
+    // Rafale de `n` appels dont `pass` doivent partir : OpenRouter ne répond
+    // qu'une fois les `n - pass` refus tombés (les appels partis attendent).
+    const burst = async (n: number, pass: number) => {
+      let open!: () => void;
+      const gate = new Promise<void>((r) => (open = r));
+      t.openRouter.state.reply = async () => {
+        await gate;
+        return completion();
+      };
+      let settled = 0;
+      const pending = Array.from({ length: n }, () => chat(t, token).finally(() => settled++));
+      await until(() => settled >= n - pass);
+      open();
+      const done = await Promise.all(pending);
+      t.openRouter.state.reply = () => completion();
+      return done;
+    };
+    const statuses = (rs: { status: number }[]) => rs.map((r) => r.status).sort();
+    const credit = async () => (await t.api('/v1/me', { token })).body.creditCents;
+
+    // 1 c de bienvenue : une génération, pas six.
+    const first = await burst(6, 1);
+    assert.deepEqual(statuses(first), [200, 429, 429, 429, 429, 429]);
+    const refused = first.find((r) => r.status === 429)!;
+    assert.match(String(refused.body.error), /déjà en cours/);
+    assert.equal('resetAt' in refused.body, false, 'pas le refus du plafond journalier');
+    assert.equal((await events(t)).rows.length, 1, 'un seul appel parti et compté');
+    assert.equal(await credit(), -2);
+    assert.equal((await chat(t, token)).status, 402, 'place rendue : le refus suivant est celui du solde');
+
+    // Solde confortable : le Mur et une question en même temps, pas plus.
+    await t.db.query('UPDATE accounts SET credit_cents = 500 WHERE email = $1', [user.email]);
+    assert.deepEqual(statuses(await burst(4, 2)), [200, 200, 429, 429]);
+    assert.equal(await credit(), 494, 'deux appels débités de 3');
+    // Sous la marge : un seul à la fois.
+    await t.db.query('UPDATE accounts SET credit_cents = $2 WHERE email = $1', [user.email, PARALLEL_MARGIN_CENTS - 1]);
+    assert.deepEqual(statuses(await burst(3, 1)), [200, 429, 429]);
+
+    // Pro : la marge est celle de l'inclus, seule source débitée ; les crédits n'y comptent pas.
+    await t.db.query("UPDATE accounts SET plan = 'pro', monthly_included_cents = 300, included_since = $2, credit_cents = 0 WHERE email = $1", [user.email, t.now()]);
+    assert.deepEqual(statuses(await burst(3, 2)), [200, 200, 429]);
+    await t.db.query('UPDATE accounts SET monthly_included_cents = 50, credit_cents = 500 WHERE email = $1', [user.email]);
+    assert.deepEqual(statuses(await burst(3, 1)), [200, 429, 429], 'inclus presque épuisé : un seul, même avec des crédits');
+    // Compte offert : jamais débité, deux à la fois (le plafond journalier ne
+    // peut être dépassé que d'un appel), pas trois.
+    await t.db.query('UPDATE accounts SET gifted = true WHERE email = $1', [user.email]);
+    assert.deepEqual(statuses(await burst(3, 2)), [200, 200, 429]);
+    // Retour en gratuit sous la marge pour la suite : un seul appel à la fois.
+    await t.db.query("UPDATE accounts SET gifted = false, plan = 'free', credit_cents = 50 WHERE email = $1", [user.email]);
+
+    // Un appel en échec ou refusé avant de partir rend sa place.
+    t.openRouter.state.reply = () => Response.json({ error: { message: 'down' } }, { status: 500 });
+    assert.equal((await chat(t, token)).status, 502);
+    assert.equal((await chat(t, token, { messages: [] })).status, 400);
+    t.openRouter.state.reply = () => completion();
+    assert.equal((await chat(t, token)).status, 200);
+
+    // Maintien : la place est tenue tant que le flux dure (la requête, elle,
+    // a déjà répondu 200), puis rendue à sa fin ou quand le client part.
+    const keepalive = () =>
+      t.app.request('http://server.test/v1/relay/chat', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', 'x-ds-keepalive': '1' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: 'Trois DA' }] }),
+      });
+    const free = async () => (await chat(t, token)).status !== 429;
+    let answer!: (r: Response) => void;
+    t.openRouter.state.reply = () => new Promise<Response>((r) => (answer = r));
+    const held = (await keepalive()).body!.getReader();
+    await held.read();
+    await until(() => typeof answer === 'function');
+    const slow = answer;
+    t.openRouter.state.reply = () => completion();
+    assert.equal((await chat(t, token)).status, 429, 'place tenue pendant le flux');
+    slow(completion());
+    for (let r = await held.read(); !r.done; r = await held.read());
+    assert.equal(await free(), true, 'place rendue à la fin du flux');
+
+    // Client parti : l'appel continue et garde la place jusqu'à sa fin, puis
+    // il est compté (sinon on enchaînerait des générations gratuites).
+    let finish: ((r: Response) => void) | undefined;
+    t.openRouter.state.reply = () => new Promise<Response>((r) => (finish = r));
+    const gone = (await keepalive()).body!.getReader();
+    await gone.read();
+    await until(() => finish !== undefined, 'appel abandonné parti chez OpenRouter');
+    const late = finish!;
+    t.openRouter.state.reply = () => completion();
+    const before = (await events(t)).rows.length;
+    await gone.cancel();
+    assert.equal((await chat(t, token)).status, 429, 'place tenue après le départ du client, tant que l’appel court');
+    late(completion());
+    await until(free, 'place rendue à la fin de l’appel abandonné');
+    assert.equal((await events(t)).rows.length, before + 2, 'appel abandonné compté, puis la sonde');
+  } finally {
+    await t.close();
+  }
+});
+
+// Revue du 2026-11-13, n° 2 : seuls les champs que l'app envoie partent chez
+// OpenRouter, et la sortie d'un appel est plafonnée par le serveur.
+test('relais : champs hors liste retirés, max_tokens plafonné, routage réduit à zdr, outils « function » seulement', async () => {
+  const t = await testApp();
+  try {
+    const token = await connect(t, user);
+    await t.db.query('UPDATE accounts SET gifted = true WHERE email = $1', [user.email]);
+    const messages = [{ role: 'user', content: 'Bonjour' }];
+    const tools = [{ type: 'function', function: { name: 'propose_changes', parameters: { type: 'object' } } }];
+    const res = await chat(t, token, {
+      messages,
+      max_tokens: 1_000_000,
+      temperature: 0.2,
+      response_format: { type: 'json_object' },
+      tools,
+      tool_choice: 'auto',
+      provider: { zdr: true, order: ['cher'], allow_fallbacks: true },
+      // Tout ce qui suit coûterait ou contournerait le modèle imposé.
+      models: ['anthropic/claude-inconnu'],
+      plugins: [{ id: 'web', max_results: 50 }],
+      transforms: ['middle-out'],
+      route: 'fallback',
+      stream: true,
+    });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.deepEqual(t.openRouter.calls[0].body, {
+      model: DEFAULT_RELAY_MODEL,
+      stream: false,
+      messages,
+      max_tokens: MAX_COMPLETION_TOKENS,
+      temperature: 0.2,
+      response_format: { type: 'json_object' },
+      tools,
+      tool_choice: 'auto',
+      provider: { zdr: true },
+    });
+
+    // Sans `max_tokens` : le plafond du serveur ; `provider` sans zdr : rien.
+    assert.equal((await chat(t, token, { messages, provider: { order: ['cher'] } })).status, 200);
+    assert.deepEqual(t.openRouter.calls[1].body, { model: DEFAULT_RELAY_MODEL, stream: false, messages, max_tokens: MAX_COMPLETION_TOKENS });
+
+    // Un outil qu'OpenRouter exécuterait lui-même, ou sans nom : refusé, rien ne part.
+    assert.equal((await chat(t, token, { messages, tools: [{ type: 'openrouter:web_search' }] })).status, 400);
+    assert.equal((await chat(t, token, { messages, tools: [{ type: 'function' }] })).status, 400);
+    // Outils ou schéma de réponse de plusieurs Mo : refusés.
+    const huge = 'x'.repeat(MAX_SPEC_CHARS);
+    assert.equal((await chat(t, token, { messages, tools: [{ type: 'function', function: { name: 'f', description: huge } }] })).status, 400);
+    assert.equal((await chat(t, token, { messages, response_format: { type: 'json_schema', json_schema: { name: huge } } })).status, 400);
+    // Parties de message : texte et image en `data:` seulement (ce que le Mur envoie).
+    const wall = [{ role: 'user', content: [{ type: 'text', text: 'DA' }, { type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } }] }];
+    assert.equal((await chat(t, token, { messages: wall })).status, 200);
+    for (const part of [
+      { type: 'image_url', image_url: { url: 'https://exemple.test/a.png' } },
+      { type: 'file', file: { filename: 'a.pdf', file_data: 'data:application/pdf;base64,AAAA' } },
+      { type: 'input_audio', input_audio: { data: 'AAAA', format: 'wav' } },
+    ])
+      assert.equal((await chat(t, token, { messages: [{ role: 'user', content: [part] }] })).status, 400, part.type);
+    assert.equal(t.openRouter.calls.length, 3);
   } finally {
     await t.close();
   }

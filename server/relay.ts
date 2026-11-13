@@ -5,7 +5,7 @@
 // de l'app (plan du lot 2, « relais non streamé en V0 »). Lot 4 : le débit
 // est ceil(coût × RATE) en centimes d'euro (credits.ts), le coût reste en
 // centimes de dollar.
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { body, requireAccount, type Account } from './auth.js';
@@ -103,10 +103,71 @@ function pricesCache(fetchImpl: typeof fetch) {
   };
 }
 
-const relaySchema = z.looseObject({
+// Liste fermée des champs relayés (revue du 2026-11-13, n° 2) : ce que l'app
+// envoie, rien d'autre. Un champ inconnu (`models`, `plugins`, `stream`…) est
+// retiré sans erreur : une app plus ancienne ne casse pas.
+// Parties d'un message : du texte, ou une image jointe en `data:` (le Mur) ;
+// jamais une URL distante, un fichier, un son ou une vidéo que le fournisseur
+// irait chercher ou traiter à nos frais.
+const contentPart = z.union([
+  z.looseObject({ type: z.literal('text') }),
+  z.looseObject({ type: z.literal('image_url'), image_url: z.looseObject({ url: z.string().startsWith('data:image/') }) }),
+], { error: 'partie de message : texte, ou image jointe en data:image/, seulement' });
+const message = z.looseObject({ content: z.union([z.string(), z.array(contentPart), z.null()]).optional() });
+/** Taille sérialisée des outils et du schéma de réponse : décrits au modèle, jamais plusieurs Mo. */
+export const MAX_SPEC_CHARS = 64_000;
+const small = <T extends z.ZodType>(schema: T) =>
+  schema.refine((v) => JSON.stringify(v).length <= MAX_SPEC_CHARS, `trop long (plus de ${MAX_SPEC_CHARS} caractères)`);
+const relaySchema = z.object({
   model: z.string().max(200).optional(),
-  messages: z.array(z.unknown()).min(1, 'messages : au moins un message').max(500),
+  messages: z.array(message).min(1, 'messages : au moins un message').max(500),
+  max_tokens: z.number().int().positive().optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  response_format: small(z.looseObject({ type: z.enum(['text', 'json_object', 'json_schema']) })).optional(),
+  // Outils décrits au modèle seulement : jamais un outil exécuté par OpenRouter.
+  tools: small(z.array(z.looseObject({ type: z.literal('function'), function: z.looseObject({ name: z.string().min(1).max(64) }) })).max(16)).optional(),
+  tool_choice: z.union([z.enum(['auto', 'none', 'required']), z.looseObject({ type: z.literal('function') })]).optional(),
+  provider: z.looseObject({ zdr: z.boolean().optional() }).optional(),
 });
+/** Plafond de sortie d'un appel, celui du Mur (`app/server/wall.ts`) : borne le coût d'un appel avec la fenêtre du modèle. */
+export const MAX_COMPLETION_TOKENS = 32_000;
+
+/** Appels en cours qu'un compte peut avoir en même temps (le Mur et une question). */
+export const MAX_PARALLEL = 2;
+/** Marge de la source débitée, centimes d'euro, pour un second appel en même temps ; en dessous, un seul à la fois. */
+export const PARALLEL_MARGIN_CENTS = 100;
+const BUSY = 'Une génération est déjà en cours sur ce compte : attends sa fin, puis réessaie.';
+const BUSY_LOW = `Une génération est déjà en cours sur ce compte et il reste moins de ${PARALLEL_MARGIN_CENTS / 100} € à débiter : une seule à la fois. Attends sa fin, puis réessaie.`;
+
+// Appels en cours par compte (revue du 2026-11-13, n° 1). Le solde et le
+// plafond sont lus avant l'appel, le débit arrive après : sans cette garde,
+// des appels lancés ensemble passaient tous sur le même solde.
+// shortcut: compteur en mémoire, exact pour une seule instance (render.yaml) ; à porter en base avant de passer à plusieurs instances.
+function inflight() {
+  const counts = new Map<string, number>();
+  return {
+    /** Prend une place, ou 429 au-delà de MAX_PARALLEL ; `others()` compte, au moment où on le demande, les autres appels encore en cours. Sans attente : deux requêtes ne se croisent pas. */
+    take(accountId: string) {
+      const taken = counts.get(accountId) ?? 0;
+      if (taken >= MAX_PARALLEL) throw new ApiError(BUSY, 429);
+      counts.set(accountId, taken + 1);
+      let held = true;
+      const release = () => {
+        if (!held) return;
+        held = false;
+        clearTimeout(expiry);
+        const n = (counts.get(accountId) ?? 1) - 1;
+        if (n > 0) counts.set(accountId, n);
+        else counts.delete(accountId);
+      };
+      // Filet : une place jamais rendue (requête figée) ne bloque pas le compte au-delà du plus long appel.
+      const expiry = setTimeout(release, KEEPALIVE_UPSTREAM_MS + 30_000);
+      expiry.unref();
+      const others = () => (held ? (counts.get(accountId) ?? 1) - 1 : 0);
+      return { others, release };
+    },
+  };
+}
 
 // Délai vers OpenRouter : 120 s en réponse simple (sous la coupure de
 // l'app), 290 s avec maintien (app : 300 s pour le Mur).
@@ -119,12 +180,30 @@ export function relayRoutes(deps: Deps) {
   const account = requireAccount(deps);
   const fetchImpl = deps.openRouter.fetch ?? fetch;
   const prices = pricesCache(fetchImpl);
+  const slots = inflight();
   const limit = bodyLimit({
     maxSize: MAX_BODY_BYTES,
     onError: (c) => c.json({ error: `Requête trop lourde (plus de ${MAX_BODY_BYTES / 1024 / 1024} Mo).` }, 413),
   });
 
-  app.post('/chat', limit, async (c) => {
+  app.post('/chat', limit, (c) => guarded(c));
+
+  // Une place par appel en cours, rendue quand l'appel finit (réponse, refus ou
+  // client parti) : `chat` dit s'il a confié la place à un appel qui la rendra.
+  async function guarded(c: Context) {
+    const session = await account(c);
+    const slot = slots.take(session.id);
+    let handed = false;
+    try {
+      return await chat(c, slot, () => (handed = true));
+    } finally {
+      if (!handed) slot.release();
+    }
+  }
+
+  async function chat(c: Context, slot: { others: () => number; release: () => void }, hand: () => void) {
+    // Compte relu une fois la place prise : le solde tient compte de l'appel
+    // précédent, même fini pendant que cette requête arrivait.
     const me = await account(c);
     if (!deps.openRouter.apiKey) throw new ApiError('Relais OpenRouter désactivé sur ce serveur.', 503);
     const now = clock(deps)();
@@ -144,12 +223,29 @@ export function relayRoutes(deps: Deps) {
         402,
       );
     }
+    // Un autre appel court déjà et n'est pas encore débité : un second ne
+    // passe que si la source débitée garde de la marge. Compte offert (créé
+    // par l'administration, jamais débité) : deux à la fois, le plafond
+    // journalier ne peut être dépassé que d'un appel.
+    if (slot.others() > 0 && charged !== 'gift') {
+      const margin = charged === 'pro' ? me.monthlyIncludedCents - usage.includedUsedCents : me.creditCents;
+      if (margin < PARALLEL_MARGIN_CENTS) throw new ApiError(BUSY_LOW, 429);
+    }
 
     const input = await body(c, relaySchema);
     const model = input.model && RELAY_MODELS.includes(input.model) ? input.model : DEFAULT_RELAY_MODEL;
-    // Non streamé en V0 ; le modèle est celui du serveur.
-    const { stream_options: _streamOptions, ...rest } = input as Record<string, unknown>;
-    const payload = { ...rest, model, stream: false };
+    // Non streamé en V0 ; le modèle et le plafond de sortie sont ceux du serveur.
+    const payload = {
+      model,
+      stream: false,
+      messages: input.messages,
+      max_tokens: Math.min(input.max_tokens ?? MAX_COMPLETION_TOKENS, MAX_COMPLETION_TOKENS),
+      ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
+      ...(input.response_format ? { response_format: input.response_format } : {}),
+      ...(input.tools?.length ? { tools: input.tools, ...(input.tool_choice !== undefined ? { tool_choice: input.tool_choice } : {}) } : {}),
+      // Fournisseurs sans conservation des données (agent du dépôt) : seule option de routage admise.
+      ...(input.provider?.zdr === true ? { provider: { zdr: true } } : {}),
+    };
 
     const origin = originOf(c.req.header('x-ds-origin'));
     // Appel, comptage et débit ; rien n'est compté si l'appel échoue.
@@ -220,8 +316,13 @@ export function relayRoutes(deps: Deps) {
     // commencé après 100 s, et une génération du Mur dépasse souvent 2 min.
     // Réponse 200 tout de suite, une espace toutes les 15 s (JSON.parse les
     // ignore), puis la réponse d'OpenRouter, ou `{ error, status }` en cas
-    // d'échec. Client parti : appel arrêté, rien compté.
+    // d'échec. Client parti : l'appel continue jusqu'à sa fin et il est
+    // débité (OpenRouter le facture de toute façon ; l'arrêter rendait la
+    // génération gratuite, relecture du 2026-11-13). La place du compte est
+    // rendue par l'appel, pas par la requête, déjà répondue.
+    hand();
     const controller = new AbortController();
+    // shortcut: un appel coupé à 290 s n'est pas compté alors qu'OpenRouter a pu le facturer ; écart borné à un appel par place et par 290 s, revoir si les journaux montrent des coupures fréquentes.
     const timer = setTimeout(() => controller.abort(), KEEPALIVE_UPSTREAM_MS);
     const encoder = new TextEncoder();
     let beat: ReturnType<typeof setInterval> | undefined;
@@ -249,6 +350,7 @@ export function relayRoutes(deps: Deps) {
             },
           )
           .finally(() => {
+            slot.release();
             clearInterval(beat);
             clearTimeout(timer);
             try {
@@ -259,13 +361,12 @@ export function relayRoutes(deps: Deps) {
           });
       },
       cancel() {
+        // Plus personne n'écoute : on arrête l'attente, pas l'appel.
         clearInterval(beat);
-        clearTimeout(timer);
-        controller.abort();
       },
     });
     return c.body(stream, 200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-  });
+  }
 
   return app;
 }
