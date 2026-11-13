@@ -50,5 +50,9 @@
   --glass-bg: rgb(14 16 19 / 0.72);
   --glass-line: rgb(255 255 255 / 0.08);
   --glass-blur: blur(18px) saturate(140%);
+  /* Coin pixel fin des boutons et pastilles : escalier de pixels de 2 px qui
+     dessine le rayon de 8 px des contrôles (8 → 4 → 2 → 0), moins « cube »
+     que --px (une seule marche de 4 px, demande de Romain du 2026-11-13). */
+  --px-btn: polygon(0 8px, 2px 8px, 2px 4px, 4px 4px, 4px 2px, 8px 2px, 8px 0, calc(100% - 8px) 0, calc(100% - 8px) 2px, calc(100% - 4px) 2px, calc(100% - 4px) 4px, calc(100% - 2px) 4px, calc(100% - 2px) 8px, 100% 8px, 100% calc(100% - 8px), calc(100% - 2px) calc(100% - 8px), calc(100% - 2px) calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) calc(100% - 2px), calc(100% - 8px) calc(100% - 2px), calc(100% - 8px) 100%, 8px 100%, 8px calc(100% - 2px), 4px calc(100% - 2px), 4px calc(100% - 4px), 2px calc(100% - 4px), 2px calc(100% - 8px), 0 calc(100% - 8px));
   --px: polygon(0 4px, 4px 4px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px));
 }
