@@ -114,7 +114,8 @@ test('administration : stripe-test-reset efface le mode test Stripe, aperçu d�
     assert.deepEqual([g.gifted, g.plan, g.stripe_customer_id], [true, 'free', null], 'offert reste offert');
     assert.equal((await t.db.query<{ stripe_customer_id: string }>('SELECT stripe_customer_id FROM accounts WHERE id = $1', [gone])).rows[0].stripe_customer_id, 'cus_test4', 'compte supprimé intact');
     assert.deepEqual((await t.db.query('SELECT * FROM accounts WHERE email = $1', ['autre@example.com'])).rows[0], otherBefore, 'autre compte intact');
-    assert.deepEqual((await t.db.query<{ ref: string }>('SELECT ref FROM purchases ORDER BY ref')).rows.map((r) => r.ref), ['checkout:csXtest_pas_stripe', 'checkout:cs_test_gone']);
+    // Tri en JS : l'ordre de `ORDER BY` dépend de la collation (PGlite ≠ Postgres de la CI).
+    assert.deepEqual((await t.db.query<{ ref: string }>('SELECT ref FROM purchases')).rows.map((r) => r.ref).sort(), ['checkout:csXtest_pas_stripe', 'checkout:cs_test_gone']);
     const ledger = await t.db.query<{ reason: string; delta_cents: number; ref: string }>(`SELECT reason, delta_cents, ref FROM credit_events WHERE account_id = $1 ORDER BY id`, [id]);
     assert.deepEqual(ledger.rows.map((r) => [r.reason, r.delta_cents]), [['welcome', 1], ['topup', 500], ['withdrawal', -100], ['admin', -400]], 'grand livre gardé');
     const history = await accountHistory(t.db, id);
