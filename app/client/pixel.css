@@ -335,7 +335,7 @@ code,
   background: var(--c-accent);
 }
 /* Les sections de la planche se nomment ; leur numéro n'apprend rien (pas de
-   01 / 02). Le parcours de l'accueil garde les siens jusqu'à son lot. Sous-barre :
+   01 / 02). Sous-barre :
    masqué à l'œil seulement, le nom accessible du bouton reste inchangé. */
 .fold .nav-num {
   display: none;
@@ -704,58 +704,6 @@ body:has(.home) {
   font-size: 16px;
   color: var(--c-soft);
 }
-.home-stairs {
-  display: flex;
-  align-items: flex-end;
-  gap: 4px;
-  flex: none;
-}
-.home-stairs span {
-  width: 24px;
-  animation: stair-in 0.6s steps(4) both;
-}
-.home-stairs span:nth-child(2) { animation-delay: 0.08s; }
-.home-stairs span:nth-child(3) { animation-delay: 0.16s; }
-.home-stairs span:nth-child(4) { animation-delay: 0.24s; }
-.home-stairs span:nth-child(5) { animation-delay: 0.32s; }
-@keyframes stair-in {
-  from { transform: scaleY(0); transform-origin: bottom; }
-  to { transform: scaleY(1); transform-origin: bottom; }
-}
-.home-journey {
-  list-style: none;
-  margin: 0 0 48px;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  border-bottom: 1px solid var(--c-line);
-}
-.home-journey li {
-  display: grid;
-  gap: 4px;
-  padding: 20px 16px 20px 0;
-}
-.home-journey li + li {
-  padding-left: 16px;
-  border-left: 1px solid var(--c-line);
-}
-.home-journey .nav-num {
-  font-family: var(--f-title);
-  font-size: 13px;
-  color: var(--c-accent);
-}
-.home-journey strong {
-  font-family: var(--f-label);
-  font-weight: 600;
-  font-size: 14px;
-  text-transform: none;
-  letter-spacing: 0;
-}
-.home-journey small {
-  color: var(--c-muted);
-  font-size: 13px;
-  line-height: 1.4;
-}
 .home-section-head {
   display: flex;
   align-items: center;
@@ -913,23 +861,6 @@ body:has(.home) {
 }
 .project-card.new strong {
   color: var(--c-accent);
-}
-@media (max-width: 760px) {
-  .home-stairs {
-    display: none;
-  }
-  .home-journey {
-    grid-template-columns: 1fr 1fr;
-  }
-  .home-journey li:nth-child(3) {
-    padding-left: 0;
-    border-left: 0;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .home-stairs span {
-    animation: none;
-  }
 }
 
 /* Assistant, vues pleine largeur, historique */
@@ -1144,4 +1075,315 @@ dialog.diff th {
 }
 ::-webkit-scrollbar-button {
   display: none;
+}
+
+/* ---------- Navigation et UX (cadrage du 2026-11-14) ----------
+   Barre : trois actions visibles (GitHub, Figma, Accepter), le reste rangé
+   dans « ⋯ » ; engrenage (Réglages) et avatar (Compte, badge Pro en verre)
+   à droite de chaque écran. Logos GitHub et Figma en SVG dans le code. */
+.app-links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.top .actions .app-links {
+  margin-left: 6px;
+  padding-left: 8px;
+  border-left: 1px solid var(--c-line);
+}
+.home-top {
+  display: flex;
+  justify-content: flex-end;
+  margin: -32px 0 16px;
+}
+.pixel-icon,
+.mark {
+  display: block;
+  flex: none;
+}
+.icon-btn {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid transparent;
+  color: var(--c-soft);
+  background: none;
+}
+:where(body:not(.preview-body)) .icon-btn:hover:not(:disabled),
+.icon-btn[aria-expanded='true'] {
+  color: var(--c-text);
+  border-color: transparent;
+  background: rgb(255 255 255 / 0.06);
+}
+/* Avatar : initiale en police pixel ; liseré lime pour un compte Pro. */
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--c-raised);
+  border: 1px solid var(--c-line-strong);
+  color: var(--c-text);
+  font-family: var(--f-title);
+  font-size: 13px;
+  line-height: 1;
+}
+.avatar.is-pro {
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 2px rgb(189 255 46 / 0.14);
+}
+.avatar--large {
+  width: 56px;
+  height: 56px;
+  font-size: 26px;
+}
+/* Badge en verre (« Pro », « Bientôt disponible ») : il signale sans pousser. */
+.glass-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-family: var(--f-label);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: var(--c-text);
+  background:
+    linear-gradient(135deg, rgb(189 255 46 / 0.24), rgb(46 107 255 / 0.2)),
+    rgb(255 255 255 / 0.05);
+  border: 1px solid rgb(255 255 255 / 0.16);
+  -webkit-backdrop-filter: blur(8px) saturate(140%);
+  backdrop-filter: blur(8px) saturate(140%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14);
+}
+/* Badge Pro posé sur l'icône du compte, en bas à droite. */
+.account-btn .glass-badge {
+  position: absolute;
+  right: -7px;
+  bottom: -3px;
+  padding: 0 5px;
+  font-size: 9px;
+  line-height: 14px;
+  background:
+    linear-gradient(135deg, rgb(189 255 46 / 0.4), rgb(46 107 255 / 0.32)),
+    rgb(14 16 19 / 0.85);
+}
+/* GitHub et Figma : logo et libellé, un trait fin ; l'acide reste à Accepter. */
+.top .actions > button.brand-btn:not(.primary):not(.count) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  color: var(--c-text);
+  border-color: var(--c-line);
+}
+:where(body:not(.preview-body)) .top .actions > button.brand-btn:hover:not(:disabled) {
+  border-color: var(--c-line-strong);
+  background: rgb(255 255 255 / 0.05);
+}
+.brand-btn.is-off {
+  color: var(--c-soft);
+  border-style: dashed;
+}
+/* Menu « ⋯ » : panneau quasi opaque (le flou de la barre ne se cumule pas). */
+.more {
+  position: relative;
+}
+.more-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+  min-width: 200px;
+  display: grid;
+  gap: 2px;
+  padding: 4px;
+  background: rgb(14 16 19 / 0.97);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--r-panel);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.5);
+  animation: menu-in 0.16s ease-out;
+}
+.more-menu button {
+  display: flex;
+  justify-content: flex-start;
+  text-align: left;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--c-soft);
+}
+:where(body:not(.preview-body)) .more-menu button:hover:not(:disabled),
+.more-menu button:focus-visible {
+  color: var(--c-text);
+  background: rgb(255 255 255 / 0.06);
+  border-color: transparent;
+}
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+/* Écarts : badge sur l'onglet Design system (ouvre les corrections) ; un
+   pixel lime quand tout est conforme. */
+.tab-badge {
+  flex: none;
+  margin-left: -2px;
+}
+.tab-badge.warn {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 99px;
+  background: var(--c-warn);
+  color: var(--c-on-accent);
+  font-family: var(--f-label);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+}
+:where(body:not(.preview-body)) .tab-badge.warn:hover:not(:disabled) {
+  background: #ff8a4a;
+  color: var(--c-on-accent);
+}
+.tab-badge.ok {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 0;
+  background: var(--c-accent);
+}
+
+/* Pages Compte et Réglages : une colonne, titres pixel, logos dans les titres. */
+.settings .home-hero {
+  padding-bottom: 24px;
+}
+.settings .home-hero h1 {
+  font-size: clamp(40px, 6vw, 64px);
+}
+.settings-grid--single {
+  max-width: 560px;
+}
+.settings-block h2.with-mark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.settings-block h2.with-mark .glass-badge {
+  margin-left: auto;
+}
+.account-id {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.account-id .count:not(.ok) {
+  background: var(--c-raised);
+  color: var(--c-soft);
+}
+.account-email {
+  margin: 0 0 6px;
+  font-size: 15px;
+  color: var(--c-text);
+  overflow-wrap: anywhere;
+}
+.billing-label {
+  margin: 0;
+  font-size: 13px;
+  color: var(--c-soft);
+}
+.billing-amount {
+  margin: 4px 0 6px;
+  font-family: var(--f-title);
+  font-size: 40px;
+  line-height: 1;
+  color: var(--c-text);
+}
+.billing-sub {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+.billing .form-actions {
+  margin-top: 16px;
+}
+.billing .hint {
+  margin-top: 12px;
+}
+/* Bloc replié (Détails, Avancé) : un titre cliquable, une flèche pixel. */
+.details summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+  font-family: var(--f-label);
+  font-weight: 600;
+  color: var(--c-soft);
+}
+.details summary::-webkit-details-marker {
+  display: none;
+}
+.details summary::before {
+  content: '';
+  width: 6px;
+  height: 8px;
+  background: currentColor;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  transition: transform 0.15s ease-out;
+}
+.details[open] summary::before {
+  transform: rotate(90deg);
+}
+.details[open] summary {
+  margin-bottom: 12px;
+}
+.account-block .details {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--c-line);
+}
+/* Résumé du compte dans Réglages : une ligne qui mène à la page Compte. */
+.account-summary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--c-text);
+  text-decoration: none;
+  transition: border-color 0.15s ease-out;
+}
+.account-summary:hover {
+  border-color: var(--c-line-strong);
+}
+.account-summary-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.account-summary-text strong {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.account-summary-text small {
+  color: var(--c-muted);
+  font-size: 13px;
+}
+.account-summary-go {
+  margin-left: auto;
+  color: var(--c-muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .more-menu {
+    animation: none;
+  }
+  .details summary::before {
+    transition: none;
+  }
 }

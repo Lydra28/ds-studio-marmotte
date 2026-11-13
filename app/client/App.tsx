@@ -37,8 +37,9 @@ import {
 } from './api.js';
 import type { Config } from '../shared/project.js';
 import Board from './Board.js';
-import { foldable, Home, openSettings, SectionBar, TopNav, useRoute, type View } from './Shell.js';
-import { SettingsPage } from './Settings.js';
+import { foldable, Home, SectionBar, TopNav, useRoute, type View } from './Shell.js';
+import { AccountPage, SettingsPage } from './Settings.js';
+import { FigmaMark, GithubMark, MoreMenu, openSettings, useGithub } from './Chrome.js';
 import AssistantPanel from './Assistant.js';
 import { brandColor, MascotDock } from './Mascot.js';
 import Wall from './Wall.js';
@@ -104,12 +105,14 @@ function announce(slug: string) {
 export default function App() {
   const [boot, setBoot] = useState<Bootstrap>();
   const [bootError, setBootError] = useState('');
-  const [route, go, settings] = useRoute();
+  const [route, go, page] = useRoute();
   useEffect(() => {
     bootstrap().then(setBoot).catch((e) => setBootError(e.message));
   }, []);
   if (!boot) return <p className="loading" role="alert">{bootError || 'Chargement…'}</p>;
-  if (settings) return <SettingsPage onBack={() => (history.length > 1 ? history.back() : go())} />;
+  const back = () => (history.length > 1 ? history.back() : go());
+  if (page === 'settings') return <SettingsPage onBack={back} />;
+  if (page === 'account') return <AccountPage onBack={back} />;
   // Instance fixe (--project=) : pas d'accueil, son unique projet s'ouvre.
   const slug = route ?? (boot.multi ? undefined : boot.fallback);
   if (!slug) return <Home onOpen={go} />;
@@ -146,6 +149,9 @@ function Workspace({
   onOpen: (slug?: string) => void;
 }) {
   const { state, setState, error: stateError } = useCommittedState(slug);
+  // GitHub relu en direct (connexion faite dans Réglages puis retour) ; l'état du démarrage en attendant.
+  const gh = useGithub();
+  const githubLive = gh ? gh.pro && gh.status === 'connected' : github;
   const [config, setConfig] = useState<Config>();
   const k = (name: string) => `${name}:${slug}`;
   // Brouillon : valeurs changées (clé@mode) et structure (token ajouté, ou
@@ -544,21 +550,24 @@ function Workspace({
         onView={(v) => (v === 'versions' ? openVersions(versionsTab) : setView(v))}
         versions={versions.map((v) => v.revision)}
         onVersion={(revision) => openVersions('timeline', revision)}
-      >
-          {findings.length ? (
+        boardBadge={
+          findings.length ? (
             <button
-              className="count warn"
+              className="tab-badge warn"
               title="Voir les corrections proposées"
+              aria-label={`${findings.length} écart(s) · Corrections`}
               onClick={() => {
                 setView('board');
                 setTimeout(() => void document.getElementById('corrections')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
               }}
             >
-              {findings.length} écart(s) · Corrections
+              {findings.length}
             </button>
           ) : (
-            <span className="count ok">Aucun écart</span>
-          )}
+            <span className="tab-badge ok" role="img" aria-label="Aucun écart" title="Aucun écart" />
+          )
+        }
+      >
           {inbox && (
             <button
               className="inbox"
@@ -572,20 +581,28 @@ function Workspace({
               Fiches reçues de Figma ({Object.keys(inbox.file.components).length})
             </button>
           )}
-          <button onClick={openSettings} title="Réglages de l’application">
-            Réglages
-          </button>
-          <button onClick={() => setFigmaOpen(true)}>Figma</button>
           <button
+            className={githubLive ? 'brand-btn' : 'brand-btn is-off'}
             onClick={() => {
+              if (!githubLive) return openSettings();
               setView('board');
               setRepoPanel('open');
             }}
-            title="Lire un dépôt GitHub"
+            title={githubLive ? 'Lire le dépôt GitHub du projet' : 'Connecter GitHub (Réglages → Connexions)'}
           >
-            Dépôt
+            <GithubMark />
+            {githubLive ? 'GitHub' : 'Connecter GitHub'}
           </button>
-          <button onClick={() => file.current?.click()}>Importer</button>
+          <button className="brand-btn" onClick={() => setFigmaOpen(true)} title="Envoyer le design system dans Figma">
+            <FigmaMark />
+            Figma
+          </button>
+          <MoreMenu
+            items={[
+              { label: 'Importer', onSelect: () => file.current?.click() },
+              { label: 'Exporter le code', onSelect: () => setExportOpen(true) },
+            ]}
+          />
           <input
             ref={file}
             type="file"
@@ -597,7 +614,6 @@ function Workspace({
               e.target.value = '';
             }}
           />
-          <button onClick={() => setExportOpen(true)}>Exporter</button>
           <button
             className="primary"
             disabled={busy || draftCount > 0 || !!accepted}

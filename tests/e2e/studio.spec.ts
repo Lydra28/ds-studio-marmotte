@@ -71,7 +71,7 @@ test('réglages : version, dossier et services affichés, aucune valeur de secre
   // Depuis le projet, puis retour : la page est la même que depuis l'accueil.
   await page.getByRole('button', { name: 'Réglages' }).click();
   await expect(page).toHaveURL(/#\/reglages$/);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('DS-Studio');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Réglages');
   const settings = await (await page.request.get('/api/settings')).json();
   expect(settings.desktop).toBe(false);
   expect(settings.app.version).toMatch(/^\d+\.\d+\.\d+/);
@@ -82,9 +82,13 @@ test('réglages : version, dossier et services affichés, aucune valeur de secre
   expect(JSON.stringify(settings)).not.toMatch(/sk-|ghp_|OPENROUTER|GITHUB_TOKEN/);
   await expect(page.getByText(`Version ${settings.app.version}`)).toBeVisible();
   await expect(page.getByText('Mises à jour gérées hors de l’app')).toBeVisible();
+  // Services et dossier : repliés dans « Avancé » (cadrage navigation du 2026-11-14).
+  await expect(page.getByText('Indisponible')).toBeHidden();
+  await page.locator('summary', { hasText: 'Avancé' }).click();
   await expect(page.getByText('Indisponible')).toBeVisible();
-  // Sans compte : le formulaire de connexion, et rien d'autre, dans la section Compte.
-  await expect(page.getByRole('form', { name: 'Compte DS-Studio' })).toBeVisible();
+  // Sans compte : un résumé qui mène à la page Compte, plus de formulaire ici.
+  await expect(page.getByRole('link', { name: /Pas connecté/ })).toBeVisible();
+  await expect(page.getByRole('form', { name: 'Compte DS-Studio' })).toHaveCount(0);
   expect((await (await page.request.get('/api/account')).json()).status).toBe('none');
   await page.screenshot({ path: 'test-results/reglages-sans-compte.png', fullPage: true });
   // Hors de l'app Electron : pas de bouton d'action, et la route refuse proprement.
@@ -98,14 +102,22 @@ test('réglages : version, dossier et services affichés, aucune valeur de secre
   expect(refused.status()).toBe(409);
   await page.getByRole('button', { name: '← Retour' }).click();
   await expect(page.locator('.bar .project')).toHaveText('Marmotte');
+  // Compte (avatar) : le formulaire de connexion, sur sa propre page.
+  await page.getByRole('button', { name: 'Compte', exact: true }).click();
+  await expect(page).toHaveURL(/#\/compte$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Compte');
+  await expect(page.getByRole('form', { name: 'Compte DS-Studio' })).toBeVisible();
+  await page.screenshot({ path: 'test-results/compte-sans-compte.png', fullPage: true });
+  await page.getByRole('button', { name: '← Retour' }).click();
+  await expect(page.locator('.bar .project')).toHaveText('Marmotte');
   await page.goto('/');
   await page.getByRole('button', { name: 'Réglages' }).click();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('DS-Studio');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Réglages');
 });
 
-test('compte : connexion dans Réglages, Pro (offert) et usage affichés, assistant actif par le relais, déconnexion', async ({ page }) => {
+test('compte : connexion sur la page Compte, Pro (offert) et usage affichés, assistant actif par le relais, déconnexion', async ({ page }) => {
   // Faux serveur DS-Studio de scripts/e2e-server.mjs (tests/e2e/fake-api.ts) : jamais le vrai.
-  await page.getByRole('button', { name: 'Réglages' }).click();
+  await page.getByRole('button', { name: 'Compte', exact: true }).click();
   const form = page.getByRole('form', { name: 'Compte DS-Studio' });
   await form.getByLabel('Adresse mail').fill('associe@example.com');
   await form.getByLabel('Mot de passe').fill('mauvais');
@@ -119,7 +131,8 @@ test('compte : connexion dans Réglages, Pro (offert) et usage affichés, assist
   await expect(account).toContainText('Valide jusqu’au');
   await expect(account).toContainText('0,12 $ sur 2,00 $');
   await expect(account).toContainText('jamais débité');
-  await expect(page.getByText('Actif', { exact: true })).toBeVisible();
+  // Badge Pro sur l'icône du compte, dans la barre (au retour au projet, plus bas).
+  expect((await (await page.request.get('/api/settings')).json()).services.assistant).toBe(true);
   // Le navigateur ne voit jamais le jeton de session, seulement l'état.
   const status = await (await page.request.get('/api/account')).json();
   expect(status.status).toBe('connected');
@@ -129,6 +142,7 @@ test('compte : connexion dans Réglages, Pro (offert) et usage affichés, assist
   // L'assistant répond, par le relais du serveur, avec le compte connecté.
   await page.getByRole('button', { name: '← Retour' }).click();
   await expect(page.locator('.bar .project')).toHaveText('Marmotte');
+  await expect(page.getByRole('button', { name: 'Compte', exact: true })).toContainText('Pro');
   await page.getByRole('button', { name: 'Ouvrir l’assistant' }).click();
   const panel = page.getByRole('complementary', { name: 'Assistant' });
   await expect(panel.getByLabel('Message à l’assistant')).toBeEnabled();
@@ -155,7 +169,7 @@ test('compte : connexion dans Réglages, Pro (offert) et usage affichés, assist
   await panel.getByRole('button', { name: 'Effacer' }).click();
   await panel.getByRole('button', { name: 'Fermer l’assistant' }).click();
   // Déconnexion : le formulaire revient, l'assistant se grise de nouveau.
-  await page.getByRole('button', { name: 'Réglages' }).click();
+  await page.getByRole('button', { name: 'Compte', exact: true }).click();
   await page.getByRole('button', { name: 'Se déconnecter' }).click();
   await expect(form).toBeVisible();
   expect((await (await page.request.get('/api/account')).json()).status).toBe('none');
@@ -171,11 +185,15 @@ test('github : réservé à Pro, connexion par code contre le faux GitHub, dép�
   await expect(github).toContainText('Réservé à DS-Studio Pro');
   await expect(github.getByRole('button', { name: 'Connecter GitHub' })).toBeDisabled();
 
+  // Résumé du compte de Réglages → page Compte → retour à Réglages.
+  await page.getByRole('link', { name: /Pas connecté/ }).click();
   const form = page.getByRole('form', { name: 'Compte DS-Studio' });
   await form.getByLabel('Adresse mail').fill('associe@example.com');
   await form.getByLabel('Mot de passe').fill('mot-de-passe-de-test');
   await form.getByRole('button', { name: 'Se connecter' }).click();
   await expect(page.getByRole('region', { name: 'Compte' })).toContainText('Pro (offert)');
+  await page.getByRole('button', { name: '← Retour' }).click();
+  await expect(page).toHaveURL(/#\/reglages$/);
   await expect(github).not.toContainText('Réservé à DS-Studio Pro');
 
   // github.com/login/device s'ouvre dans un autre onglet (faux GitHub), le code s'affiche ici.
@@ -194,12 +212,13 @@ test('github : réservé à Pro, connexion par code contre le faux GitHub, dép�
 
   await github.getByRole('button', { name: 'Déconnecter GitHub' }).click();
   await expect(github.getByRole('button', { name: 'Connecter GitHub' })).toBeEnabled();
+  await page.getByRole('link', { name: /associe@example\.com/ }).click();
   await page.getByRole('region', { name: 'Compte' }).getByRole('button', { name: 'Se déconnecter' }).click();
   await expect(form).toBeVisible();
 });
 
 test('facturation : compte gratuit, génération offerte puis 402, recharge, Pro, portail (faux Stripe, URL dans un nouvel onglet)', async ({ page }) => {
-  await page.getByRole('button', { name: 'Réglages' }).click();
+  await page.getByRole('button', { name: 'Compte', exact: true }).click();
   const form = page.getByRole('form', { name: 'Compte DS-Studio' });
   await form.getByLabel('Adresse mail').fill('libre@example.com');
   await form.getByLabel('Mot de passe').fill('mot-de-passe-de-test');
@@ -227,7 +246,7 @@ test('facturation : compte gratuit, génération offerte puis 402, recharge, Pro
   await panel.getByRole('button', { name: 'Effacer' }).click();
   await panel.getByRole('button', { name: 'Fermer l’assistant' }).click();
   // Recharge : la page de paiement s'ouvre dans un nouvel onglet ; le solde se met à jour tout seul (webhook simulé, relecture auto).
-  await page.getByRole('button', { name: 'Réglages' }).click();
+  await page.getByRole('button', { name: 'Compte', exact: true }).click();
   const [topup] = await Promise.all([page.waitForEvent('popup'), account.getByRole('button', { name: 'Recharger 5 €' }).click()]);
   expect(topup.url()).toContain('/v1/billing/done?s=ok');
   await topup.close();
@@ -285,7 +304,7 @@ test('boucle : écart signalé, correction essayée, diff validé, preview à jo
   await expect(mascot.getByRole('status')).toHaveText('1 écart(s) : regarde « Corrections ».');
   await expect.poll(() => previewVar(page, '--space-sm')).toBe('15px');
   await page.getByRole('button', { name: 'Essayer 16 px' }).click();
-  await expect(page.getByText('Aucun écart', { exact: true })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Aucun écart' })).toBeVisible();
   await expect(mascot.getByRole('status')).toHaveText('Plus aucun écart !');
   await expect(mascot.locator('.mascot-badge')).toHaveCount(0);
   await validate(page);
@@ -302,7 +321,7 @@ test('écarts : le compteur du haut mène aux corrections, « Tout corriger » m
   await page.getByRole('button', { name: '2 écart(s) · Corrections' }).click();
   await expect(page.locator('#corrections')).toBeInViewport();
   await page.getByRole('button', { name: 'Tout corriger (2)' }).click();
-  await expect(page.getByText('Aucun écart', { exact: true })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Aucun écart' })).toBeVisible();
   await expect(page.getByLabel('space/sm', { exact: true })).toHaveValue('16');
   await expect(page.getByLabel('space/md', { exact: true })).toHaveValue('24');
   await expect(page.getByText(/2 correction\(s\) mises en brouillon/)).toBeVisible();
@@ -527,7 +546,8 @@ test('écrans d’exemple : projet aux noms de son dépôt, signalé au lieu d�
 });
 
 test('export code : CSS, Tailwind et JSON de l’état enregistré, téléchargement', async ({ page }) => {
-  await page.getByRole('button', { name: 'Exporter' }).click();
+  await page.getByRole('button', { name: 'Plus d’actions' }).click();
+  await page.getByRole('menuitem', { name: 'Exporter le code' }).click();
   const dialog = page.getByRole('dialog', { name: 'Exporter le code' });
   const code = dialog.getByRole('tabpanel');
   await expect(code).toContainText(':root {');
@@ -651,11 +671,16 @@ test('dépôt : nouveau projet depuis un dépôt GitHub, tokens repris, plan, br
   // Connexion Pro puis GitHub contre les faux serveurs ; archive fictive de
   // `dev-e2e/site-vitrine` (tests/e2e/fake-api.ts). Aucun réseau.
   test.setTimeout(60_000);
-  await page.getByRole('button', { name: 'Réglages' }).click();
+  await page.getByRole('button', { name: 'Compte', exact: true }).click();
   const form = page.getByRole('form', { name: 'Compte DS-Studio' });
   await form.getByLabel('Adresse mail').fill('associe@example.com');
   await form.getByLabel('Mot de passe').fill('mot-de-passe-de-test');
   await form.getByRole('button', { name: 'Se connecter' }).click();
+  await expect(page.getByRole('region', { name: 'Compte' })).toContainText('Pro (offert)');
+  await page.getByRole('button', { name: '← Retour' }).click();
+  // Pas encore lié : le bouton de la barre propose la connexion et mène à Réglages.
+  await page.getByRole('button', { name: 'Connecter GitHub' }).click();
+  await expect(page).toHaveURL(/#\/reglages$/);
   const github = page.getByRole('region', { name: 'GitHub' });
   await expect(github).not.toContainText('Réservé à DS-Studio Pro');
   const popup = page.waitForEvent('popup');
@@ -700,15 +725,15 @@ test('dépôt : nouveau projet depuis un dépôt GitHub, tokens repris, plan, br
   expect(plan.entryCount).toBeGreaterThan(0);
   expect(JSON.stringify(plan)).not.toMatch(/ghu_|ghr_/);
 
-  // Bouton « Dépôt » : dernier plan, puis relecture en rattachement : rien à reprendre.
-  await page.getByRole('button', { name: 'Dépôt', exact: true }).click();
+  // Bouton GitHub de la barre : dernier plan, puis relecture en rattachement : rien à reprendre.
+  await page.getByRole('button', { name: 'GitHub', exact: true }).click();
   await expect(panel.locator('ul[aria-label="Fichiers du dépôt"]')).toContainText('src/components/Card.css');
   await panel.getByRole('button', { name: 'Relire le dépôt' }).click();
   await expect(panel.getByRole('button', { name: 'Rien à reprendre' })).toBeDisabled();
   await panel.getByRole('button', { name: 'Fermer le dépôt' }).click();
 
   // Couche sémantique (recette du 2026-11-09) : couleur à plat → primitive de palette + rôle.
-  await page.getByRole('button', { name: 'Dépôt', exact: true }).click();
+  await page.getByRole('button', { name: 'GitHub', exact: true }).click();
   await expect(panel.getByRole('button', { name: 'Proposer une couche sémantique' })).toBeVisible();
   await page.screenshot({ path: 'test-results/depot-semantique.png', fullPage: false });
   await panel.getByRole('button', { name: 'Proposer une couche sémantique' }).click();
@@ -730,7 +755,7 @@ test('dépôt : nouveau projet depuis un dépôt GitHub, tokens repris, plan, br
   await page.screenshot({ path: 'test-results/depot-pr.png', fullPage: false });
 
   // G6 : l'agent nomme les valeurs sans token, après l'écran de consentement.
-  await page.getByRole('button', { name: 'Dépôt', exact: true }).click();
+  await page.getByRole('button', { name: 'GitHub', exact: true }).click();
   await panel.getByRole('button', { name: 'Demander à l’agent de nommer les tokens' }).click();
   const consent = panel.getByRole('group', { name: 'Envoi à l’agent' });
   await expect(consent).toContainText('src/components/Card.css');
@@ -757,6 +782,7 @@ test('dépôt : nouveau projet depuis un dépôt GitHub, tokens repris, plan, br
   await page.getByRole('button', { name: 'Réglages' }).click();
   await github.getByRole('button', { name: 'Déconnecter GitHub' }).click();
   await expect(github.getByRole('button', { name: 'Connecter GitHub' })).toBeEnabled();
+  await page.getByRole('link', { name: /associe@example\.com/ }).click();
   await page.getByRole('region', { name: 'Compte' }).getByRole('button', { name: 'Se déconnecter' }).click();
   await expect(form).toBeVisible();
 });

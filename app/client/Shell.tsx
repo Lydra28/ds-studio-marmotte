@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { createProject, getGithub, githubAction, listProjects, type GithubRepo, type ProjectSummary } from './api.js';
+import { ACCOUNT_HASH, AppLinks, SETTINGS_HASH } from './Chrome.js';
 
 // Route dans le hash : `#/p/<projet>` ouvre un projet, `#/reglages` les
-// réglages de l'application, sinon l'accueil.
-const SETTINGS = '#/reglages';
+// réglages de l'application, `#/compte` le compte, sinon l'accueil.
 const slugOf = (hash: string) => /^#\/p\/([a-z0-9-]+)$/.exec(hash)?.[1];
-export function useRoute(): [string | undefined, (slug?: string) => void, boolean] {
+export type Page = 'settings' | 'account' | null;
+export function useRoute(): [string | undefined, (slug?: string) => void, Page] {
   const [hash, setHash] = useState(() => location.hash);
   useEffect(() => {
     const on = () => setHash(location.hash);
@@ -15,11 +16,8 @@ export function useRoute(): [string | undefined, (slug?: string) => void, boolea
   const go = (slug?: string) => {
     location.hash = slug ? `/p/${slug}` : slug === undefined ? '/' : '/nouveau';
   };
-  return [slugOf(hash), go, hash === SETTINGS];
+  return [slugOf(hash), go, hash === SETTINGS_HASH ? 'settings' : hash === ACCOUNT_HASH ? 'account' : null];
 }
-export const openSettings = () => {
-  location.hash = SETTINGS.slice(1);
-};
 
 function useProjects() {
   const [projects, setProjects] = useState<ProjectSummary[]>();
@@ -56,6 +54,7 @@ export function TopNav({
   onView,
   versions,
   onVersion,
+  boardBadge,
   children,
 }: {
   current: string;
@@ -68,6 +67,8 @@ export function TopNav({
   // Révisions des versions acceptées : une marche de « chaleur » chacune.
   versions: number[];
   onVersion: (revision: number) => void;
+  // Écarts du projet, en badge sur l'onglet Design system (plus de pastille à part).
+  boardBadge?: ReactNode;
   children: ReactNode;
 }) {
   const { projects } = useProjects();
@@ -110,12 +111,16 @@ export function TopNav({
               <button aria-current={view === v ? 'page' : undefined} onClick={() => onView(v)}>
                 {label}
               </button>
+              {v === 'board' && boardBadge}
             </li>
           ))}
         </ol>
         {versions.length > 0 && <Stairs versions={versions} onVersion={onVersion} />}
       </nav>
-      <div className="actions">{children}</div>
+      <div className="actions">
+        {children}
+        <AppLinks />
+      </div>
     </header>
   );
 }
@@ -193,13 +198,6 @@ export function SectionBar({
   );
 }
 
-// Parcours d'un projet, rappelé sur l'accueil dans l'ordre de la barre du haut.
-const journey = [
-  ['S’inspirer', 'Mur des DA : images, liens, DA proposées par l’assistant'],
-  ['Construire', 'Design system : primitives, tokens, typo, composants'],
-  ['Versionner', 'Comparer avec le site en ligne, diff, version acceptée, Figma et pull request'],
-] as const;
-
 export function Home({ onOpen }: { onOpen: (slug?: string) => void }) {
   const { projects, error } = useProjects();
   const [creating, setCreating] = useState(location.hash === '#/nouveau');
@@ -212,30 +210,16 @@ export function Home({ onOpen }: { onOpen: (slug?: string) => void }) {
   const sorted = projects && [...projects].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return (
     <div className="home">
+      <div className="home-top">
+        <AppLinks />
+      </div>
       <header className="home-hero">
         <div>
           <p className="home-kicker">Atelier de design system</p>
           <h1>DS-Studio</h1>
           <p className="home-lead">Un atelier par projet : essais en direct, règles, versions, transfert Figma.</p>
-          <button className="home-settings" onClick={openSettings}>
-            Réglages
-          </button>
-        </div>
-        <div className="home-stairs" aria-hidden="true">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <span key={i} style={{ height: 16 * i, background: `var(--c-heat-${i})` }} />
-          ))}
         </div>
       </header>
-      <ol className="home-journey" aria-label="Parcours d’un projet">
-        {journey.map(([title, detail], i) => (
-          <li key={title}>
-            <span className="nav-num">0{i + 1}</span>
-            <strong>{title}</strong>
-            <small>{detail}</small>
-          </li>
-        ))}
-      </ol>
       <div className="home-section-head">
         <h2>Projets</h2>
         {sorted && <span className="count">{sorted.length}</span>}

@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { accountChanged, ACCOUNT_HASH, Avatar, FigmaMark, GithubMark, GlassBadge } from './Chrome.js';
 import {
   accountAction,
   desktopAction,
@@ -140,6 +141,7 @@ function AccountSection({ account, onChange }: { account: AccountStatus | undefi
         const r = await accountAction({ action: 'refresh' });
         if (cancelled || !watchDone(watch.kind, watch.before, r.account)) return;
         onChange(r.account);
+        accountChanged();
         setWatch(null);
         setPayUrl('');
         const a = r.account;
@@ -178,6 +180,7 @@ function AccountSection({ account, onChange }: { account: AccountStatus | undefi
     try {
       const r = await accountAction(fields ? { action, email: email || undefined, password: password || undefined, code: code || undefined } : { action, ...buy });
       onChange(r.account);
+      accountChanged();
       setNotice(r.message ?? '');
       setPassword('');
       if (r.url) {
@@ -217,72 +220,61 @@ function AccountSection({ account, onChange }: { account: AccountStatus | undefi
     const a = account;
     const u = a.usage;
     return (
-      <section className="settings-block" aria-labelledby="s-account">
-        <h2 id="s-account">Compte</h2>
-        <dl>
-          <dt>Adresse</dt>
-          <dd className="mono">{a.email}</dd>
-          <dt>Palier</dt>
-          <dd>
+      <section className="settings-block account-block" aria-label="Compte">
+        <div className="account-id">
+          <Avatar account={a} large />
+          <div>
+            <p className="mono account-email">{a.email}</p>
             <span className={a.tier === 'pro' ? 'count ok' : 'count'}>{tierLabel(a)}</span>
-            {subscriptionLabel(a) ? ` ${subscriptionLabel(a)}` : ''}
-          </dd>
-          <dt>Licence</dt>
-          <dd>{licenseLabel(a)}</dd>
-          <dt>Serveur</dt>
-          <dd>{a.online ? 'En ligne.' : 'Injoignable : l’assistant et le Mur des DA reviennent avec le réseau.'}</dd>
-          {u && (
+          </div>
+        </div>
+        {/* Carte en verre : le solde et ce qu'on peut acheter, rien de technique. */}
+        <div className="billing">
+          <p className="billing-label">{a.gifted ? 'Compte offert' : 'Solde'}</p>
+          <p className="billing-amount">{u ? (a.gifted ? 'Pro' : euros(u.creditCents)) : '—'}</p>
+          {u ? (
+            <p className="billing-sub">
+              {a.gifted ? 'Compte offert : jamais débité.' : a.welcome ? `${euros(u.creditCents)} : une génération offerte` : 'Crédits disponibles.'}
+            </p>
+          ) : (
+            <p className="billing-sub">Solde indisponible hors ligne : actualise une fois en ligne.</p>
+          )}
+          {u && a.plan === 'pro' && !a.gifted && (
+            <p className="billing-sub">
+              {euros(u.includedLeftCents)} encore inclus ce mois
+              {a.catalog && a.catalog.generationCents.wall > 0
+                ? ` (≈ ${Math.floor(u.includedLeftCents / a.catalog.generationCents.wall)} générations du Mur)`
+                : ''}
+              .
+            </p>
+          )}
+          {subscriptionLabel(a) && <p className="billing-sub">{subscriptionLabel(a)}</p>}
+          {!a.gifted && !a.catalog && <p className="hint">Prix indisponibles : clique Actualiser une fois en ligne.</p>}
+          {!a.gifted && a.catalog && (
             <>
-              <dt>Crédits</dt>
-              <dd>{a.gifted ? 'Compte offert : jamais débité.' : `${euros(u.creditCents)}${a.welcome ? ' : une génération offerte' : ''}`}</dd>
-              {a.plan === 'pro' && !a.gifted && (
-                <>
-                  <dt>Inclus Pro</dt>
-                  <dd>
-                    {euros(u.includedLeftCents)} encore inclus ce mois
-                    {a.catalog && a.catalog.generationCents.wall > 0
-                      ? ` (≈ ${Math.floor(u.includedLeftCents / a.catalog.generationCents.wall)} générations du Mur)`
-                      : ''}
-                    .
-                  </dd>
-                </>
-              )}
-              <dt>Aujourd’hui</dt>
-              <dd>
-                {dollars(u.todayCents)} sur {dollars(u.dailyCapCents)} de plafond journalier (coût du modèle, remis à zéro à minuit UTC).
-              </dd>
-              <dt>Ce mois</dt>
-              <dd>{dollars(u.monthCents)} de coût du modèle.</dd>
+              <div className="form-actions">
+                {a.catalog.packs.map((p) => (
+                  <button key={p.pack} disabled={busy} onClick={() => void run('checkout', false, { kind: 'credits', pack: p.pack })}>
+                    Recharger {euroLabel(p.amountCents)}
+                  </button>
+                ))}
+                {a.plan === 'pro' ? (
+                  <button disabled={busy} onClick={() => void run('portal')}>
+                    Gérer mon abonnement
+                  </button>
+                ) : (
+                  <button className="primary" disabled={busy} onClick={() => void run('checkout', false, { kind: 'pro' })}>
+                    Passer Pro ({euroLabel(a.catalog.pro.amountCents)}/mois{a.catalog.mode === 'test' ? ', test' : ''})
+                  </button>
+                )}
+              </div>
+              <p className="hint">
+                Le paiement se fait sur une page Stripe dans ton navigateur ; l’app guette ensuite ton compte pendant 3 minutes.
+                {a.catalog.mode === 'test' ? ' Paiements de test : aucune carte réelle débitée.' : ''}
+              </p>
             </>
           )}
-        </dl>
-        {!a.gifted && !a.catalog && (
-          <p className="hint">Prix indisponibles : clique Actualiser une fois en ligne.</p>
-        )}
-        {!a.gifted && a.catalog && (
-          <div className="billing">
-            <p className="hint">
-              Le paiement se fait sur une page Stripe dans ton navigateur ; l’app guette ensuite ton compte pendant 3 minutes.
-              {a.catalog.mode === 'test' ? ' Paiements de test : aucune carte réelle débitée.' : ''}
-            </p>
-            <div className="form-actions">
-              {a.catalog.packs.map((p) => (
-                <button key={p.pack} disabled={busy} onClick={() => void run('checkout', false, { kind: 'credits', pack: p.pack })}>
-                  Recharger {euroLabel(p.amountCents)}
-                </button>
-              ))}
-              {a.plan === 'pro' ? (
-                <button disabled={busy} onClick={() => void run('portal')}>
-                  Gérer mon abonnement
-                </button>
-              ) : (
-                <button className="primary" disabled={busy} onClick={() => void run('checkout', false, { kind: 'pro' })}>
-                  Passer Pro ({euroLabel(a.catalog.pro.amountCents)}/mois{a.catalog.mode === 'test' ? ', test' : ''})
-                </button>
-              )}
-            </div>
-          </div>
-        )}
+        </div>
         {notice && (
           <p className="message ok" role="status">
             {notice}
@@ -316,6 +308,26 @@ function AccountSection({ account, onChange }: { account: AccountStatus | undefi
             Se déconnecter
           </button>
         </div>
+        {/* Pour le support : licence, serveur, coût du modèle. Replié. */}
+        <details className="details">
+          <summary>Détails</summary>
+          <dl>
+            <dt>Licence</dt>
+            <dd>{licenseLabel(a)}</dd>
+            <dt>Serveur</dt>
+            <dd>{a.online ? 'En ligne.' : 'Injoignable : l’assistant et le Mur des DA reviennent avec le réseau.'}</dd>
+            {u && (
+              <>
+                <dt>Aujourd’hui</dt>
+                <dd>
+                  {dollars(u.todayCents)} sur {dollars(u.dailyCapCents)} de plafond journalier (coût du modèle, remis à zéro à minuit UTC).
+                </dd>
+                <dt>Ce mois</dt>
+                <dd>{dollars(u.monthCents)} de coût du modèle.</dd>
+              </>
+            )}
+          </dl>
+        </details>
       </section>
     );
   }
@@ -407,6 +419,13 @@ function GithubSection({ tier }: { tier: string | undefined }) {
   useEffect(() => {
     void load();
   }, [tier]);
+  // Connexion aboutie ou retirée : la barre du haut et l'accueil se relisent.
+  const linked = github?.status;
+  const was = useRef(linked);
+  useEffect(() => {
+    if (was.current && linked && was.current !== linked) accountChanged();
+    was.current = linked;
+  }, [linked]);
   const pending = github?.status === 'pending';
   useEffect(() => {
     if (!pending) return;
@@ -432,14 +451,18 @@ function GithubSection({ tier }: { tier: string | undefined }) {
   const g = github;
   return (
     <section className="settings-block" aria-labelledby="s-github">
-      <h2 id="s-github">GitHub</h2>
+      <h2 id="s-github" className="with-mark">
+        <GithubMark size={18} />
+        GitHub
+        {!g.pro && <GlassBadge>Pro</GlassBadge>}
+      </h2>
       <p className="hint">
         DS-Studio lit le design system d’un dépôt et propose une pull request qui modifie ses valeurs de design ; tu merges
         toi-même sur GitHub. Le code est lu sur cet ordinateur.
       </p>
       {!g.pro && (
         <p className="message" role="status">
-          Réservé à DS-Studio Pro : passe Pro dans la section Compte.
+          Réservé à DS-Studio Pro : passe Pro depuis ta page <a href={ACCOUNT_HASH}>Compte</a>.
         </p>
       )}
       {g.status === 'connected' && (
@@ -521,6 +544,46 @@ function GithubSection({ tier }: { tier: string | undefined }) {
   );
 }
 
+// Page Compte (avatar de la barre, `#/compte`) : qui est connecté, le solde
+// et les achats dans la carte en verre, le reste replié. Hors connexion : le
+// formulaire de connexion.
+export function AccountPage({ onBack }: { onBack: () => void }) {
+  const [account, setAccount] = useState<AccountStatus>();
+  const [error, setError] = useState('');
+  useEffect(() => {
+    getAccount()
+      .then(setAccount)
+      .catch((e) => setError((e as Error).message));
+  }, []);
+  return (
+    <div className="home settings">
+      <button className="settings-back" onClick={onBack}>
+        ← Retour
+      </button>
+      <header className="home-hero">
+        <div>
+          <h1>Compte</h1>
+          <p className="home-lead">Ton compte DS-Studio, ton solde et ton abonnement.</p>
+        </div>
+      </header>
+      {error && (
+        <p className="message error" role="alert">
+          {error}
+        </p>
+      )}
+      {account && (
+        <div className="settings-grid settings-grid--single">
+          <AccountSection account={account} onChange={setAccount} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Page Réglages (engrenage, `#/reglages`) : les connexions, les mises à jour,
+// le reste replié dans « Avancé ». Plus de compte ni de paiement ici : un
+// résumé renvoie vers la page Compte (les messages du serveur disent
+// « Réglages → Compte »).
 export function SettingsPage({ onBack }: { onBack: () => void }) {
   const [settings, setSettings] = useState<Settings>();
   const [account, setAccount] = useState<AccountStatus>();
@@ -559,6 +622,7 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
     <span className={active ? 'count ok' : 'count'}>{active ? yes : no}</span>
   );
   const connected = account?.status === 'connected';
+  const canUpdate = !!settings?.desktop && !!settings.update && settings.update.status !== 'disabled';
   return (
     <div className="home settings">
       <button className="settings-back" onClick={onBack}>
@@ -566,9 +630,8 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
       </button>
       <header className="home-hero">
         <div>
-          <p className="home-kicker">Réglages</p>
-          <h1>{settings?.app.name ?? 'DS-Studio'}</h1>
-          <p className="home-lead">{settings ? `Version ${settings.app.version}` : 'Chargement…'}</p>
+          <h1>Réglages</h1>
+          <p className="home-lead">Tes connexions et les mises à jour de l’app.</p>
         </div>
       </header>
       {error && (
@@ -578,71 +641,86 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
       )}
       {settings && (
         <div className="settings-grid">
-          <AccountSection
-            account={account}
-            onChange={(a) => {
-              setAccount(a);
-              void load();
-            }}
-          />
+          {/* Résumé du compte : le détail et les achats sont sur la page Compte. */}
+          <a className="settings-block account-summary" href={ACCOUNT_HASH}>
+            <Avatar account={account} />
+            <span className="account-summary-text">
+              <strong>{connected ? account.email : 'Pas connecté'}</strong>
+              <small>{connected ? `${tierLabel(account)} · solde, recharges et abonnement` : 'Connexion ou création de compte'}</small>
+            </span>
+            <span className="account-summary-go" aria-hidden="true">
+              →
+            </span>
+          </a>
           <GithubSection tier={account?.tier} />
-          <section className="settings-block" aria-labelledby="s-app">
-            <h2 id="s-app">Application</h2>
+          <section className="settings-block" aria-labelledby="s-figma">
+            <h2 id="s-figma" className="with-mark">
+              <FigmaMark size={18} />
+              Plugin Figma
+              <GlassBadge>Bientôt disponible</GlassBadge>
+            </h2>
+            <p className="hint">
+              Le plugin transfère la version acceptée dans ton fichier Figma et renvoie tes composants ici. Le code
+              d’appairage est dans le bouton Figma de chaque projet.
+            </p>
+            <p>{on(settings.services.plugin, 'Prêt à être appairé', 'Fermé')}</p>
+          </section>
+          <section className="settings-block" aria-labelledby="s-update">
+            <h2 id="s-update">Mises à jour</h2>
+            {status === 'ready' ? (
+              <div className="form-actions">
+                <button className="primary" disabled={busy} onClick={() => void act('install-update')}>
+                  Redémarrer pour installer la version {settings.update?.available ?? ''}
+                </button>
+              </div>
+            ) : (
+              <p className="hint" aria-live="polite">
+                Version <span className="mono">{settings.app.version}</span> · {updateLabel(settings.update)}
+              </p>
+            )}
+          </section>
+          {/* Pour le support et les cas rares : replié. */}
+          <details className="settings-block details">
+            <summary>Avancé</summary>
             <dl>
               <dt>Version</dt>
-              <dd className="mono">{settings.app.version}</dd>
-              <dt>Mises à jour</dt>
-              <dd aria-live="polite">{updateLabel(settings.update)}</dd>
-            </dl>
-            {settings.desktop && settings.update && settings.update.status !== 'disabled' && (
-              <div className="form-actions">
-                <button disabled={busy || status === 'checking' || status === 'downloading'} onClick={() => void act('check-update')}>
-                  Rechercher une mise à jour
-                </button>
-                {status === 'ready' && (
-                  <button className="primary" disabled={busy} onClick={() => void act('install-update')}>
-                    Redémarrer pour installer
-                  </button>
-                )}
-              </div>
-            )}
-          </section>
-          <section className="settings-block" aria-labelledby="s-projects">
-            <h2 id="s-projects">Projets</h2>
-            <dl>
-              <dt>Dossier</dt>
+              <dd className="mono">
+                {settings.app.name} {settings.app.version}
+                {settings.update ? ` (canal ${settings.update.channel})` : ''}
+              </dd>
+              <dt>Dossier des projets</dt>
               <dd className="mono">{settings.projects ?? 'Instance fixe : un seul projet'}</dd>
-            </dl>
-            {settings.desktop && settings.projects && (
-              <div className="form-actions">
-                <button disabled={busy} onClick={() => void act('choose-projects')}>
-                  Changer de dossier…
-                </button>
-              </div>
-            )}
-            <p className="hint">Tes projets restent sur cet ordinateur. Rien n’est envoyé ailleurs sans ton action.</p>
-          </section>
-          <section className="settings-block" aria-labelledby="s-services">
-            <h2 id="s-services">Services</h2>
-            <dl>
               <dt>Assistant et Mur des DA</dt>
               <dd>
                 {on(settings.services.assistant, 'Actif', connected && account?.online === false ? 'Serveur injoignable' : 'Indisponible')}
                 {!settings.services.assistant && (
                   <small className="hint">
                     {' '}
-                    {connected ? 'Ils reviennent dès que le serveur DS-Studio répond.' : 'Connecte-toi à ton compte DS-Studio (section Compte).'}
+                    {connected ? 'Ils reviennent dès que le serveur DS-Studio répond.' : 'Connecte-toi à ton compte DS-Studio (page Compte).'}
                   </small>
                 )}
               </dd>
-              <dt>Plugin Figma</dt>
-              <dd>{on(settings.services.plugin, 'Prêt (code d’appairage dans le bouton Figma)', 'Fermé')}</dd>
               <dt>Site en direct</dt>
               <dd>{on(settings.services.relay, 'Relais actif', 'Relais arrêté')}</dd>
               <dt>Pull request GitHub</dt>
-              <dd>{on(settings.services.github, 'Par ta connexion GitHub', 'GitHub non connecté (section GitHub)')}</dd>
+              <dd>{on(settings.services.github, 'Par ta connexion GitHub', 'GitHub non connecté')}</dd>
             </dl>
-          </section>
+            <p className="hint">Tes projets restent sur cet ordinateur. Rien n’est envoyé ailleurs sans ton action.</p>
+            {(canUpdate || (settings.desktop && settings.projects)) && (
+              <div className="form-actions">
+                {canUpdate && (
+                  <button disabled={busy || status === 'checking' || status === 'downloading'} onClick={() => void act('check-update')}>
+                    Rechercher une mise à jour
+                  </button>
+                )}
+                {settings.desktop && settings.projects && (
+                  <button disabled={busy} onClick={() => void act('choose-projects')}>
+                    Changer de dossier…
+                  </button>
+                )}
+              </div>
+            )}
+          </details>
         </div>
       )}
     </div>
