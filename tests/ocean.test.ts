@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createOcean, SCHOOL, sharkPixels, step, SHARK } from '../app/client/ocean-sim.js';
+import { createOcean, resizeOcean, SCHOOL, sharkPixels, step, SHARK } from '../app/client/ocean-sim.js';
 
 // Hasard reproductible : même océan à chaque essai.
 function seeded(seed: number) {
@@ -34,6 +34,15 @@ test('océan : un poisson près du requin proche s’en éloigne', () => {
   for (let i = 0; i < 10; i++) step(o, rand);
   const after = Math.hypot(o.fish[0].x - cx, o.fish[0].y - cy);
   assert.ok(after > before, `${after} > ${before}`);
+});
+
+test('océan : une fenêtre réduite à 0 px ne casse pas la simulation', () => {
+  const rand = seeded(5);
+  const o = createOcean(320, 180, rand);
+  resizeOcean(o, 0, 0);
+  resizeOcean(o, 400, 200);
+  step(o, rand);
+  for (const p of [...o.sharks, ...o.fish, ...o.bubbles]) assert.ok(Number.isFinite(p.x) && Number.isFinite(p.y));
 });
 
 test('océan : les requins repartent de l’autre côté et se retournent à gauche', () => {

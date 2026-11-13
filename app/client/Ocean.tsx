@@ -11,7 +11,8 @@ const FPS = 20;
 const COLORS = {
   near: { '#': '#232a33', b: '#313945', g: '#161b21', e: '#bdff2e' } as Record<string, string>,
   far: { '#': '#13171c', b: '#181d23', g: '#101318', e: '#3d5214' } as Record<string, string>,
-  fish: 'rgb(189 255 46 / 0.5)',
+  // Discrets : le banc passe parfois sous du texte gris (contraste du texte).
+  fish: 'rgb(189 255 46 / 0.35)',
   bubble: '#2a313b',
 };
 
@@ -48,7 +49,7 @@ export function Ocean() {
     const el = canvas.current;
     const ctx = el?.getContext('2d');
     if (!el || !ctx) return;
-    const size = () => [Math.ceil(innerWidth / PX), Math.ceil(innerHeight / PX)] as const;
+    const size = () => [Math.max(1, Math.ceil(innerWidth / PX)), Math.max(1, Math.ceil(innerHeight / PX))] as const;
     const [w, h] = size();
     el.width = w;
     el.height = h;
@@ -71,12 +72,18 @@ export function Ocean() {
       draw(ctx, sea);
       if (!reduce.matches && !document.hidden) frame = requestAnimationFrame(tick);
     };
+    // Redimensionnement regroupé sur une image, et seulement si la taille change.
+    let resizing = 0;
     const onResize = () => {
-      const [nw, nh] = size();
-      el.width = nw;
-      el.height = nh;
-      resizeOcean(sea, nw, nh);
-      draw(ctx, sea);
+      cancelAnimationFrame(resizing);
+      resizing = requestAnimationFrame(() => {
+        const [nw, nh] = size();
+        if (nw === el.width && nh === el.height) return;
+        el.width = nw;
+        el.height = nh;
+        resizeOcean(sea, nw, nh);
+        draw(ctx, sea);
+      });
     };
     play();
     document.addEventListener('visibilitychange', play);
@@ -84,6 +91,7 @@ export function Ocean() {
     window.addEventListener('resize', onResize);
     return () => {
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(resizing);
       document.removeEventListener('visibilitychange', play);
       reduce.removeEventListener('change', play);
       window.removeEventListener('resize', onResize);

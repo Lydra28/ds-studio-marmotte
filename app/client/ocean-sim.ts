@@ -86,6 +86,8 @@ export function createOcean(w: number, h: number, rand: Rand = Math.random): Oce
 
 // Redimensionnement : on garde les créatures, ramenées dans le nouveau cadre.
 export function resizeOcean(o: Ocean, w: number, h: number) {
+  // Fenêtre réduite (0 px) : on garde l'océan tel quel, sinon NaN au retour.
+  if (w < 1 || h < 1) return;
   const sx = w / o.w;
   const sy = h / o.h;
   for (const s of o.sharks) {

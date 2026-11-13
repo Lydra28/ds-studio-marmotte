@@ -194,7 +194,6 @@ function GithubStep({
       .then((g) => {
         if (n !== seq.current) return;
         setGh(g);
-        setError('');
       })
       .catch((e) => n === seq.current && setError((e as Error).message));
   };
@@ -208,15 +207,23 @@ function GithubStep({
     return () => clearInterval(timer);
   }, [pending]);
   const linked = gh?.pro && gh.status === 'connected';
+  // Seule la dernière lecture compte ; en échec, pas de « Aucun dépôt » trompeur.
+  const reposSeq = useRef(0);
+  const [reposFailed, setReposFailed] = useState(false);
   const readRepos = () => {
+    const n = ++reposSeq.current;
     setRepos(null);
+    setReposFailed(false);
+    setError('');
     githubAction('repos')
       .then((r) => {
+        if (n !== reposSeq.current) return;
         setRepos(r.repos ?? []);
         if (r.repos?.length) setRepo((cur) => cur || r.repos![0].fullName);
       })
       .catch((e) => {
-        setRepos([]);
+        if (n !== reposSeq.current) return;
+        setReposFailed(true);
         setError((e as Error).message);
       });
   };
@@ -280,7 +287,14 @@ function GithubStep({
       ) : !gh ? (
         error ? (
           <div className="form-actions">
-            <button onClick={() => void load()}>Réessayer</button>
+            <button
+              onClick={() => {
+                setError('');
+                void load();
+              }}
+            >
+              Réessayer
+            </button>
           </div>
         ) : (
           <p className="hint">Chargement…</p>
@@ -331,7 +345,13 @@ function GithubStep({
             </span>
           </div>
           {repos === null ? (
-            <p className="hint">Lecture de tes dépôts…</p>
+            reposFailed ? (
+              <div className="form-actions">
+                <button onClick={readRepos}>Relire mes dépôts</button>
+              </div>
+            ) : (
+              <p className="hint">Lecture de tes dépôts…</p>
+            )
           ) : repos.length ? (
             <div className="onb-repo">
               <label>

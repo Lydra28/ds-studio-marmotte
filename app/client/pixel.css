@@ -1808,9 +1808,11 @@ dialog.onboarding::backdrop {
   height: 100vh;
   image-rendering: pixelated;
   pointer-events: none;
-  z-index: 0;
+  z-index: -1;
 }
-.home--ocean > :not(.ocean) {
+/* Contexte d'empilement propre : l'océan passe sous le contenu de l'accueil
+   sans toucher au positionnement des enfants (pop-in modale comprise). */
+.home--ocean {
   position: relative;
-  z-index: 1;
+  isolation: isolate;
 }
