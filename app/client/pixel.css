@@ -1508,6 +1508,9 @@ dialog.onboarding::backdrop {
 .onb-body {
   padding: 24px 28px 8px;
 }
+.onb-body h2:focus {
+  outline: 0;
+}
 .onb-body h2 {
   margin: 0 0 8px;
   font-family: var(--f-title);
@@ -1623,22 +1626,26 @@ dialog.onboarding::backdrop {
   gap: 8px;
 }
 :where(body:not(.preview-body)) .onb-dot {
+  /* Cible de 26 px de haut, pastille de 10 px dessinée au centre. */
   width: 10px;
   height: 10px;
   padding: 0;
+  box-sizing: content-box;
   border: 0;
+  border-block: 8px solid transparent;
   border-radius: 0;
-  background: var(--c-line-strong);
+  background: var(--c-line-strong) padding-box;
   transition:
     background-color 0.15s ease-out,
     width 0.2s ease-out;
 }
 :where(body:not(.preview-body)) .onb-dot:hover:not(:disabled) {
-  background: var(--c-muted);
+  background: var(--c-muted) padding-box;
+  border-color: transparent;
 }
 :where(body:not(.preview-body)) .onb-dot[aria-current='step'] {
   width: 22px;
-  background: var(--c-accent);
+  background: var(--c-accent) padding-box;
 }
 
 /* Motion Compte : logo tramé pixel par pixel (état final = logo entier). */
@@ -1785,4 +1792,25 @@ dialog.onboarding::backdrop {
   :where(body:not(.preview-body)) .onb-dot {
     transition: none;
   }
+  /* Image figée : les tokens attendent dans l'atelier, le fichier est rempli. */
+  .onb-fig__chip {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Océan de l'accueil (Ocean.tsx) : canvas basse définition agrandi au plus
+   proche voisin, derrière le contenu, jamais cliquable. */
+.ocean {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  image-rendering: pixelated;
+  pointer-events: none;
+  z-index: 0;
+}
+.home--ocean > :not(.ocean) {
+  position: relative;
+  z-index: 1;
 }

@@ -563,7 +563,8 @@ function GithubSection({ tier }: { tier: string | undefined }) {
 // Page Compte (avatar de la barre, `#/compte`) : qui est connecté, le solde
 // et les achats dans la carte en verre, le reste replié. Hors connexion : le
 // formulaire de connexion.
-export function AccountPage({ onBack }: { onBack: () => void }) {
+// `welcome` : la pop-in d'accueil existe (accueil multi-projets), sinon pas de lien.
+export function AccountPage({ onBack, welcome = true }: { onBack: () => void; welcome?: boolean }) {
   const [account, setAccount] = useState<AccountStatus>();
   const [error, setError] = useState('');
   const load = () => {
@@ -603,9 +604,11 @@ export function AccountPage({ onBack }: { onBack: () => void }) {
       {account && (
         <div className="settings-grid settings-grid--single">
           <AccountSection account={account} onChange={setAccount} />
-          <p className="hint">
-            <a href={WELCOME_HASH}>Revoir la présentation</a> : compte, GitHub et plugin Figma en trois étapes.
-          </p>
+          {welcome && (
+            <p className="hint">
+              <a href={WELCOME_HASH}>Revoir la présentation</a> : compte, GitHub et plugin Figma en trois étapes.
+            </p>
+          )}
         </div>
       )}
     </div>

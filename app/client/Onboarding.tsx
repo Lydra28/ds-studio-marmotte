@@ -49,19 +49,35 @@ export function Onboarding({
   onProject: (slug: string) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const next = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
   const [step, setStep] = useState<Step>(start);
   const [dir, setDir] = useState<'next' | 'back'>('next');
   const account = useAccount();
+  // Ouverte : le focus va à « Suivant » (pas à la croix, premier élément).
   useEffect(() => {
     dialog.current?.showModal();
+    next.current?.focus();
   }, []);
+  // Étape changée : le panneau est remonté, le focus va à son titre (annoncé).
+  const moved = useRef(false);
+  useEffect(() => {
+    if (!moved.current) return;
+    panel.current?.querySelector<HTMLElement>('#onb-title')?.focus();
+  }, [step]);
   const i = STEPS.findIndex((s) => s.id === step);
   const go = (j: number) => {
     if (j < 0 || j >= STEPS.length) return;
+    moved.current = true;
     setDir(j < i ? 'back' : 'next');
     setStep(STEPS[j].id);
   };
+  // Une seule fermeture, quel que soit le chemin (croix, Échap, fermeture
+  // forcée du dialog par le navigateur, fin).
+  const closed = useRef(false);
   const close = () => {
+    if (closed.current) return;
+    closed.current = true;
     markSeen();
     onClose();
   };
@@ -74,13 +90,14 @@ export function Onboarding({
         e.preventDefault();
         close();
       }}
+      onClose={close}
     >
       <button className="icon-btn onb-close" onClick={close} aria-label="Fermer la présentation" title="Fermer">
         <svg width="12" height="12" viewBox="0 0 12 12" shapeRendering="crispEdges" aria-hidden="true">
           <path fill="currentColor" d="M1 1h2v2H1z M3 3h2v2H3z M5 5h2v2H5z M7 7h2v2H7z M9 9h2v2H9z M9 1h2v2H9z M7 3h2v2H7z M3 7h2v2H3z M1 9h2v2H1z" />
         </svg>
       </button>
-      <div className={`onb-panel onb-panel--${dir}`} key={step}>
+      <div className={`onb-panel onb-panel--${dir}`} key={step} ref={panel}>
         <div className="onb-stage" aria-hidden="true">
           {step === 'account' && <LogoMotion />}
           {step === 'github' && <GithubMotion />}
@@ -108,11 +125,11 @@ export function Onboarding({
           ))}
         </div>
         {i < STEPS.length - 1 ? (
-          <button className="onb-next" autoFocus onClick={() => go(i + 1)}>
+          <button className="onb-next" ref={next} onClick={() => go(i + 1)}>
             Suivant
           </button>
         ) : (
-          <button className="primary" onClick={close}>
+          <button className="primary" ref={next} onClick={close}>
             C’est parti
           </button>
         )}
@@ -126,7 +143,7 @@ function AccountStep({ account }: { account: AccountStatus | undefined }) {
   const connected = account?.status === 'connected';
   return (
     <>
-      <h2 id="onb-title">Ton compte DS-Studio</h2>
+      <h2 id="onb-title" tabIndex={-1}>Ton compte DS-Studio</h2>
       <p className="onb-lead">Il active l’assistant et le Mur des DA. Tes projets restent sur cet ordinateur.</p>
       {connected ? (
         <div className="onb-done" role="status">
@@ -165,10 +182,22 @@ function GithubStep({
   const [error, setError] = useState('');
   const connected = account?.status === 'connected';
   const tier = account?.tier;
-  const load = () =>
-    getGithub()
-      .then(setGh)
-      .catch((e) => setError((e as Error).message));
+  // Réponses dans le désordre (sondage, annulation) : seule la dernière compte.
+  const seq = useRef(0);
+  const set = (g: GithubStatus) => {
+    seq.current++;
+    setGh(g);
+  };
+  const load = () => {
+    const n = ++seq.current;
+    return getGithub()
+      .then((g) => {
+        if (n !== seq.current) return;
+        setGh(g);
+        setError('');
+      })
+      .catch((e) => n === seq.current && setError((e as Error).message));
+  };
   useEffect(() => {
     if (connected) void load();
   }, [connected, tier]);
@@ -179,23 +208,36 @@ function GithubStep({
     return () => clearInterval(timer);
   }, [pending]);
   const linked = gh?.pro && gh.status === 'connected';
-  // Lié : la barre et l'accueil se relisent, la liste des dépôts arrive.
-  useEffect(() => {
-    if (!linked) return;
-    accountChanged();
+  const readRepos = () => {
+    setRepos(null);
     githubAction('repos')
       .then((r) => {
         setRepos(r.repos ?? []);
         if (r.repos?.length) setRepo((cur) => cur || r.repos![0].fullName);
       })
-      .catch((e) => setError((e as Error).message));
+      .catch((e) => {
+        setRepos([]);
+        setError((e as Error).message);
+      });
+  };
+  // Lié : la barre et l'accueil se relisent, la liste des dépôts arrive.
+  useEffect(() => {
+    if (!linked) return;
+    accountChanged();
+    readRepos();
   }, [linked]);
+  const cancel = () => {
+    setError('');
+    githubAction('cancel')
+      .then((r) => set(r.github))
+      .catch((e) => setError((e as Error).message));
+  };
   const start = async () => {
     setBusy(true);
     setError('');
     try {
       const r = await githubAction('start');
-      setGh(r.github);
+      set(r.github);
       if (r.github.verificationUri) openUrl(r.github.verificationUri);
     } catch (e) {
       setError((e as Error).message);
@@ -228,7 +270,7 @@ function GithubStep({
   };
   return (
     <>
-      <h2 id="onb-title">Ton dépôt GitHub</h2>
+      <h2 id="onb-title" tabIndex={-1}>Ton dépôt GitHub</h2>
       <p className="onb-lead">
         DS-Studio lit le design system de ton dépôt, tu le modifies ici, et chaque version acceptée part en pull request sur une
         branche. Tu merges toi-même.
@@ -236,7 +278,13 @@ function GithubStep({
       {!connected ? (
         <p className="hint">Connecte d’abord ton compte DS-Studio (étape précédente).</p>
       ) : !gh ? (
-        <p className="hint">Chargement…</p>
+        error ? (
+          <div className="form-actions">
+            <button onClick={() => void load()}>Réessayer</button>
+          </div>
+        ) : (
+          <p className="hint">Chargement…</p>
+        )
       ) : !gh.pro ? (
         <div className="onb-action">
           <button className="github-btn" disabled>
@@ -253,17 +301,23 @@ function GithubStep({
             </span>
           </p>
         </div>
-      ) : gh.status === 'pending' && gh.userCode ? (
+      ) : gh.status === 'pending' ? (
         <div className="onb-action">
-          <p>
-            Saisis ce code sur <span className="mono">{gh.verificationUri}</span> :
-          </p>
-          <p className="mono github-user-code" aria-label="Code GitHub">
-            {gh.userCode}
-          </p>
+          {gh.userCode ? (
+            <>
+              <p>
+                Saisis ce code sur <span className="mono">{gh.verificationUri}</span> :
+              </p>
+              <p className="mono github-user-code" aria-label="Code GitHub">
+                {gh.userCode}
+              </p>
+            </>
+          ) : (
+            <p className="hint">Connexion GitHub en attente…</p>
+          )}
           <div className="form-actions">
             {gh.verificationUri && <button onClick={() => openUrl(gh.verificationUri!)}>Ouvrir GitHub</button>}
-            <button disabled={busy} onClick={() => void githubAction('cancel').then((r) => setGh(r.github))}>
+            <button disabled={busy} onClick={cancel}>
               Annuler
             </button>
           </div>
@@ -282,7 +336,13 @@ function GithubStep({
             <div className="onb-repo">
               <label>
                 Dépôt à ouvrir
-                <select value={repo} onChange={(e) => setRepo(e.target.value)}>
+                <select
+                  value={repo}
+                  onChange={(e) => {
+                    setRepo(e.target.value);
+                    setError('');
+                  }}
+                >
                   {repos.map((r) => (
                     <option key={r.fullName} value={r.fullName}>
                       {r.fullName}
@@ -299,6 +359,7 @@ function GithubStep({
             <div className="form-actions">
               <p className="hint">Aucun dépôt accessible : ajoute DS-Studio à un dépôt sur GitHub.</p>
               <button onClick={() => openUrl(gh.installUrl)}>Ajouter un dépôt</button>
+              <button onClick={readRepos}>Relire mes dépôts</button>
             </div>
           )}
         </div>
@@ -329,7 +390,7 @@ function GithubStep({
 function FigmaStep({ plugin }: { plugin: string | null }) {
   return (
     <>
-      <h2 id="onb-title" className="with-mark">
+      <h2 id="onb-title" className="with-mark" tabIndex={-1}>
         Le plugin Figma
         <GlassBadge>Bientôt disponible</GlassBadge>
       </h2>
@@ -408,8 +469,8 @@ function GithubMotion() {
         <rect x="46" y="34" width="38" height="4" fill="#f2f1ec" opacity="0.85" />
       </g>
       <g className="onb-gh__check">
-        <rect x="86" y="22" width="12" height="12" fill="var(--c-accent)" />
-        <path d="M88 28h2v2h-2z M90 30h2v2h-2z M92 28h2v2h-2z M94 26h2v2h-2z" fill="#0b0b0c" />
+        <rect x="96" y="22" width="12" height="12" fill="var(--c-accent)" />
+        <path d="M98 28h2v2h-2z M100 30h2v2h-2z M102 28h2v2h-2z M104 26h2v2h-2z" fill="#0b0b0c" />
       </g>
       <g className="onb-gh__cursor">
         <path d={CURSOR} transform="scale(1.6)" fill="#f2f1ec" stroke="#0b0b0c" strokeWidth="0.4" />

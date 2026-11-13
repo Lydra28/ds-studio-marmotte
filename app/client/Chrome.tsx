@@ -165,14 +165,14 @@ export function MoreMenu({ items }: { items: { label: string; onSelect: () => vo
       list[(j + list.length) % list.length]?.focus();
     };
     if (e.key === 'ArrowDown') move(at + 1);
-    else if (e.key === 'ArrowUp') move(at - 1);
+    else if (e.key === 'ArrowUp') move(at < 0 ? list.length - 1 : at - 1);
     else if (e.key === 'Home') move(0);
     else if (e.key === 'End') move(list.length - 1);
     else if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
       close();
-    } else if (e.key === 'Tab') setOpen(false);
+    } else if (e.key === 'Tab') close();
   };
   return (
     <div className="more" ref={root} onKeyDown={open ? onKey : undefined}>

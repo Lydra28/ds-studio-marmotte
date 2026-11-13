@@ -112,7 +112,7 @@ export default function App() {
   if (!boot) return <p className="loading" role="alert">{bootError || 'Chargement…'}</p>;
   const back = () => (history.length > 1 ? history.back() : go());
   if (page === 'settings') return <SettingsPage onBack={back} />;
-  if (page === 'account') return <AccountPage onBack={back} />;
+  if (page === 'account') return <AccountPage onBack={back} welcome={boot.multi} />;
   // Instance fixe (--project=) : pas d'accueil, son unique projet s'ouvre.
   const slug = route ?? (boot.multi ? undefined : boot.fallback);
   if (!slug) return <Home onOpen={go} plugin={boot.plugin} />;

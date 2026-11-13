@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { createProject, getGithub, githubAction, listProjects, type GithubRepo, type ProjectSummary } from './api.js';
 import { ACCOUNT_HASH, AppLinks, GithubMark, GlassBadge, rememberStart, SETTINGS_HASH, useAccount, useGithub, WELCOME_HASH } from './Chrome.js';
 import { Onboarding, onboardingSeen, type Step } from './Onboarding.js';
+import { Ocean } from './Ocean.js';
 
 // Route dans le hash : `#/p/<projet>` ouvre un projet, `#/reglages` les
 // réglages de l'application, `#/compte` le compte, sinon l'accueil.
@@ -222,7 +223,8 @@ export function Home({ onOpen, plugin }: { onOpen: (slug?: string) => void; plug
   }, []);
   const status = account?.status;
   useEffect(() => {
-    if (status === 'none' && !onboardingSeen()) setWelcome((w) => w ?? 'account');
+    // Pas par-dessus un formulaire de création ouvert par lien.
+    if (status === 'none' && !onboardingSeen() && !creatingOf(location.hash)) setWelcome((w) => w ?? 'account');
   }, [status]);
   const closeWelcome = () => {
     setWelcome(null);
@@ -232,7 +234,8 @@ export function Home({ onOpen, plugin }: { onOpen: (slug?: string) => void; plug
   // Le plus récemment modifié d'abord : c'est celui qu'on rouvre.
   const sorted = projects && [...projects].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return (
-    <div className="home">
+    <div className="home home--ocean">
+      <Ocean />
       <div className="home-top">
         <AppLinks />
       </div>
