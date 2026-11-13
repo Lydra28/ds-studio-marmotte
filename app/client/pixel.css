@@ -97,15 +97,72 @@ button.primary,
   color: var(--c-text);
   box-shadow: inset 0 0 0 1px var(--c-line-strong);
 }
-:where(body:not(.preview-body)) input,
+/* Champs : trait fin uni (jamais le relief 2 px du navigateur). */
+:where(body:not(.preview-body)) input:not([type='checkbox'], [type='radio'], [type='color'], [type='range'], [type='file']),
 :where(body:not(.preview-body)) select,
 :where(body:not(.preview-body)) textarea {
   background: var(--c-bg);
-  border-color: var(--c-line);
+  border: 1px solid var(--c-line);
+  color: var(--c-text);
 }
-:where(body:not(.preview-body)) input:hover,
-:where(body:not(.preview-body)) select:hover,
-:where(body:not(.preview-body)) textarea:hover {
+/* Spécificité nulle : les paddings propres aux formulaires (.wall-ask, .assistant-input…) gagnent. */
+:where(body:not(.preview-body)) :where(input:not([type='checkbox'], [type='radio'], [type='color'], [type='range'], [type='file']), textarea) {
+  padding: 7px 10px;
+}
+:where(body:not(.preview-body)) input:focus-visible,
+:where(body:not(.preview-body)) select:focus-visible,
+:where(body:not(.preview-body)) textarea:focus-visible {
+  border-color: var(--c-info);
+  outline-offset: 0;
+}
+:where(body:not(.preview-body)) input[type='checkbox'],
+:where(body:not(.preview-body)) input[type='radio'] {
+  accent-color: var(--c-accent);
+}
+/* Avis : panneau sombre en verre, liseré de l'état (texte lisible, jamais sur fond clair). */
+.message,
+.message.ok,
+.message.error {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  color: var(--c-text);
+  border: 1px solid var(--glass-line);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.5);
+}
+.message.ok {
+  border-color: rgb(189 255 46 / 0.4);
+}
+.message.error {
+  border-color: rgb(255 61 90 / 0.5);
+}
+.message.ok::before,
+.message.error::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  vertical-align: 1px;
+  background: var(--c-accent);
+}
+.message.error::before {
+  background: var(--c-error);
+}
+/* Dans un bloc (Réglages, formulaires) : l'avis reste à sa place, sans verre. */
+.settings-block .message,
+.account-form .message,
+.assistant .message {
+  position: static;
+  max-width: none;
+  background: var(--c-raised);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+:where(body:not(.preview-body)) input:hover:not(:focus-visible),
+:where(body:not(.preview-body)) select:hover:not(:focus-visible),
+:where(body:not(.preview-body)) textarea:hover:not(:focus-visible) {
   border-color: var(--c-line-strong);
 }
 code,
@@ -418,17 +475,31 @@ code,
   border-bottom: 1px solid var(--c-line);
   overflow-x: auto;
 }
-.versions-view [role='tab'] {
+/* Onglets (Versions, Export) : texte seul, trait lime sous l'onglet actif. */
+.versions-view [role='tab'],
+.export-tabs [role='tab'] {
+  position: relative;
   border: 0;
-  border-bottom: 4px solid transparent;
-  padding: 8px 14px 6px;
-  color: var(--c-soft);
+  border-radius: var(--r-ctl) var(--r-ctl) 0 0;
+  padding: 8px 14px 10px;
+  color: var(--c-muted);
+  background: transparent;
   white-space: nowrap;
 }
-.versions-view [role='tab'][aria-selected='true'] {
+.versions-view [role='tab'][aria-selected='true'],
+.export-tabs [role='tab'][aria-selected='true'] {
   color: var(--c-text);
-  background: var(--c-raised);
-  border-bottom-color: var(--c-accent);
+  background: transparent;
+}
+.versions-view [role='tab'][aria-selected='true']::after,
+.export-tabs [role='tab'][aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 0;
+  height: 2px;
+  background: var(--c-accent);
 }
 .history {
   display: grid;
@@ -440,14 +511,15 @@ code,
 .history section {
   background: var(--c-panel);
   border: 1px solid var(--c-line);
+  border-radius: var(--r-panel);
   padding: 20px;
 }
 .history h3 {
   margin: 0 0 12px;
   font-family: var(--f-label);
-  font-weight: 400;
-  font-size: 12px;
-  text-transform: uppercase;
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: none;
   color: var(--c-muted);
 }
 .history li button {
@@ -613,14 +685,15 @@ body:has(.home) {
 .home-kicker {
   margin: 0 0 12px;
   font-family: var(--f-label);
-  font-size: 12px;
-  text-transform: uppercase;
-  color: var(--c-accent);
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: none;
+  color: var(--c-muted);
 }
 .home-hero h1 {
   margin: 0;
   font-family: var(--f-title);
-  font-weight: 700;
+  font-weight: 400;
   font-size: clamp(48px, 8vw, 88px);
   line-height: 0.95;
   letter-spacing: 0;
@@ -666,11 +739,17 @@ body:has(.home) {
   padding-left: 16px;
   border-left: 1px solid var(--c-line);
 }
+.home-journey .nav-num {
+  font-family: var(--f-title);
+  font-size: 13px;
+  color: var(--c-accent);
+}
 .home-journey strong {
   font-family: var(--f-label);
-  font-weight: 400;
-  font-size: 12px;
-  text-transform: uppercase;
+  font-weight: 600;
+  font-size: 14px;
+  text-transform: none;
+  letter-spacing: 0;
 }
 .home-journey small {
   color: var(--c-muted);
@@ -686,7 +765,7 @@ body:has(.home) {
 .home-section-head h2 {
   margin: 0;
   font-family: var(--f-title);
-  font-weight: 700;
+  font-weight: 400;
   font-size: 26px;
 }
 .home-section-head .count {
@@ -705,17 +784,20 @@ body:has(.home) {
   text-align: left;
   background: var(--c-panel);
   border: 1px solid var(--c-line);
-  border-radius: 0;
+  border-radius: var(--r-panel);
   font-family: var(--f-text);
   font-size: 14px;
   letter-spacing: 0;
   text-transform: none;
   overflow: hidden;
+  transition:
+    border-color 0.18s ease-out,
+    transform 0.18s ease-out;
 }
-.project-card:hover:not(:disabled) {
+:where(body:not(.preview-body)) .project-card:hover:not(:disabled) {
+  background: var(--c-panel);
   border-color: var(--c-accent);
-  transform: translate(-4px, -4px);
-  box-shadow: 4px 4px 0 var(--c-accent);
+  transform: translateY(-2px);
 }
 .project-card:active:not(:disabled) {
   transform: none;
@@ -730,8 +812,8 @@ body:has(.home) {
 }
 .project-card strong {
   font-family: var(--f-title);
-  font-weight: 700;
-  font-size: 24px;
+  font-weight: 400;
+  font-size: 22px;
   line-height: 1.1;
 }
 .project-card small,
@@ -819,7 +901,8 @@ body:has(.home) {
   place-items: center;
   grid-template-rows: none;
   font-family: var(--f-title);
-  font-size: 72px;
+  font-weight: 400;
+  font-size: 56px;
   color: var(--c-accent);
   background: transparent;
   border-bottom: 1px dashed var(--c-line);
@@ -850,24 +933,132 @@ body:has(.home) {
 }
 
 /* Assistant, vues pleine largeur, historique */
+/* Titres d'écran et de panneau : Departure Mono n'a qu'une graisse (400) ;
+   jamais de gras forcé, qui baverait les pixels. */
 .assistant-head strong,
 .site-view__head h2,
 .drawer h2,
-dialog.diff h2 {
+dialog.diff h2,
+.wall-head h2,
+.versions-view h2 {
   font-family: var(--f-title);
-  font-weight: 700;
+  font-weight: 400;
   font-size: 22px;
+  letter-spacing: -0.02em;
+}
+.assistant-head strong {
+  font-size: 18px;
 }
 .timeline__marks li.is-current span {
-  border-radius: 0;
+  border-radius: 6px;
   background: var(--c-accent);
   color: var(--c-on-accent);
 }
-.timeline__badge,
+.timeline__badge {
+  border-radius: 6px;
+}
 .site-view__frames .site-frame,
-.timeline__frame .site-frame,
-.frame-wrap {
-  border-radius: 0;
+.timeline__frame .site-frame {
+  border-radius: var(--r-ctl);
+}
+
+/* Fenêtres qui flottent (diff, tiroirs) : verre sur un voile flouté. */
+dialog.diff,
+.drawer {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-color: var(--glass-line);
+}
+dialog.diff::backdrop,
+.drawer-backdrop {
+  background: rgb(7 8 10 / 0.6);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+dialog.diff th {
+  font-family: var(--f-label);
+  font-weight: 600;
+  text-transform: none;
+  color: var(--c-muted);
+}
+
+/* Assistant : panneau sobre, bulles à rayon, la tienne en bleu info. */
+.assistant {
+  background: var(--c-panel);
+}
+.bubble {
+  border-radius: var(--r-ctl);
+}
+.bubble--user {
+  background: var(--c-info-bg);
+  color: var(--c-text);
+}
+.starters button {
+  background: var(--c-raised);
+  color: var(--c-soft);
+}
+
+/* Mur des DA : même trame que la planche ; la zone vide reste calme. */
+.wall {
+  background-image: radial-gradient(var(--c-dots) 1px, transparent 1.2px);
+  background-size: 8px 8px;
+}
+.planche {
+  border-radius: var(--r-panel);
+}
+
+/* Réglages : blocs à rayon, titres pixel, onglets du compte en segments,
+   offres de paiement dans une carte en verre. */
+.settings-block h2 {
+  font-family: var(--f-title);
+  font-weight: 400;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+.account-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-ctl);
+  background: var(--c-bg);
+}
+.account-tabs button {
+  border: 0;
+  border-radius: 6px;
+  padding: 5px 12px;
+}
+.account-tabs button[aria-pressed='true'] {
+  background: var(--c-raised);
+  color: var(--c-text);
+  box-shadow: inset 0 0 0 1px var(--c-line-strong);
+}
+.billing {
+  position: relative;
+  color: var(--c-soft);
+  margin-top: 16px;
+  padding: 20px;
+  border: 1px solid var(--glass-line);
+  border-radius: 14px;
+  background:
+    radial-gradient(110% 150% at 100% 0%, rgb(189 255 46 / 0.3), transparent 55%),
+    radial-gradient(90% 130% at 0% 100%, rgb(46 107 255 / 0.28), transparent 60%),
+    var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 16px 40px rgb(0 0 0 / 0.45);
+  overflow: hidden;
+}
+.billing .hint {
+  margin-top: 0;
+  color: var(--c-soft);
+}
+.github-user-code {
+  font-family: var(--f-title);
+  font-weight: 400;
 }
 
 /* Mascotte : badge et bulle suivent la DA (le sprite est dans styles.css). */
@@ -911,17 +1102,6 @@ dialog.diff h2 {
   border-bottom: 1px solid var(--c-line);
   margin-bottom: 12px;
 }
-.export-tabs [role='tab'] {
-  border: 0;
-  border-bottom: 4px solid transparent;
-  padding: 8px 14px 6px;
-  color: var(--c-soft);
-}
-.export-tabs [role='tab'][aria-selected='true'] {
-  color: var(--c-text);
-  background: var(--c-raised);
-  border-bottom-color: var(--c-accent);
-}
 .export-code {
   margin: 0 0 16px;
   max-height: min(52vh, 480px);
@@ -929,6 +1109,7 @@ dialog.diff h2 {
   padding: 16px;
   background: var(--c-bg);
   border: 1px solid var(--c-line);
+  border-radius: var(--r-ctl);
   font-family: var(--c-mono);
   font-size: 12px;
   line-height: 1.6;
