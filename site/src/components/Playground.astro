@@ -1,0 +1,118 @@
+---
+// Section interactive de l'accueil (cadrage/2026-11-14-cadrage-site.md, lot 2) :
+// changer 2 ou 3 couleurs et voir une interface suivre. Choix par boutons
+// radio, rendu en CSS seul (:has dans styles/playground.css) : rien à
+// exécuter, rien de bloqué par la CSP. Le texte sur la marque suit tout seul
+// (blanc sur le bleu, encre sur le lime et l'orange) : c'est le rôle d'un
+// token sémantique. Requins en fond : canvas animé par scripts/ocean.ts
+// (moteur de l'app, image fixe en mouvement réduit ou sur machine lente).
+import '../styles/playground.css';
+
+const brands = [
+  { id: 'bleu', label: 'Bleu', value: '#2E6BFF', on: '#FFFFFF', ratio: '4,5:1' },
+  { id: 'lime', label: 'Lime', value: '#BDFF2E', on: '#10131A', ratio: '15,5:1' },
+  { id: 'orange', label: 'Orange', value: '#FF6A1F', on: '#10131A', ratio: '6,5:1' },
+];
+const surfaces = [
+  { id: 'clair', label: 'Clair', value: '#F6F5F1' },
+  { id: 'sombre', label: 'Sombre', value: '#111318' },
+];
+---
+
+<section class="play" aria-labelledby="essayer">
+  <canvas class="play-ocean" aria-hidden="true"></canvas>
+  <div class="play-intro">
+    <h2 id="essayer">Change une couleur. Tout suit.</h2>
+    <p>Deux tokens, une interface. Dans DS-Studio, c’est tout ton projet qui suit : l’app, Figma et ton code.</p>
+  </div>
+  <div class="play-grid">
+    <div class="play-panel">
+      <fieldset>
+        <legend>Couleur de marque</legend>
+        <div class="play-swatches">
+          {
+            brands.map((b, i) => (
+              <label class={`play-swatch play-swatch--${b.id}`}>
+                <input type="radio" name="marque" id={`marque-${b.id}`} value={b.id} checked={i === 0} />
+                <span class="play-dot" />
+                <span>{b.label}</span>
+              </label>
+            ))
+          }
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Fond</legend>
+        <div class="play-swatches">
+          {
+            surfaces.map((s, i) => (
+              <label class={`play-swatch play-swatch--${s.id}`}>
+                <input type="radio" name="fond" id={`fond-${s.id}`} value={s.id} checked={i === 0} />
+                <span class="play-dot" />
+                <span>{s.label}</span>
+              </label>
+            ))
+          }
+        </div>
+      </fieldset>
+      <dl class="play-tokens">
+        <div>
+          <dt>bg/brand</dt>
+          <dd>
+            {brands.map((b) => <span class={`play-v play-v--${b.id}`}>{b.value}</span>)}
+          </dd>
+        </div>
+        <div>
+          <dt>text/on-brand</dt>
+          <dd>
+            {brands.map((b) => <span class={`play-v play-v--${b.id}`}>{b.on}</span>)}
+          </dd>
+        </div>
+        <div>
+          <dt>bg/surface</dt>
+          <dd>
+            {surfaces.map((s) => <span class={`play-v play-v--${s.id}`}>{s.value}</span>)}
+          </dd>
+        </div>
+        <div>
+          <dt>Contraste du bouton</dt>
+          <dd>
+            {brands.map((b) => <span class={`play-v play-v--${b.id}`}>{b.ratio} · AA</span>)}
+          </dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="demo" role="img" aria-label="Exemple d’interface : l’app Marmotte, aux couleurs choisies.">
+      <div class="demo-top">
+        <span class="demo-logo"></span>
+        <b>Marmotte</b>
+        <span class="demo-avatar">AM</span>
+      </div>
+      <p class="demo-label">Portefeuille</p>
+      <p class="demo-amount">1 284,50 €</p>
+      <p class="demo-delta">+2,4 % cette semaine</p>
+      <div class="demo-seg">
+        <span>7 j</span>
+        <span class="is-on">30 j</span>
+        <span>1 an</span>
+      </div>
+      <svg class="demo-chart" viewBox="0 0 300 96" preserveAspectRatio="none">
+        <path class="demo-area" d="M0 78 L30 70 L60 74 L90 58 L120 62 L150 44 L180 50 L210 34 L240 38 L270 20 L300 24 L300 96 L0 96 Z"></path>
+        <path class="demo-line" d="M0 78 L30 70 L60 74 L90 58 L120 62 L150 44 L180 50 L210 34 L240 38 L270 20 L300 24"></path>
+      </svg>
+      <div class="demo-row">
+        <span>
+          <b>Protection automatique</b>
+          <small>Repli vers le cash si le marché chute</small>
+        </span>
+        <span class="demo-switch"></span>
+      </div>
+      <span class="demo-button">Ajouter des fonds</span>
+    </div>
+  </div>
+</section>
+
+<script>
+  import '../scripts/ocean.ts';
+</script>

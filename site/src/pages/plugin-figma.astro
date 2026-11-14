@@ -1,14 +1,18 @@
 ---
 import Base from '../layouts/Base.astro';
+import PixelIcon from '../components/PixelIcon.astro';
 import { FIGMA_PLUGIN } from '../lib/site';
 ---
 
 <Base title="Plugin Figma" description="Installe le plugin DS-Studio pour envoyer ton design system dans les variables Figma.">
-  <h1>Plugin Figma</h1>
-  <p class="lead muted">
-    Le plugin écrit la version acceptée de ton design system dans les variables d’un fichier Figma, et renvoie tes
-    composants à l’atelier. Il ne parle qu’à l’app DS-Studio ouverte sur ton poste.
-  </p>
+  <div class="page-head">
+    <span class="page-icon"><PixelIcon name="figma" scale={3} /></span>
+    <h1>Plugin Figma</h1>
+    <p class="lead">
+      Le plugin écrit la version acceptée de ton design system dans les variables d’un fichier Figma, et renvoie tes
+      composants à l’atelier. Il ne parle qu’à l’app DS-Studio ouverte sur ton poste.
+    </p>
+  </div>
   <ol class="steps">
     <li>
       <div>
@@ -43,7 +47,7 @@ import { FIGMA_PLUGIN } from '../lib/site';
     </li>
   </ol>
 
-  <section aria-labelledby="linux">
+  <section class="next" aria-labelledby="linux">
     <h2 id="linux">Sur Linux</h2>
     <p class="muted">
       Figma n’a pas d’app Linux officielle : utilise Figma dans le navigateur. Le plugin y fonctionne de la même façon, l’app

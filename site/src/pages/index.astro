@@ -1,75 +1,124 @@
 ---
 import Base from '../layouts/Base.astro';
-import Prices from '../components/Prices.astro';
-import icon from '../../../desktop/icon-512.png';
+import HeroMotion from '../components/HeroMotion.astro';
+import Playground from '../components/Playground.astro';
+import PixelIcon from '../components/PixelIcon.astro';
+import { DOWNLOADS, INSTALLERS, euros, loadCatalog } from '../lib/site';
 
-// Captures de l'app générées par scripts/site-shots.mjs (projet Marmotte).
-const shots = [
-  { src: '/captures/planche.png', alt: 'Planche du design system : couleurs, typographie, échelles, avec l’aperçu en direct.', caption: 'La planche : tes tokens, les écarts aux règles et l’aperçu en direct.' },
-  { src: '/captures/extraction.png', alt: 'Panneau d’extraction : couleurs, polices et tailles lues sur un site.', caption: 'Depuis l’adresse d’un site : marque, gris, polices et tailles proposées, à valider.' },
-  { src: '/captures/versions.png', alt: 'Diff d’une révision avant validation.', caption: 'Chaque changement passe par un diff, puis devient une version acceptée.' },
-];
-const features = [
-  { title: 'Tokens et aperçu en direct', text: 'Primitives, tokens sémantiques et typographie par mode, avec un aperçu qui suit chaque brouillon.' },
-  { title: 'Règles de correction', text: 'Multiples de 4, contraste, taille de texte, nommage : les écarts sont signalés et corrigés en un clic.' },
-  { title: 'Diff et versions', text: 'Rien n’est écrit sans ton accord : chaque changement passe par un diff, l’historique se rejoue.' },
-  { title: 'Depuis un site', text: 'Donne l’adresse d’un site public : DS-Studio lit ses styles sur ton poste et propose un premier jeu.' },
+// Reste de l'accueil (cadrage/2026-11-14-cadrage-site.md, lot 3) : ce que
+// fait l'app pour chaque métier, puis téléchargement et abonnement, en
+// petites sections distinctes (retour de Romain du 2026-11-14 : boutons par
+// système avec leur logo, compte retiré). Fonctionnalités réelles seulement ;
+// montants lus dans le catalogue, comme la page Prix.
+const c = await loadCatalog();
+const design = [
+  { title: 'La planche', text: 'Primitives, tokens sémantiques et typographie par mode, avec un aperçu qui suit chaque brouillon.' },
+  { title: 'Les règles', text: 'Multiples de 4, contraste, taille de texte, nommage : les écarts sont signalés et corrigés en un clic.' },
   { title: 'Figma', text: 'Le plugin écrit la version acceptée dans tes variables Figma et renvoie tes composants à l’atelier.' },
-  { title: 'Lenny et le Mur des DA', text: 'Lenny, un assistant qui propose des brouillons et des directions artistiques générées à partir de tes inspirations.' },
+  { title: 'Lenny et le Mur des DA', text: 'Lenny propose des brouillons ; le Mur génère des directions artistiques à partir de tes inspirations.' },
+];
+const code = [
+  { title: 'Depuis l’existant', text: 'Donne l’adresse d’un site public, ou ton dépôt GitHub en Pro : DS-Studio relève couleurs, polices et tailles, et propose un premier jeu.' },
+  { title: 'Diff et versions', text: 'Rien n’est écrit sans ton accord : chaque changement passe par un diff, Comparer montre l’avant et l’après.' },
+  { title: 'Export', text: 'CSS, Tailwind v4 ou JSON, à copier ou à télécharger.' },
+  { title: 'Pull request', text: 'En Pro, la version acceptée part en pull request sur ton dépôt : les valeurs en dur deviennent des tokens.' },
 ];
 ---
 
 <Base title="DS-Studio">
   <div class="hero">
     <div>
-      <p class="kicker">Atelier de design system</p>
-      <h1>Ton design system, sur ton poste.</h1>
+      <h1>Un design system.<br />Tout le projet.</h1>
       <p class="lead">
-        DS-Studio fait évoluer tes tokens avec un aperçu en direct, des règles de correction et des versions acceptées, puis les
-        envoie dans Figma et dans ton code. Tes projets ne quittent jamais ton ordinateur.
+        Designers et développeurs travaillent sur les mêmes tokens : tu les modifies dans DS-Studio, tu compares, puis tu les
+        envoies dans Figma et dans ton code.
       </p>
       <div class="actions">
-        <a class="button primary" href="/compte/#creer">Créer un compte</a>
-        <a class="button" href="/telecharger/">Télécharger l’app</a>
+        <a class="button primary" href="/telecharger/">Télécharger l’app</a>
+        <a class="button" href="/prix/">Voir les prix</a>
       </div>
     </div>
-    <img src={icon.src} width="256" height="256" alt="Le requin marteau, logo de DS-Studio" />
+    <HeroMotion />
   </div>
 
-  <section aria-labelledby="fonctions">
-    <h2 id="fonctions">Ce que fait l’atelier</h2>
-    <div class="grid">
-      {
-        features.map((f) => (
-          <div class="card">
-            <h3>{f.title}</h3>
-            <p class="muted">{f.text}</p>
-          </div>
-        ))
-      }
+  <Playground />
+
+  <section class="roles" aria-labelledby="metiers">
+    <h2 id="metiers">Un atelier, deux métiers.</h2>
+    <p class="roles-lead">
+      Le designer règle les tokens, le développeur les reçoit dans son code. Entre les deux, une seule source et un diff à
+      chaque changement.
+    </p>
+    <div class="roles-cols">
+      <div>
+        <div class="roles-head">
+          <PixelIcon name="design" scale={3} />
+          <h3>Côté design</h3>
+        </div>
+        <dl class="roles-list">
+          {
+            design.map((f) => (
+              <div>
+                <dt>{f.title}</dt>
+                <dd>{f.text}</dd>
+              </div>
+            ))
+          }
+        </dl>
+      </div>
+      <div>
+        <div class="roles-head">
+          <PixelIcon name="code" scale={3} />
+          <h3>Côté code</h3>
+        </div>
+        <dl class="roles-list">
+          {
+            code.map((f) => (
+              <div>
+                <dt>{f.title}</dt>
+                <dd>{f.text}</dd>
+              </div>
+            ))
+          }
+        </dl>
+      </div>
     </div>
   </section>
 
-  <section aria-labelledby="captures">
-    <h2 id="captures">En images</h2>
-    <div class="shots">
+  <section class="get" aria-labelledby="telecharger">
+    <h2 id="telecharger">Télécharge DS-Studio</h2>
+    <p class="muted">Gratuit, installé sur ton poste. Il se met ensuite à jour tout seul sur Windows et Linux.</p>
+    <div class="get-os">
       {
-        shots.map((s) => (
-          <figure>
-            <img src={s.src} alt={s.alt} width="1280" height="800" loading="lazy" />
-            <figcaption>{s.caption}</figcaption>
-          </figure>
+        INSTALLERS.map((i) => (
+          <a class="button get-button" href={`${DOWNLOADS}/${i.file}`} download aria-label={`Télécharger pour ${i.os}`}>
+            <PixelIcon name={i.icon} />
+            <span>{i.os}</span>
+          </a>
         ))
       }
     </div>
+    <p class="get-note">
+      macOS : Mac à puce Apple seulement. Premier lancement d’une app pas encore signée :
+      <a href="/telecharger/">les étapes par système</a>.
+    </p>
   </section>
 
-  <section aria-labelledby="prix">
-    <h2 id="prix">Prix</h2>
-    <Prices />
+  <section class="pro" aria-labelledby="abonnement">
+    <div>
+      <h2 id="abonnement">Passe Pro</h2>
+      <p class="muted">
+        {euros(c.pro.includedCents)} d’usage de l’assistant et du Mur inclus chaque mois, GitHub et ses pull requests. Sans
+        engagement.
+      </p>
+    </div>
+    <div class="pro-cta">
+      <p class="pro-price">{euros(c.pro.amountCents)} <span>/ mois</span></p>
+      <a class="button primary" href="/compte/">Passer Pro</a>
+    </div>
   </section>
 
-  <section aria-labelledby="poste">
+  <section class="local" aria-labelledby="poste">
     <h2 id="poste">Tes projets restent chez toi</h2>
     <p class="muted">
       Le serveur DS-Studio ne garde que ton compte, ton abonnement, ton solde de crédits et le coût de tes générations. Tes

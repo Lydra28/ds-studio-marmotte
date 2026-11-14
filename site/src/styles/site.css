@@ -1,7 +1,7 @@
-/* Site vitrine DS-Studio (lot 7) : DA « Atelier 8-bit » de l'app, tokens
-   lus dans app/client/da.css (seule source). Tous les styles du site sont
-   dans ce fichier, pour la passe graphique de Romain. Multiples de 4,
-   aucun arrondi, coins en escalier (--px), un seul accent. */
+/* Site vitrine DS-Studio : DA « Atelier acide » de l'app (refonte du site,
+   cadrage/2026-11-14-cadrage-site.md), tokens lus dans app/client/da.css
+   (seule source). Multiples de 4, rayon --r-ctl sur les contrôles, coins en
+   escalier (--px-btn) réservés à l'action principale, un seul accent. */
 @import '../../../app/client/da.css';
 
 *,
@@ -31,6 +31,15 @@ img {
 a {
   color: var(--c-accent);
   text-underline-offset: 4px;
+}
+::selection {
+  background: var(--c-accent);
+  color: var(--c-on-accent);
+}
+html {
+  scrollbar-color: var(--c-line-strong) var(--c-bg);
+  accent-color: var(--c-accent);
+  caret-color: var(--c-accent);
 }
 :focus-visible {
   outline: 2px solid var(--c-accent);
@@ -122,13 +131,19 @@ code,
   color: var(--c-soft);
   text-decoration: none;
   font-family: var(--f-label);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 14px;
+  font-weight: 500;
 }
-.top nav a:hover,
+.top nav a:hover {
+  color: var(--c-text);
+}
 .top nav a[aria-current='page'] {
   color: var(--c-accent);
+}
+/* Bouton « Menu » : mobile seulement, et seulement si scripts/menu.ts tourne
+   (classe has-menu) ; sinon la navigation reste visible. */
+.menu-toggle {
+  display: none;
 }
 main {
   flex: 1;
@@ -158,33 +173,52 @@ button {
   justify-content: center;
   gap: 8px;
   min-height: 44px;
-  padding: 12px 20px;
+  padding: 10px 20px;
   font-family: var(--f-label);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 15px;
+  font-weight: 500;
   text-decoration: none;
   color: var(--c-text);
-  background: var(--c-raised);
-  border: 1px solid var(--c-line);
-  border-radius: 0;
+  background: transparent;
+  border: 1px solid var(--c-line-strong);
+  border-radius: var(--r-ctl);
   cursor: pointer;
-  clip-path: var(--px);
-  transition: transform 0.12s steps(3);
+  transition:
+    background-color 0.15s ease-out,
+    border-color 0.15s ease-out,
+    transform 0.12s ease-out;
 }
 .button:hover,
 button:hover:not(:disabled) {
-  border-color: var(--c-text);
+  background: var(--c-raised);
+  border-color: var(--c-muted);
 }
 .button:active,
 button:active:not(:disabled) {
-  transform: translateY(2px);
+  transform: translateY(1px);
 }
+/* L'action principale : lime plein, coins pixel, comme dans l'app. */
 .button.primary,
 button.primary {
   background: var(--c-accent);
   border-color: var(--c-accent);
+  border-radius: 0;
+  clip-path: var(--px-btn);
+  box-shadow: inset 0 -3px 0 rgb(0 0 0 / 0.2);
   color: var(--c-on-accent);
+  font-weight: 600;
+}
+.button.primary:hover,
+button.primary:hover:not(:disabled) {
+  background: var(--c-accent-hover);
+  border-color: var(--c-accent-hover);
+}
+/* Le clip-path des coins pixel couperait l'anneau de focus : coins droits
+   pendant le focus clavier. */
+.button.primary:focus-visible,
+button.primary:focus-visible {
+  clip-path: none;
+  outline-offset: 3px;
 }
 button:disabled {
   opacity: 0.5;
@@ -198,83 +232,591 @@ button:disabled {
 }
 
 /* Blocs. */
+/* Haut de page centré, motion large en dessous (référence atlas.design,
+   retour de Romain du 2026-11-14). */
 .hero {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  gap: 48px;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  margin-bottom: 64px;
+  gap: 56px;
+  margin: 24px 0 96px;
+  text-align: center;
+}
+.hero h1 {
+  font-size: clamp(36px, 6.4vw, 72px);
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  margin-bottom: 24px;
+  text-wrap: balance;
 }
 .hero .lead {
-  font-size: 20px;
+  font-size: 19px;
+  line-height: 1.55;
   color: var(--c-soft);
+  max-width: 34em;
+  margin-inline: auto;
+  text-wrap: pretty;
 }
-.hero img {
-  image-rendering: pixelated;
-  justify-self: center;
-}
-.kicker {
-  font-family: var(--f-label);
-  font-size: 12px;
-  text-transform: uppercase;
-  color: var(--c-accent);
-  margin-bottom: 12px;
+.hero .actions {
+  justify-content: center;
 }
 section {
   margin-bottom: 64px;
 }
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 16px;
-}
-.card {
-  background: var(--c-panel);
-  border: 1px solid var(--c-line);
-  padding: 24px;
-  clip-path: var(--px);
-}
-.card h3 {
-  margin-bottom: 8px;
-}
-.card p:last-child {
-  margin-bottom: 0;
-}
 .muted {
   color: var(--c-muted);
 }
-.shots {
-  display: grid;
-  gap: 24px;
+/* Accueil, lot 3 : ce que fait l'app pour chaque métier, puis pour
+   commencer. Pas de cartes identiques (retour de Romain : trop de carrés) :
+   des colonnes séparées par des filets, un seul bloc mis en avant. */
+.roles {
+  margin-bottom: 120px;
 }
-.shots figure {
-  margin: 0;
-  border: 1px solid var(--c-line);
-  background: var(--c-panel);
+.roles > h2,
+.roles-lead {
+  text-align: center;
 }
-.shots figcaption {
-  padding: 12px 16px;
-  font-size: 14px;
+.roles-lead {
+  max-width: 36em;
+  margin: 0 auto 48px;
+  font-size: 17px;
   color: var(--c-soft);
+  text-wrap: balance;
+}
+.roles-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--c-line);
+}
+.roles-cols > div {
+  padding: 32px 48px 0 0;
+}
+.roles-cols > div + div {
+  padding: 32px 0 0 48px;
+  border-left: 1px solid var(--c-line);
+}
+.roles-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  color: var(--c-accent);
+}
+.roles-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.roles-list {
+  margin: 0;
+}
+.roles-list div + div {
+  margin-top: 24px;
+}
+.roles-list dt {
+  margin-bottom: 4px;
+  font-weight: 600;
+  color: var(--c-text);
+}
+.roles-list dd {
+  margin: 0;
+  color: var(--c-muted);
+  text-wrap: pretty;
 }
 
-/* Prix. */
-.price {
+/* Téléchargement : un bouton par système, logo pixel (PixelIcon.astro). */
+.get {
+  margin-bottom: 96px;
+  text-align: center;
+}
+.get-os {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 32px;
+}
+.get-button {
+  gap: 12px;
+  min-width: 180px;
+  min-height: 56px;
+  justify-content: center;
+  font-size: 16px;
+}
+.get-button svg {
+  color: var(--c-accent);
+}
+.get-note {
+  margin: 20px 0 0;
+  font-size: 14px;
+  color: var(--c-muted);
+}
+
+/* Abonnement : bande entre deux filets, prix et appel à droite. */
+.pro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  margin-bottom: 96px;
+  padding: 40px 0;
+  border-block: 1px solid var(--c-line);
+}
+.pro h2 {
+  margin-bottom: 8px;
+}
+.pro p {
+  max-width: 34em;
+  margin: 0;
+}
+.pro-cta {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex: none;
+}
+.pro .pro-price {
+  font-family: var(--f-title);
+  font-size: 28px;
+  color: var(--c-text);
+  white-space: nowrap;
+}
+.pro-price span {
+  font-family: var(--f-text);
+  font-size: 15px;
+  color: var(--c-muted);
+}
+.local {
+  max-width: 40em;
+}
+.local h2 {
+  font-size: 20px;
+}
+
+/* Pages intérieures (lot 5) : même en-tête que la page Prix. */
+.page-head {
+  margin: 8px 0 56px;
+}
+.page-head h1 {
+  font-size: clamp(40px, 6.4vw, 72px);
+  line-height: 1.05;
+  margin-bottom: 24px;
+}
+.page-head .lead {
+  max-width: 34em;
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.55;
+  color: var(--c-soft);
+  text-wrap: pretty;
+}
+/* Logo pixel au-dessus du titre (page Plugin Figma). */
+.page-icon {
+  display: block;
+  margin-bottom: 24px;
+  color: var(--c-accent);
+}
+.page-icon svg {
+  display: block;
+}
+.page-head:has(h1:only-child) {
+  margin-bottom: 32px;
+}
+.next {
+  margin-top: 96px;
+}
+
+/* Télécharger : un système par colonne, filets comme la page Prix. */
+.os-cols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--c-line);
+}
+.os-col {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
+  margin: 0;
+  padding: 32px 32px 0 0;
+  color: var(--c-accent);
 }
-.price .amount {
+.os-col + .os-col {
+  padding-left: 32px;
+  border-left: 1px solid var(--c-line);
+}
+/* Logos de hauteurs différentes (11 ou 12 pixels) : titres alignés. */
+.os-icon {
+  display: flex;
+  align-items: flex-end;
+  height: 36px;
+}
+.os-col h2 {
+  margin: 20px 0 4px;
+  font-size: 24px;
+  color: var(--c-text);
+}
+.os-col .muted {
+  margin-bottom: 24px;
+}
+.os-col h3 {
+  margin: 32px 0 8px;
+  font-family: var(--f-text);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-muted);
+}
+.os-note {
+  margin: 0;
+  font-size: 14px;
+  color: var(--c-soft);
+  text-wrap: pretty;
+}
+
+/* Page Prix (lot 4) : texte et carte Pro en verre (GlassCard.astro), puis
+   trois colonnes à filets, Pro marqué en lime. */
+.price-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 460px);
+  align-items: center;
+  gap: 56px;
+  margin: 8px 0 72px;
+}
+.price-hero h1 {
+  font-size: clamp(40px, 6.4vw, 72px);
+  line-height: 1.05;
+  margin-bottom: 24px;
+}
+.price-hero .lead {
+  max-width: 30em;
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.55;
+  color: var(--c-soft);
+  text-wrap: pretty;
+}
+
+/* La carte : verre (flou de ce qui est derrière) devant une forme lime
+   qu'on ne voit qu'à travers elle. Tailles en cqw de la scène. */
+.gc {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1.25;
+  container-type: inline-size;
+  perspective: 1400px;
+}
+.gc-glow {
+  position: absolute;
+  inset: 18% 12%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 40%, var(--c-accent), transparent 62%),
+    radial-gradient(circle at 75% 65%, var(--c-info), transparent 60%);
+  filter: blur(56px);
+  opacity: 0.4;
+}
+/* Forme toujours cachée derrière la carte (retour de Romain : on ne doit
+   pas la voir dépasser) : seule sa version floue traverse le verre. */
+.gc-shape {
+  position: absolute;
+  top: 26.25%;
+  left: 32%;
+  width: 56%;
+  aspect-ratio: 56 / 38;
+  /* Lumière sans contour (retours de Romain) : une ellipse allongée et
+     inclinée comme la carte, qui s'efface lentement jusqu'au transparent.
+     Centre (0,6 ; 0,4) et rayons (0,28 ; 0,19) en largeur W de la scène :
+     dans la carte (x 0,08 à 0,92, y 0,135 à 0,665). */
+  transform: rotate(-5deg);
+  background: radial-gradient(
+    ellipse closest-side,
+    color-mix(in oklab, var(--c-accent), white 40%),
+    var(--c-accent) 18%,
+    color-mix(in oklab, var(--c-accent) 55%, transparent) 42%,
+    color-mix(in oklab, var(--c-accent) 18%, transparent) 70%,
+    transparent 100%
+  );
+}
+.gc-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 84%;
+  aspect-ratio: 1.586;
+  padding: 6.5cqw 7cqw;
+  color: var(--c-text);
+  /* Teinte sombre sous le reflet : le texte reste lisible devant le lime. */
+  background:
+    linear-gradient(140deg, rgb(255 255 255 / 0.18), rgb(255 255 255 / 0.04) 55%, rgb(255 255 255 / 0.08)),
+    rgb(7 8 10 / 0.42);
+  border: 1px solid rgb(255 255 255 / 0.24);
+  border-radius: 5cqw;
+  backdrop-filter: blur(32px) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.35),
+    0 3cqw 8cqw rgb(0 0 0 / 0.5);
+  /* Orientation choisie par Romain (ancien état de survol), légère
+     flottaison ; pas de survol. Image fixe en mouvement réduit. */
+  transform: rotateX(8deg) rotateY(-8deg) rotateZ(-5deg);
+  animation: gc-float 6s ease-in-out infinite alternate;
+  will-change: transform;
+}
+@keyframes gc-float {
+  to {
+    transform: translateY(-2.4cqw) rotateX(10deg) rotateY(-6deg) rotateZ(-4deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gc-card {
+    animation: none;
+  }
+}
+.gc-top {
+  display: flex;
+  align-items: center;
+  gap: 2.4cqw;
+  font-family: var(--f-title);
+  font-size: 4.2cqw;
+}
+.gc-top img {
+  width: 6.4cqw;
+  height: auto;
+  image-rendering: pixelated;
+}
+.gc-top b {
+  margin-left: auto;
+  padding: 0.6cqw 2cqw;
+  font-size: 3.4cqw;
+  color: var(--c-on-accent);
+  background: var(--c-accent);
+  border-radius: 1.2cqw;
+}
+.gc-chip {
+  width: 12cqw;
+  aspect-ratio: 1.3;
+  border-radius: 1.6cqw;
+  background:
+    linear-gradient(90deg, transparent 32%, rgb(0 0 0 / 0.18) 32% 36%, transparent 36% 64%, rgb(0 0 0 / 0.18) 64% 68%, transparent 68%),
+    linear-gradient(180deg, transparent 46%, rgb(0 0 0 / 0.18) 46% 54%, transparent 54%),
+    linear-gradient(135deg, rgb(255 255 255 / 0.75), rgb(255 255 255 / 0.3));
+}
+.gc-bottom p {
+  margin: 0;
+}
+.gc-price {
+  font-family: var(--f-title);
+  font-size: 8.4cqw;
+  line-height: 1.1;
+}
+.gc-price span {
+  font-family: var(--f-text);
+  font-size: 3.6cqw;
+  color: var(--c-text);
+}
+.gc-foot {
+  margin-top: 1cqw;
+  font-size: 3.6cqw;
+  letter-spacing: 0.02em;
+  color: var(--c-text);
+}
+
+.plans {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--c-line);
+}
+.plan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 32px 32px 0 0;
+}
+.plan + .plan {
+  padding-left: 32px;
+  border-left: 1px solid var(--c-line);
+}
+.plan--pro::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--c-accent);
+}
+.plan h2 {
+  margin-bottom: 8px;
+  font-size: 20px;
+}
+.plan--pro h2 {
+  color: var(--c-accent);
+}
+.plan .amount {
+  margin: 0 0 24px;
   font-family: var(--f-title);
   font-size: 32px;
-  margin: 8px 0 16px;
 }
-.price ul {
-  margin: 0 0 16px;
-  padding-left: 20px;
+.plan .amount .muted {
+  font-family: var(--f-text);
+  font-size: 15px;
+}
+.plan ul {
   flex: 1;
+  margin: 0 0 28px;
+  padding: 0;
+  list-style: none;
 }
-.price.highlight {
+.plan li {
+  position: relative;
+  padding: 8px 0 8px 18px;
+  color: var(--c-soft);
+  border-top: 1px solid var(--c-line);
+}
+/* Puce pixel : un carré de 6 px. */
+.plan li::before {
+  content: '';
+  position: absolute;
+  top: 17px;
+  left: 0;
+  width: 6px;
+  height: 6px;
+  background: var(--c-muted);
+}
+.plan--pro li::before {
+  background: var(--c-accent);
+}
+.plan .button {
+  align-self: flex-start;
+}
+.plans-note {
+  margin: 32px 0 96px;
+  font-size: 14px;
+  color: var(--c-muted);
+}
+
+/* Crédits : barre à paliers (Prices.astro, retour de Romain du 2026-11-14),
+   radios lues par :has(), sans script. Trois paliers comme les packs du
+   serveur (type Pack de server/billing.ts) : en ajouter un = revoir les
+   nth-child ci-dessous. Remplissage du centre du premier carré (10 px) à
+   celui du palier choisi. */
+.cr {
+  margin: 0 0 24px;
+  padding: 0;
+  border: 0;
+}
+.cr legend {
+  margin-bottom: 14px;
+  padding: 0;
+  font-size: 13px;
+  color: var(--c-muted);
+}
+.cr-track {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+}
+.cr-track::before,
+.cr-track::after {
+  content: '';
+  position: absolute;
+  top: 9px;
+  left: 10px;
+  right: 10px;
+  height: 2px;
+  background: var(--c-line-strong);
+}
+.cr-track::after {
+  right: auto;
+  width: 0;
+  background: var(--c-accent);
+  transition: width 0.25s ease-out;
+}
+.plan--credits:has(.cr-stop:nth-child(2) input:checked) .cr-track::after {
+  width: calc(50% - 10px);
+}
+.plan--credits:has(.cr-stop:nth-child(3) input:checked) .cr-track::after {
+  width: calc(100% - 20px);
+}
+.cr-stop {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 48px;
+  min-height: 44px;
+  font-size: 14px;
+  color: var(--c-muted);
+  cursor: pointer;
+  transition: color 0.15s ease-out;
+}
+.cr-stop:first-child {
+  align-items: flex-start;
+}
+.cr-stop:last-child {
+  align-items: flex-end;
+}
+.cr-stop::before {
+  content: '';
+  width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  background: var(--c-bg);
+  border: 2px solid var(--c-line-strong);
+  transition:
+    background-color 0.15s ease-out,
+    border-color 0.15s ease-out;
+}
+.cr-stop:hover {
+  color: var(--c-text);
+}
+.cr-stop:has(~ .cr-stop input:checked)::before {
   border-color: var(--c-accent);
+}
+.cr-stop:has(input:checked) {
+  color: var(--c-text);
+}
+.cr-stop:has(input:checked)::before {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+}
+.cr-stop:has(input:focus-visible)::before {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 3px;
+}
+.cr-stop input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.plan--credits .cr-v {
+  display: none;
+}
+.plan--credits:has(.cr-stop:nth-child(1) input:checked) .cr-v:nth-child(1),
+.plan--credits:has(.cr-stop:nth-child(2) input:checked) .cr-v:nth-child(2),
+.plan--credits:has(.cr-stop:nth-child(3) input:checked) .cr-v:nth-child(3) {
+  display: inline;
+}
+
+/* Questions fréquentes : deux colonnes, question au-dessus de sa réponse. */
+.faq {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 48px;
+}
+.faq h3 {
+  margin: 24px 0 8px;
+  font-size: 17px;
+}
+.faq p {
+  color: var(--c-muted);
 }
 
 /* Étapes numérotées (plugin, installation). */
@@ -284,24 +826,32 @@ section {
   padding: 0;
   margin: 0;
   display: grid;
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 32px;
 }
+/* Une étape par colonne : numéro pixel au-dessus, filet en tête. */
 .steps li {
   counter-increment: step;
   display: grid;
-  grid-template-columns: 40px 1fr;
+  align-content: start;
   gap: 16px;
+  padding-top: 20px;
+  color: var(--c-soft);
+  border-top: 1px solid var(--c-line);
 }
 .steps li::before {
   content: counter(step);
-  font-family: var(--f-label);
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
+  font-family: var(--f-title);
   background: var(--c-accent);
   color: var(--c-on-accent);
   clip-path: var(--px);
+}
+.steps strong {
+  color: var(--c-text);
 }
 
 /* Formulaires du compte. */
@@ -328,15 +878,52 @@ input {
 input:focus-visible {
   border-color: var(--c-accent);
 }
+/* Compte : tout dans un panneau en verre ; onglets en sélecteur segmenté. */
+.account {
+  max-width: 560px;
+  padding: 32px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--r-panel);
+}
+.account form {
+  max-width: none;
+}
+.account section {
+  margin-bottom: 0;
+}
+.account h2 {
+  margin-top: 32px;
+  font-size: 18px;
+}
 .tabs {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 24px;
+  gap: 4px;
+  margin: 24px 0;
+  padding: 4px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-ctl);
 }
-.tabs button[aria-pressed='true'] {
-  border-color: var(--c-accent);
-  color: var(--c-accent);
+.tabs button {
+  flex: 1;
+  min-height: 40px;
+  padding: 4px 8px;
+  font-size: 14px;
+  line-height: 1.25;
+  color: var(--c-muted);
+  background: transparent;
+  border: 0;
+}
+.tabs button:hover:not(:disabled) {
+  color: var(--c-text);
+  background: transparent;
+}
+.tabs button[aria-pressed='true'],
+.tabs button[aria-pressed='true']:hover:not(:disabled) {
+  color: var(--c-text);
+  background: var(--c-raised);
+  box-shadow: inset 0 -2px 0 var(--c-accent);
 }
 .message {
   padding: 12px 16px;
@@ -388,26 +975,123 @@ ul.purchases li {
 }
 
 /* Pages de texte (légales). */
+/* Pages légales : texte inchangé, mise en page seule (lot 5). */
 .prose {
   max-width: 720px;
 }
+.prose h1 {
+  font-size: clamp(32px, 5vw, 48px);
+  line-height: 1.1;
+  margin: 8px 0 40px;
+}
 .prose h2 {
-  font-size: 22px;
-  margin-top: 40px;
+  font-size: 18px;
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--c-line);
+}
+.prose p,
+.prose li {
+  color: var(--c-soft);
+  line-height: 1.7;
+}
+@media (max-width: 900px) {
+  .hero {
+    gap: 40px;
+  }
+  /* Télécharger : sous 900 px, le bouton ne tient plus sur une ligne en
+     trois colonnes. */
+  .os-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .os-col,
+  .os-col + .os-col {
+    padding: 28px 0;
+    border-left: 0;
+  }
+  .os-col + .os-col {
+    border-top: 1px solid var(--c-line);
+  }
 }
 @media (max-width: 800px) {
-  .hero {
-    grid-template-columns: 1fr;
-  }
   main {
     padding: 32px 16px 48px;
   }
+  .roles-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .roles-cols > div,
+  .roles-cols > div + div {
+    padding: 32px 0 0;
+    border-left: 0;
+  }
+  .roles-cols > div + div {
+    margin-top: 32px;
+    border-top: 1px solid var(--c-line);
+  }
+  .pro {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .price-hero,
+  .plans,
+  .faq {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .price-hero {
+    gap: 24px;
+  }
+  .plan,
+  .plan + .plan {
+    padding: 28px 0;
+    border-left: 0;
+  }
+  .plan + .plan {
+    border-top: 1px solid var(--c-line);
+  }
+  .account {
+    padding: 24px 16px;
+  }
+  .get-button {
+    flex: 1 1 100%;
+  }
   .top {
-    padding: 16px;
+    padding: 12px 16px;
+  }
+  .top.has-menu .menu-toggle {
+    display: inline-flex;
+    min-height: 44px;
+    padding: 0 14px;
+    font-size: 14px;
+    color: var(--c-soft);
+  }
+  .top.has-menu .menu-toggle svg {
+    color: var(--c-accent);
+  }
+  .top.has-menu nav {
+    display: none;
+    width: 100%;
+  }
+  .top.has-menu.is-open nav {
+    display: block;
+  }
+  .top.has-menu nav ul {
+    flex-direction: column;
+    gap: 0;
+    border-top: 1px solid var(--c-line);
+  }
+  .top.has-menu nav a {
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+    font-size: 16px;
+    border-bottom: 1px solid var(--c-line);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  * {
+  *,
+  *::before,
+  *::after {
     transition: none !important;
   }
 }

@@ -1,27 +1,37 @@
 ---
 import Base from '../layouts/Base.astro';
+import PixelIcon from '../components/PixelIcon.astro';
 import { DOWNLOADS, INSTALLERS } from '../lib/site';
+
+// Lot 5 du site : un système par colonne (filets, logo pixel), puis les
+// étapes après l'installation.
 ---
 
 <Base title="Télécharger" description="Télécharge DS-Studio pour Windows, macOS ou Linux.">
-  <h1>Télécharger DS-Studio</h1>
-  <p class="lead muted">Toujours la dernière version publiée. L’app se met ensuite à jour toute seule (Windows et Linux).</p>
-  <div class="grid">
+  <div class="page-head">
+    <h1>Télécharger DS-Studio</h1>
+    <p class="lead">Toujours la dernière version publiée. L’app se met ensuite à jour toute seule (Windows et Linux).</p>
+  </div>
+  <div class="os-cols">
     {
       INSTALLERS.map((i) => (
-        <div class="card price">
-          <h2>{i.os}</h2>
+        <section class="os-col" aria-labelledby={`os-${i.icon}`}>
+          <span class="os-icon">
+            <PixelIcon name={i.icon} scale={3} />
+          </span>
+          <h2 id={`os-${i.icon}`}>{i.os}</h2>
           <p class="muted">{i.detail}</p>
-          <p>{i.note}</p>
           <a class="button primary" href={`${DOWNLOADS}/${i.file}`} download>
             Télécharger pour {i.os}
           </a>
-        </div>
+          <h3>Premier lancement</h3>
+          <p class="os-note">{i.note}</p>
+        </section>
       ))
     }
   </div>
 
-  <section aria-labelledby="ensuite">
+  <section class="next" aria-labelledby="ensuite">
     <h2 id="ensuite">Ensuite</h2>
     <ol class="steps">
       <li><div>Au premier lancement, choisis le dossier où ranger tes projets.</div></li>

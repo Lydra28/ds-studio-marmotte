@@ -39,22 +39,26 @@ export const euros = (cents: number) =>
     ? `${cents / 100} €`
     : `${(cents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 
-// Fichiers à nom fixe poussés par release.yml à chaque version (lot 7).
+// Fichiers à nom fixe poussés par release.yml à chaque version (lot 7) ;
+// `icon` : logo pixel du système (components/PixelIcon.astro).
 export const INSTALLERS = [
   {
     os: 'Windows',
+    icon: 'windows',
     file: 'DS-Studio-Setup.exe',
     detail: 'Windows 10 ou 11, 64 bits.',
     note: 'L’installateur n’est pas encore signé : Windows affiche « Windows a protégé votre ordinateur ». Clique « Informations complémentaires », puis « Exécuter quand même ».',
   },
   {
     os: 'macOS',
+    icon: 'apple',
     file: 'DS-Studio.dmg',
     detail: 'Mac à puce Apple (M1 et suivants).',
     note: 'L’app n’est pas encore signée par Apple : après l’avoir glissée dans Applications, fais clic droit sur DS-Studio puis « Ouvrir », et confirme. Les mises à jour automatiques arriveront avec la signature.',
   },
   {
     os: 'Linux',
+    icon: 'linux',
     file: 'DS-Studio.AppImage',
     detail: 'AppImage 64 bits, sans installation.',
     note: 'Rends le fichier exécutable (clic droit → Propriétés → Autoriser l’exécution, ou chmod +x DS-Studio.AppImage), puis lance-le.',

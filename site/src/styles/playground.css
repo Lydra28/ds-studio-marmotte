@@ -1,0 +1,407 @@
+/* Section interactive de l'accueil (components/Playground.astro), lot 2.
+   Le choix vient de boutons radio lus par :has() ; les couleurs de la démo
+   sont des propriétés enregistrées (@property), donc animables : la bascule
+   se fait en 0,3 s. Les tokens de la démo (--d-*) restent locaux à la
+   section : ce ne sont pas ceux du site (da.css). */
+
+@property --d-brand {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #2e6bff;
+}
+@property --d-on {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ffffff;
+}
+@property --d-bg {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #f6f5f1;
+}
+@property --d-text {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #10131a;
+}
+@property --d-muted {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #5f6672;
+}
+@property --d-card {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ffffff;
+}
+@property --d-line {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #e3e2dd;
+}
+
+.play {
+  --d-brand: #2e6bff;
+  --d-on: #ffffff;
+  --d-bg: #f6f5f1;
+  --d-text: #10131a;
+  --d-muted: #5f6672;
+  --d-card: #ffffff;
+  --d-line: #e3e2dd;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  margin-bottom: 96px;
+  padding: 72px 48px;
+  transition:
+    --d-brand 0.3s ease-out,
+    --d-on 0.3s ease-out,
+    --d-bg 0.3s ease-out,
+    --d-text 0.3s ease-out,
+    --d-muted 0.3s ease-out,
+    --d-card 0.3s ease-out,
+    --d-line 0.3s ease-out;
+}
+/* Texte sur la marque : blanc sur le bleu (4,5:1), encre sur le lime
+   (15,5:1) et l'orange (6,5:1). Couleurs à garder synchronisées avec le
+   tableau de Playground.astro (valeurs affichées) et les --dot plus bas. */
+.play:has(#marque-lime:checked) {
+  --d-brand: #bdff2e;
+  --d-on: #10131a;
+}
+.play:has(#marque-orange:checked) {
+  --d-brand: #ff6a1f;
+  --d-on: #10131a;
+}
+.play:has(#fond-sombre:checked) {
+  --d-bg: #111318;
+  --d-text: #f3f4ef;
+  --d-muted: #9aa1ac;
+  --d-card: #1a1d24;
+  --d-line: #2a2e37;
+}
+
+/* Requins : derrière tout, jamais cliquables (le moteur écoute le pointeur
+   sur la fenêtre). Les glyphes prennent la police du canvas. Zone sans
+   cadre (retour de Romain du 2026-11-14 : trop de carrés) : bords estompés
+   par un masque, les requins s'effacent au lieu d'être coupés net. */
+.play-ocean {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
+  font-family: 'Geist Mono', ui-monospace, Menlo, monospace;
+  mask-image:
+    linear-gradient(to right, transparent, #000 14%, #000 86%, transparent),
+    linear-gradient(to bottom, transparent, #000 16%, #000 84%, transparent);
+  mask-composite: intersect;
+}
+
+.play-intro {
+  position: relative;
+  max-width: 36em;
+  margin: 0 auto 48px;
+  text-align: center;
+  text-wrap: balance;
+}
+/* Voile sombre derrière le texte : un requin qui passe ne le rend pas
+   illisible. Peint au-dessus du canvas (même contexte, plus loin dans le
+   document). */
+.play-intro::before {
+  content: '';
+  position: absolute;
+  inset: -32px -64px;
+  z-index: -1;
+  background: radial-gradient(closest-side, rgb(7 8 10 / 0.92) 75%, transparent);
+  pointer-events: none;
+}
+.play-intro p {
+  margin: 0;
+  font-size: 17px;
+  color: var(--c-soft);
+}
+.play-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 320px) minmax(0, 380px);
+  justify-content: center;
+  align-items: center;
+  gap: 56px;
+}
+
+/* Réglages : panneau lisible au-dessus des requins. */
+.play-panel {
+  padding: 24px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--r-panel);
+}
+.play-panel fieldset {
+  margin: 0 0 20px;
+  padding: 0;
+  border: 0;
+}
+.play-panel legend {
+  padding: 0;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: var(--c-muted);
+}
+.play-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.play-swatch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px 0 10px;
+  font-size: 14px;
+  color: var(--c-soft);
+  border: 1px solid var(--c-line-strong);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    color 0.15s ease-out,
+    background-color 0.15s ease-out,
+    border-color 0.15s ease-out;
+}
+.play-swatch:hover {
+  color: var(--c-text);
+  border-color: var(--c-muted);
+}
+.play-swatch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.play-swatch:has(input:checked) {
+  color: var(--c-text);
+  background: var(--c-raised);
+  border-color: var(--c-text);
+}
+.play-swatch:has(input:focus-visible) {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+}
+.play-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--dot);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.18);
+}
+.play-swatch--bleu {
+  --dot: #2e6bff;
+}
+.play-swatch--lime {
+  --dot: #bdff2e;
+}
+.play-swatch--orange {
+  --dot: #ff6a1f;
+}
+.play-swatch--clair {
+  --dot: #f6f5f1;
+}
+.play-swatch--sombre {
+  --dot: #111318;
+}
+
+/* Valeurs des tokens : seule celle du choix en cours est affichée. */
+.play-tokens {
+  margin: 4px 0 0;
+  border-top: 1px solid var(--c-line);
+}
+.play-tokens div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  font-size: 13px;
+  border-bottom: 1px solid var(--c-line);
+}
+.play-tokens dt {
+  font-family: var(--c-mono);
+  color: var(--c-muted);
+}
+.play-tokens dd {
+  margin: 0;
+  font-family: var(--c-mono);
+  color: var(--c-text);
+}
+.play-v {
+  display: none;
+}
+.play:has(#marque-bleu:checked) .play-v--bleu,
+.play:has(#marque-lime:checked) .play-v--lime,
+.play:has(#marque-orange:checked) .play-v--orange,
+.play:has(#fond-clair:checked) .play-v--clair,
+.play:has(#fond-sombre:checked) .play-v--sombre {
+  display: inline;
+}
+
+/* L'écran d'exemple : l'app Marmotte, tout en tokens --d-*. */
+.demo {
+  width: 100%;
+  max-width: 380px;
+  justify-self: center;
+  padding: 24px;
+  font-family: var(--f-text);
+  color: var(--d-text);
+  background: var(--d-bg);
+  border-radius: 28px;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.06),
+    0 32px 80px rgb(0 0 0 / 0.55);
+}
+.demo p {
+  margin: 0;
+}
+.demo-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+}
+.demo-logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--d-brand);
+}
+.demo-avatar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--d-muted);
+  background: var(--d-card);
+  border: 1px solid var(--d-line);
+  border-radius: 50%;
+}
+.demo .demo-label {
+  margin-top: 24px;
+  font-size: 13px;
+  color: var(--d-muted);
+}
+.demo-amount {
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.demo .demo-delta {
+  margin-bottom: 20px;
+  font-size: 13px;
+  color: var(--d-muted);
+}
+.demo-seg {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--d-card);
+  border: 1px solid var(--d-line);
+  border-radius: 12px;
+}
+.demo-seg span {
+  flex: 1;
+  padding: 6px 0;
+  font-size: 13px;
+  text-align: center;
+  color: var(--d-muted);
+  border-radius: 8px;
+}
+.demo-seg .is-on {
+  font-weight: 600;
+  color: var(--d-on);
+  background: var(--d-brand);
+}
+/* Courbe : la marque mêlée au texte, pour rester visible sur les deux fonds
+   (le lime pur disparaît sur le fond clair). */
+.demo-chart {
+  display: block;
+  width: 100%;
+  height: 96px;
+  margin: 16px 0 8px;
+}
+.demo-line {
+  fill: none;
+  stroke: color-mix(in oklab, var(--d-brand) 55%, var(--d-text));
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.demo-area {
+  fill: color-mix(in srgb, var(--d-brand) 20%, transparent);
+}
+.demo-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--d-line);
+}
+.demo-row b {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+.demo-row small {
+  display: block;
+  font-size: 12px;
+  color: var(--d-muted);
+}
+.demo-switch {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 26px;
+  background: var(--d-brand);
+  border-radius: 999px;
+}
+.demo-switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 20px;
+  height: 20px;
+  background: var(--d-on);
+  border-radius: 50%;
+}
+.demo-button {
+  display: block;
+  margin-top: 8px;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--d-on);
+  background: var(--d-brand);
+  border-radius: 14px;
+}
+
+@media (max-width: 800px) {
+  .play {
+    padding: 48px 16px;
+  }
+  .play-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+}

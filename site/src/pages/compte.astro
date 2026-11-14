@@ -4,8 +4,10 @@ import { API } from '../lib/site';
 ---
 
 <Base title="Compte" description="Crée ton compte DS-Studio, connecte-toi, recharge tes crédits ou passe Pro.">
-  <h1>Ton compte</h1>
-  <div data-api={API}>
+  <div class="page-head">
+    <h1>Ton compte</h1>
+  </div>
+  <div class="account" data-api={API}>
     <p class="message" data-message role="status" aria-live="polite" hidden></p>
 
     <div data-out>

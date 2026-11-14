@@ -2,6 +2,7 @@
 import '../styles/site.css';
 import icon from '../../../desktop/logo-small.png';
 import { loadCatalog } from '../lib/site';
+import PixelIcon from '../components/PixelIcon.astro';
 
 interface Props {
   title: string;
@@ -49,7 +50,11 @@ const nav = [
         <img src={icon.src} width="32" height="32" alt="" />
         <span>DS-Studio</span>
       </a>
-      <nav aria-label="Navigation principale">
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="navigation">
+        <PixelIcon name="menu" />
+        <span>Menu</span>
+      </button>
+      <nav id="navigation" aria-label="Navigation principale">
         <ul>
           {
             nav.map((item) => (
@@ -75,5 +80,8 @@ const nav = [
       </ul>
       <p>DS-Studio, atelier de design system. Tes projets restent sur ton poste.</p>
     </footer>
+    <script>
+      import '../scripts/menu.ts';
+    </script>
   </body>
 </html>

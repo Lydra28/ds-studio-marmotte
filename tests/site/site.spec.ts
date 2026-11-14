@@ -90,11 +90,19 @@ test('en-têtes : CSP stricte, API seule destination des requêtes', async ({ re
 test('prix et téléchargements : montants du catalogue, fichiers à nom fixe', async ({ page }) => {
   await offline(page);
   await page.goto('/prix/');
-  const pro = page.locator('.card', { has: page.getByRole('heading', { name: 'Pro' }) });
+  const pro = page.locator('.plan', { has: page.getByRole('heading', { name: 'Pro' }) });
   await expect(pro).toContainText('9,99 € / mois');
   await expect(pro).toContainText('11 € d’usage');
   await expect(pro).toContainText('≈ 275 générations du Mur');
-  await expect(page.locator('.card', { has: page.getByRole('heading', { name: 'Crédits' }) })).toContainText('5 €, 10 €, 20 €');
+  const credits = page.locator('.plan', { has: page.getByRole('heading', { name: 'Crédits' }) });
+  for (const amount of ['5 €', '10 €', '20 €']) await expect(credits.getByRole('radio', { name: amount })).toBeAttached();
+  // Barre à paliers : le montant et les générations affichés suivent le palier choisi.
+  // (innerText : les valeurs des autres paliers sont dans la page, masquées.)
+  await expect(credits.locator('.amount')).toHaveText('5 €', { useInnerText: true });
+  await credits.locator('.cr-stop', { hasText: '10 €' }).click();
+  await expect(credits.getByRole('radio', { name: '10 €' })).toBeChecked();
+  await expect(credits.locator('.amount')).toHaveText('10 €', { useInnerText: true });
+  await expect(credits.locator('li').first()).toHaveText('≈ 250 générations du Mur', { useInnerText: true });
 
   await page.goto('/telecharger/');
   for (const [os, file] of [
@@ -240,4 +248,25 @@ test('confirmation : jeton du lien envoyé puis retiré de l’adresse', async (
   expect(page.url()).toBe(`${SITE}/compte/verifier/`);
   await page.goto('/compte/verifier/');
   await expect(page.getByRole('status')).toContainText('Lien incomplet');
+});
+
+test('navigation mobile : bouton Menu, ouverture, fermeture par Échap', async ({ page }) => {
+  const errors = await offline(page);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/prix/');
+  const menu = page.getByRole('button', { name: 'Menu' });
+  const link = page.getByRole('navigation', { name: 'Navigation principale' }).getByRole('link', { name: 'Télécharger' });
+  await expect(menu).toHaveAttribute('aria-expanded', 'false');
+  await expect(link).toBeHidden();
+  await menu.click();
+  await expect(menu).toHaveAttribute('aria-expanded', 'true');
+  await expect(link).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(link).toBeHidden();
+  await expect(menu).toBeFocused();
+  // Bureau : pas de bouton, navigation affichée.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(menu).toBeHidden();
+  await expect(link).toBeVisible();
+  expect(errors).toEqual([]);
 });

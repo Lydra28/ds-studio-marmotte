@@ -1,14 +1,19 @@
 ---
 import { euros, loadCatalog } from '../lib/site';
 
-// Paliers du cadrage (O4) aux montants du catalogue du serveur.
+// Paliers du cadrage (O4) aux montants du catalogue du serveur. Page Prix
+// seulement (lot 4 du site) : trois colonnes à filets, Pro marqué en lime,
+// plus de cartes identiques.
 const c = await loadCatalog();
+// La barre des crédits (site.css, nth-child) est écrite pour trois paliers,
+// comme les packs du serveur (Pack de server/billing.ts) : sinon build arrêté.
+if (c.packs.length !== 3) throw new Error(`Barre des crédits prévue pour 3 recharges, catalogue : ${c.packs.length}.`);
 const per = (cents: number) => (c.generationCents.wall > 0 ? Math.floor(cents / c.generationCents.wall) : 0);
 ---
 
-<div class="grid">
-  <div class="card price">
-    <h3>Gratuit</h3>
+<div class="plans">
+  <div class="plan">
+    <h2>Gratuit</h2>
     <p class="amount">0 €</p>
     <ul>
       <li>Tout l’atelier sur ton poste : projets, aperçu, règles, diff, versions</li>
@@ -19,8 +24,8 @@ const per = (cents: number) => (c.generationCents.wall > 0 ? Math.floor(cents / 
     </ul>
     <a class="button" href="/compte/#creer">Créer un compte</a>
   </div>
-  <div class="card price highlight">
-    <h3>Pro</h3>
+  <div class="plan plan--pro">
+    <h2>Pro</h2>
     <p class="amount">{euros(c.pro.amountCents)} <span class="muted">/ mois</span></p>
     <ul>
       <li>Tout le gratuit</li>
@@ -29,23 +34,47 @@ const per = (cents: number) => (c.generationCents.wall > 0 ? Math.floor(cents / 
           per(c.pro.includedCents) > 0 && ` (≈ ${per(c.pro.includedCents)} générations du Mur)`
         }
       </li>
+      <li>Connexion GitHub : projet lu dans ton dépôt, pull request mise à jour à chaque version acceptée</li>
       <li>Au-delà, tes crédits prennent le relais</li>
       <li>Sans engagement, résiliable depuis ton compte</li>
     </ul>
     <a class="button primary" href="/compte/">Passer Pro</a>
   </div>
-  <div class="card price">
-    <h3>Crédits</h3>
-    <p class="amount">dès {euros(Math.min(...c.packs.map((p) => p.amountCents)))}</p>
+  <div class="plan plan--credits">
+    <h2>Crédits</h2>
+    <p class="amount">
+      {c.packs.map((p) => <span class="cr-v">{euros(p.amountCents)}</span>)}
+    </p>
+    {/* Barre à paliers : boutons radio lus par :has() dans site.css, aucun script. */}
+    <fieldset class="cr">
+      <legend>Montant de la recharge</legend>
+      <div class="cr-track">
+        {
+          c.packs.map((p, i) => (
+            <label class="cr-stop">
+              <input type="radio" name="recharge" value={p.pack} checked={i === 0} />
+              <span>{euros(p.amountCents)}</span>
+            </label>
+          ))
+        }
+      </div>
+    </fieldset>
     <ul>
-      <li>Recharges de {c.packs.map((p) => euros(p.amountCents)).join(', ')}</li>
+      {
+        per(c.packs[0]?.amountCents ?? 0) > 0 && (
+          <li>
+            {c.packs.map((p) => (
+              <span class="cr-v">≈ {per(p.amountCents)} générations du Mur</span>
+            ))}
+          </li>
+        )
+      }
       <li>Assistant et Mur payés à l’usage, sans abonnement</li>
-      {per(c.packs[0]?.amountCents ?? 0) > 0 && <li>≈ {per(c.packs[0].amountCents)} générations du Mur pour {euros(c.packs[0].amountCents)}</li>}
       <li>Sans date d’expiration</li>
     </ul>
     <a class="button" href="/compte/">Recharger</a>
   </div>
 </div>
-<p class="muted">
+<p class="plans-note">
   Prix en euros. Le paiement se fait sur une page sécurisée Stripe ; DS-Studio ne voit jamais ta carte.
 </p>

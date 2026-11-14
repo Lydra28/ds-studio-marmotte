@@ -1,0 +1,28 @@
+---
+// Carte Pro en verre dépoli de la page Prix (cadrage du site, lot 4 ;
+// référence : carte inclinée devant une forme lumineuse floue). Décorative
+// seulement : aucun champ, aucun numéro, rien qui ressemble à un formulaire
+// de paiement (la carte bancaire se saisit uniquement sur la page Stripe).
+// Le prix vient du catalogue, comme la carte Pro de Prices.astro.
+import icon from '../../../desktop/logo-small.png';
+import { euros, loadCatalog } from '../lib/site';
+
+const c = await loadCatalog();
+---
+
+<div class="gc" aria-hidden="true">
+  <span class="gc-glow"></span>
+  <span class="gc-shape"></span>
+  <div class="gc-card">
+    <div class="gc-top">
+      <img src={icon.src} width="32" height="32" alt="" />
+      <span>DS-Studio</span>
+      <b>Pro</b>
+    </div>
+    <span class="gc-chip"></span>
+    <div class="gc-bottom">
+      <p class="gc-price">{euros(c.pro.amountCents)} <span>/ mois</span></p>
+      <p class="gc-foot">Assistant · Mur des DA · GitHub</p>
+    </div>
+  </div>
+</div>

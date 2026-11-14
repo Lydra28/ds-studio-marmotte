@@ -1,0 +1,134 @@
+---
+// Motion du haut de page (cadrage/2026-11-14-cadrage-site.md, lot 1) :
+// 12 s en boucle, CSS seul (styles/hero-motion.css). Parcours réel de l'app : connexion GitHub (Pro), couleur de
+// marque changée sur la planche, Comparer avant / après, Accepter → pull
+// request, puis le site en ligne recoloré après le merge (fait par
+// l'utilisateur). Deux acteurs : le curseur (toi) et Lenny (l'app), teinté
+// par la couleur de marque comme dans l'app. Mouvement réduit : image finale
+// fixe. Hors écran : animation en pause (scripts/hero-motion.ts).
+import '../styles/hero-motion.css';
+import { ASSISTANT_64, type Rect } from '../../../app/client/sprites.ts';
+
+// Plages de même caractère fusionnées (même calcul que Mascot.tsx).
+const runs = (char: string): Rect[] =>
+  ASSISTANT_64.flatMap((row, y) => [...row.matchAll(new RegExp(`${char}+`, 'g'))].map((m): Rect => [m.index!, y, m[0].length, 1]));
+// Contour, corps (couleur de marque), ombre, visage au repos (FACES.idle de
+// app/client/Mascot.tsx) : un groupe par teinte, animée en CSS.
+const LENNY: [string, Rect[]][] = [
+  ['o', runs('#')],
+  ['f', runs('Y')],
+  ['s', runs('s')],
+  ['k', [[3, 28, 3, 3], [58, 28, 3, 3], [25, 35, 2, 2], [37, 35, 2, 2], [27, 37, 10, 2]]],
+];
+const tokens = [
+  { name: 'text/primary', value: '#10131A', swatch: 'ink' },
+  { name: 'space/md', value: '16 px' },
+  { name: 'radius/card', value: '12 px' },
+];
+---
+
+<div class="hm" role="img" aria-label="Animation : DS-Studio se connecte à GitHub, la couleur de marque change sur la planche, l’avant et l’après se comparent, puis une pull request est ouverte et le site en ligne prend la nouvelle couleur.">
+  <div class="hm-stage">
+  <div class="hm-win">
+    <div class="hm-bar">
+      <span class="hm-name">DS-Studio</span>
+      <span class="hm-proj">Marmotte</span>
+      <span class="hm-cmp">Comparer</span>
+      <span class="hm-gh">
+        <span class="hm-a">Connecter GitHub</span>
+        <span class="hm-b">marmotte-site</span>
+        <i class="hm-pro">Pro</i>
+      </span>
+      <span class="hm-accept">Accepter</span>
+    </div>
+    <div class="hm-body">
+      <div class="hm-board">
+        <p class="hm-h">Couleurs</p>
+        <div class="hm-row">
+          <span class="hm-sw hm-sw--brand"></span>
+          <span class="hm-tk">bg/brand</span>
+          <span class="hm-val"><span class="hm-a">#2E6BFF</span><span class="hm-b">#BDFF2E</span></span>
+        </div>
+        <div class="hm-pick">
+          <span class="hm-chip hm-chip--1"></span>
+          <span class="hm-chip hm-chip--2"></span>
+          <span class="hm-chip hm-chip--3"></span>
+        </div>
+        {
+          tokens.map((t) => (
+            <div class="hm-row">
+              <span class:list={['hm-sw', t.swatch ? `hm-sw--${t.swatch}` : 'hm-sw--none']} />
+              <span class="hm-tk">{t.name}</span>
+              <span class="hm-val">{t.value}</span>
+            </div>
+          ))
+        }
+      </div>
+      <div class="hm-preview">
+        <span class="hm-url"><span class="hm-a">Aperçu en direct</span><span class="hm-b">marmotte.fr · en ligne</span></span>
+        <div class="hm-site">
+          <span class="hm-site-nav"></span>
+          <span class="hm-site-title"></span>
+          <span class="hm-site-line"></span>
+          <span class="hm-site-line hm-site-line--short"></span>
+          <span class="hm-site-btn"></span>
+          <span class="hm-site-card"></span>
+        </div>
+      </div>
+    </div>
+    <div class="hm-compare">
+      <div class="hm-half hm-half--before">
+        <b>Avant</b>
+        <div class="hm-site">
+          <span class="hm-site-nav"></span>
+          <span class="hm-site-title"></span>
+          <span class="hm-site-line"></span>
+          <span class="hm-site-btn"></span>
+          <span class="hm-site-card"></span>
+        </div>
+      </div>
+      <div class="hm-half hm-half--after">
+        <b>Après</b>
+        <div class="hm-site">
+          <span class="hm-site-nav"></span>
+          <span class="hm-site-title"></span>
+          <span class="hm-site-line"></span>
+          <span class="hm-site-btn"></span>
+          <span class="hm-site-card"></span>
+        </div>
+      </div>
+    </div>
+    <div class="hm-pr">
+      <span class="hm-pr-dot"></span>
+      <span class="hm-pr-text">
+        <span class="hm-a">Pull request ouverte</span>
+        <span class="hm-b">Mergée · site mis à jour</span>
+      </span>
+      <span class="hm-pr-branch">ds-studio/design-system</span>
+    </div>
+  </div>
+  <div class="hm-lenny">
+    <svg viewBox="0 0 64 64" shape-rendering="crispEdges">
+      {
+        LENNY.map(([cls, list]) => (
+          <g class={cls}>
+            {list.map(([x, y, w, h]) => (
+              <rect x={x} y={y} width={w} height={h} />
+            ))}
+          </g>
+        ))
+      }
+    </svg>
+  </div>
+  <div class="hm-cursor">
+    <svg viewBox="0 0 12 18" shape-rendering="crispEdges">
+      <path class="hm-cursor-o" d="M0 0h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1H8v1h1v2h1v2H9v1H7v-1H6v-2H5v-2H4v1H3v1H2v1H1v1H0z" />
+      <path class="hm-cursor-f" d="M1 2h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1h1v1H7v1h1v2h1v2H8v-2H7v-2H6v-1H5v1H4v1H3v1H2v1H1z" />
+    </svg>
+  </div>
+  </div>
+</div>
+
+<script>
+  import '../scripts/hero-motion.ts';
+</script>

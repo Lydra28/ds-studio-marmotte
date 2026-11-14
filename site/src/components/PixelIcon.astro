@@ -1,0 +1,152 @@
+---
+// Icônes pixel de l'accueil (lot 3, retour de Romain du 2026-11-14) : logos
+// des systèmes sur les boutons de téléchargement, plume (design) et « </> »
+// (code) des deux métiers, menu de la navigation mobile, logo Figma de la
+// page du plugin (retour de Romain du 2026-11-14, monochrome comme les autres).
+// Dessinées à la main en grilles (« # » = pixel plein), dans l'esprit
+// 8-bit de la DA ; couleur du texte (currentColor), décoratives seulement.
+interface Props {
+  name: keyof typeof GRIDS | 'code' | 'figma';
+  class?: string;
+  /** Taille d'un pixel en px CSS : un entier, pour rester net. */
+  scale?: number;
+}
+
+const GRIDS = {
+  windows: [
+    '#####.#####',
+    '#####.#####',
+    '#####.#####',
+    '#####.#####',
+    '#####.#####',
+    '...........',
+    '#####.#####',
+    '#####.#####',
+    '#####.#####',
+    '#####.#####',
+    '#####.#####',
+  ],
+  apple: [
+    '......##....',
+    '.....##.....',
+    '..###..###..',
+    '.##########.',
+    '###########.',
+    '##########..',
+    '#########...',
+    '#########...',
+    '##########..',
+    '###########.',
+    '.##########.',
+    '..###..###..',
+  ],
+  linux: [
+    '....####....',
+    '...######...',
+    '...#.##.#...',
+    '...######...',
+    '..###..###..',
+    '.####..####.',
+    '.###....###.',
+    '###......###',
+    '###......###',
+    '.###....###.',
+    '..########..',
+    '.####..####.',
+  ],
+  design: [
+    '..#######..',
+    '..#######..',
+    '...........',
+    '.#########.',
+    '.###...###.',
+    '.###...###.',
+    '..###.###..',
+    '..###.###..',
+    '...##.##...',
+    '...##.##...',
+    '....#.#....',
+    '....#.#....',
+    '.....#.....',
+  ],
+  menu: [
+    '##########',
+    '##########',
+    '..........',
+    '..........',
+    '##########',
+    '##########',
+    '..........',
+    '..........',
+    '##########',
+    '##########',
+  ],
+} as const;
+
+// « </> » : chevron fermant en miroir de l'ouvrant, barre oblique en
+// escalier ; calculé plutôt que recopié à la main.
+const codeGrid = (() => {
+  const w = 17;
+  const rows: string[] = [];
+  const open = ['...##', '..##.', '.##..', '##...', '##...', '.##..', '..##.', '...##'];
+  for (let r = 0; r < 12; r++) {
+    const row = Array(w).fill('.');
+    const o = r >= 2 && r <= 9 ? open[r - 2] : '.....';
+    for (let c = 0; c < 5; c++) {
+      if (o[c] === '#') {
+        row[c] = '#';
+        row[w - 1 - c] = '#';
+      }
+    }
+    const s = 9 - Math.floor(r / 3);
+    row[s] = '#';
+    row[s + 1] = '#';
+    rows.push(row.join(''));
+  }
+  return rows;
+})();
+
+// Logo Figma : cinq formes de 7 × 7 séparées d'un pixel (demi-pilules à
+// gauche et en haut à droite, rond au milieu à droite, goutte en bas).
+const figmaGrid = (() => {
+  const left = ['..#####', '.######', '#######', '#######', '#######', '.######', '..#####'];
+  const right = left.map((r) => [...r].reverse().join(''));
+  const round = ['..###..', '.#####.', '#######', '#######', '#######', '.#####.', '..###..'];
+  const drop = [...left.slice(0, 5), '.#####.', '..###..'];
+  const gap = '.'.repeat(15);
+  return [
+    ...left.map((r, i) => `${r}.${right[i]}`),
+    gap,
+    ...left.map((r, i) => `${r}.${round[i]}`),
+    gap,
+    ...drop.map((r) => `${r}........`),
+  ];
+})();
+
+const { name, class: cls, scale = 2 } = Astro.props;
+const grid: readonly string[] = name === 'code' ? codeGrid : name === 'figma' ? figmaGrid : GRIDS[name];
+const width = Math.max(...grid.map((r) => r.length));
+// Une ligne de pixels contigus = un rectangle.
+const rects: { x: number; y: number; w: number }[] = [];
+grid.forEach((row, y) => {
+  for (let x = 0; x < row.length; x++) {
+    if (row[x] !== '#') continue;
+    let w = 1;
+    while (row[x + w] === '#') w++;
+    rects.push({ x, y, w });
+    x += w - 1;
+  }
+});
+---
+
+<svg
+  class={cls}
+  viewBox={`0 0 ${width} ${grid.length}`}
+  width={width * scale}
+  height={grid.length * scale}
+  shape-rendering="crispEdges"
+  aria-hidden="true"
+  focusable="false"
+>
+  {rects.map((r) => <rect x={r.x} y={r.y} width={r.w} height="1" fill="currentColor" />)}
+</svg>

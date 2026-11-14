@@ -67,8 +67,8 @@ button.primary,
   padding: 8px 16px 10px;
 }
 :where(body:not(.preview-body)) button.primary:hover:not(:disabled) {
-  background: #cfff5c;
-  border-color: #cfff5c;
+  background: var(--c-accent-hover);
+  border-color: var(--c-accent-hover);
   color: var(--c-on-accent);
 }
 :where(body:not(.preview-body)) button.primary:disabled {
