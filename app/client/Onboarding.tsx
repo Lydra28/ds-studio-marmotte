@@ -18,19 +18,21 @@ const STEPS: { id: Step; label: string }[] = [
   { id: 'figma', label: 'Figma' },
 ];
 
-// « Pop-in passée » : gardée dans le navigateur de l'app (origine fixe de
-// l'app installée). Stockage indisponible : on ne la réimpose pas.
+// « Pop-in passée » : pour ce lancement seulement (sessionStorage). Tant
+// qu'aucun compte n'est connecté, elle s'ouvre d'office à chaque lancement
+// (demande de Romain du 2026-11-14). Stockage indisponible : on ne la
+// réimpose pas.
 const SEEN = 'ds-onboarding';
 export function onboardingSeen() {
   try {
-    return localStorage.getItem(SEEN) === '1';
+    return sessionStorage.getItem(SEEN) === '1';
   } catch {
     return true;
   }
 }
 function markSeen() {
   try {
-    localStorage.setItem(SEEN, '1');
+    sessionStorage.setItem(SEEN, '1');
   } catch {
     /* Rien à garder : elle se rouvre depuis Compte. */
   }

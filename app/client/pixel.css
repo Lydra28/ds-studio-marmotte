@@ -501,30 +501,6 @@ code,
   height: 2px;
   background: var(--c-accent);
 }
-.history {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
-  gap: 20px;
-  align-items: start;
-  padding: 20px 24px 96px;
-}
-.history section {
-  background: var(--c-panel);
-  border: 1px solid var(--c-line);
-  border-radius: var(--r-panel);
-  padding: 20px;
-}
-.history h3 {
-  margin: 0 0 12px;
-  font-family: var(--f-label);
-  font-weight: 600;
-  font-size: 13px;
-  text-transform: none;
-  color: var(--c-muted);
-}
-.history li button {
-  margin: 6px 6px 0 0;
-}
 @media (max-width: 760px) {
   .top .bar {
     padding: 10px 16px;
@@ -532,7 +508,7 @@ code,
   .section-bar {
     padding: 0 8px;
   }
-  .history,
+  .hist,
   .versions-view .tabs {
     padding-inline: 16px;
   }
@@ -885,11 +861,7 @@ dialog.diff h2,
   background: var(--c-accent);
   color: var(--c-on-accent);
 }
-.timeline__badge {
-  border-radius: 6px;
-}
-.site-view__frames .site-frame,
-.timeline__frame .site-frame {
+.site-view__frames .site-frame {
   border-radius: var(--r-ctl);
 }
 
@@ -1280,6 +1252,10 @@ dialog.diff th {
 .settings-block h2.with-mark .glass-badge {
   margin-left: auto;
 }
+/* Un message d'état ne colle jamais au texte qui le précède. */
+.settings-block > .message {
+  margin-top: 12px;
+}
 .account-id {
   display: flex;
   align-items: center;
@@ -1450,8 +1426,11 @@ dialog.diff th {
 }
 
 /* Pop-in d'accueil : panneau en verre sur l'accueil flouté. */
+/* Même taille pour les trois étapes (demande de Romain du 2026-11-14) : hauteur
+   fixe, pied toujours en bas ; une étape plus haute fait défiler la pop-in. */
 dialog.onboarding {
   width: min(560px, calc(100vw - 32px));
+  height: min(600px, calc(100vh - 32px));
   max-height: calc(100vh - 32px);
   overflow: auto;
   padding: 0;
@@ -1479,7 +1458,12 @@ dialog.onboarding::backdrop {
   right: 12px;
   z-index: 1;
 }
+dialog.onboarding[open] {
+  display: flex;
+  flex-direction: column;
+}
 .onb-panel {
+  flex: 1 0 auto;
   animation: onb-next 0.22s ease-out;
 }
 .onb-panel--back {
@@ -1655,7 +1639,7 @@ dialog.onboarding::backdrop {
   filter: drop-shadow(0 0 24px rgb(189 255 46 / 0.25));
 }
 .onb-logo rect {
-  animation: onb-px 0.01s steps(1) var(--d) both;
+  animation: onb-px 0.01s steps(1) var(--d) backwards;
 }
 @keyframes onb-px {
   from {
@@ -1663,13 +1647,13 @@ dialog.onboarding::backdrop {
   }
 }
 .onb-logo__mouth {
-  animation: onb-face 0.2s steps(1) 1.15s both;
+  animation: onb-face 0.2s steps(1) 1.15s backwards;
 }
 .onb-logo__eyes {
   transform-box: fill-box;
   transform-origin: center;
   animation:
-    onb-face 0.2s steps(1) 1.15s both,
+    onb-face 0.2s steps(1) 1.15s backwards,
     onb-blink 3.2s steps(1) 2s infinite;
 }
 @keyframes onb-face {
@@ -1799,20 +1783,176 @@ dialog.onboarding::backdrop {
   }
 }
 
-/* Océan de l'accueil (Ocean.tsx) : canvas basse définition agrandi au plus
-   proche voisin, derrière le contenu, jamais cliquable. */
+/* Océan de l'accueil (Ocean.tsx, moteur ascii-sharks) : derrière le contenu,
+   jamais cliquable (le moteur écoute le pointeur sur la fenêtre). Les
+   glyphes prennent la police du canvas. */
 .ocean {
   position: fixed;
   inset: 0;
   width: 100vw;
   height: 100vh;
-  image-rendering: pixelated;
   pointer-events: none;
   z-index: -1;
+  font-family: 'Geist Mono', ui-monospace, Menlo, monospace;
 }
 /* Contexte d'empilement propre : l'océan passe sous le contenu de l'accueil
    sans toucher au positionnement des enfants (pop-in modale comprise). */
 .home--ocean {
   position: relative;
   isolation: isolate;
+}
+
+/* Vue Versions, refondue le 2026-11-14 avec Romain : Comparer en grand avec le
+   curseur du temps pour « Avant », Historique en liste à la Figma. */
+.compare {
+  gap: 14px;
+  /* Colonne bornée à la vue : sinon la grille prend la largeur des cadres,
+     que Compare.tsx calcule d'après… la largeur de la grille (boucle). */
+  grid-template-columns: minmax(0, 1fr);
+}
+.compare__time {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 14px 16px 4px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-panel);
+  background: var(--c-panel);
+}
+.compare__time-label,
+.compare__tag {
+  font-family: var(--f-title);
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  color: var(--c-text);
+}
+.compare__time-label {
+  flex: none;
+  padding-top: 8px;
+}
+.compare__side--after .compare__tag {
+  color: var(--c-accent);
+}
+.compare__frames figcaption {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.compare__what {
+  font-size: 14px;
+  color: var(--c-soft);
+}
+.compare__same {
+  margin: 0;
+}
+.compare__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: center;
+  justify-content: flex-end;
+  font-size: 12px;
+  color: var(--c-muted);
+}
+.compare__tools label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.hist {
+  padding: 20px 24px 96px;
+}
+.hist__list {
+  display: grid;
+  gap: 12px;
+  max-width: 760px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hist__item {
+  padding: 16px 20px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-panel);
+  background: var(--c-panel);
+}
+.hist__item--pending {
+  border-color: var(--c-line-strong);
+}
+.hist__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+  color: var(--c-muted);
+  font-size: 13px;
+}
+.hist__head strong {
+  font-family: var(--f-title);
+  font-weight: 400;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  color: var(--c-text);
+}
+.hist__badge {
+  padding: 1px 8px;
+  border-radius: 99px;
+  background: var(--c-accent);
+  color: var(--c-on-accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+.hist__summary {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--c-soft);
+}
+:where(body:not(.preview-body)) .hist__summary--link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  box-shadow: none;
+}
+:where(body:not(.preview-body)) .hist__summary--link:hover {
+  color: var(--c-text);
+  background: none;
+}
+.hist__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.hist__revisions {
+  margin-top: 12px;
+}
+.hist__revisions summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--c-muted);
+}
+.hist__revisions ol {
+  display: grid;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.hist__revisions li {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  padding: 10px 0;
+  border-top: 1px solid var(--c-line);
+  font-size: 13px;
+}
+.hist__keys {
+  font-family: var(--f-mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--c-muted);
 }

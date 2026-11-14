@@ -128,7 +128,8 @@ export function TopNav({
 }
 
 // Frise des versions (DA « Atelier 8-bit ») : une marche par version acceptée,
-// gamme « chaleur », les six dernières ; une marche ouvre l'évolution à sa révision.
+// gamme « chaleur », les six dernières ; une marche ouvre Comparer avec cette
+// version en « Avant ».
 function Stairs({ versions, onVersion }: { versions: number[]; onVersion: (revision: number) => void }) {
   const shown = [...versions].sort((a, b) => a - b).slice(-6);
   return (
@@ -137,7 +138,7 @@ function Stairs({ versions, onVersion }: { versions: number[]; onVersion: (revis
         <button
           key={v}
           style={{ height: 6 + 4 * (i + 1), background: `var(--c-heat-${Math.min(5, i + 1)})` }}
-          aria-label={`Voir v${v} dans l’évolution`}
+          aria-label={`Comparer avec v${v}`}
           title={`v${v}`}
           onClick={() => onVersion(v)}
         />

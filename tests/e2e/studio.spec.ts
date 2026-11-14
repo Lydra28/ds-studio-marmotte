@@ -25,7 +25,7 @@ const previewVar = (page: Page, name: string) =>
 
 test.beforeEach(async ({ page }) => {
   // Pop-in d'accueil déjà passée : elle a son propre test (« onboarding »).
-  await page.addInitScript(() => localStorage.setItem('ds-onboarding', '1'));
+  await page.addInitScript(() => sessionStorage.setItem('ds-onboarding', '1'));
   await page.goto('/#/p/marmotte');
   await expect(page.locator('.bar .project')).toHaveText('Marmotte');
   // Au lancement, toutes les sections de la planche sont repliées.
@@ -226,7 +226,7 @@ test('onboarding : pop-in au premier lancement, compte, GitHub, Figma, passable 
   const page = await context.newPage();
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
-  await page.evaluate(() => localStorage.removeItem('ds-onboarding'));
+  await page.evaluate(() => sessionStorage.removeItem('ds-onboarding'));
   await page.reload();
   const dialog = page.getByRole('dialog', { name: 'Ton compte DS-Studio' });
   await expect(dialog).toBeVisible();
@@ -422,7 +422,10 @@ test('abandon du brouillon sans écriture, puis annulation depuis l’historique
   expect(await revision(page)).toBe(before);
   await page.getByRole('button', { name: 'Versions', exact: true }).click();
   await page.getByRole('tab', { name: 'Historique' }).click();
-  await page.getByRole('button', { name: 'Annuler cette révision' }).first().click();
+  // Révisions repliées dans leur version : on les déplie toutes.
+  const history = page.getByRole('region', { name: 'Historique' });
+  await history.locator('details').evaluateAll((list) => list.forEach((d) => ((d as HTMLDetailsElement).open = true)));
+  await history.getByRole('button', { name: 'Annuler cette révision' }).first().click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('code').filter({ hasText: 'color/accent/500' })).toBeVisible();
   await dialog.getByRole('button', { name: 'Valider et enregistrer' }).click();
@@ -466,13 +469,39 @@ test('acceptation : bloquée par un brouillon, puis version figée', async ({ pa
   await expect(review.getByText(/Le transfert appliquera|Aucune cible Figma/)).toBeVisible();
   await review.getByRole('button', { name: /^Accepter v\d+$/ }).click();
   await expect(page.getByText(/Version v\d+ acceptée \(empreinte/)).toBeVisible();
-  // Historique : la version se compare à la précédente, ou montre tout son contenu.
+  // Historique : ce qui a changé en clair, détail au clic ; la version
+  // actuelle ne se « revient » pas.
   await page.getByRole('button', { name: 'Versions', exact: true }).click();
   await page.getByRole('tab', { name: 'Historique' }).click();
-  await page.getByRole('button', { name: /^(Comparer avec v\d+|Voir le contenu)$/ }).first().click();
+  const history = page.getByRole('region', { name: 'Historique' });
+  const latest = history.locator('.hist__item').filter({ hasText: 'version actuelle' });
+  await expect(latest.locator('.hist__summary--link')).toHaveText(/(\d+ \S+(, )?)+ depuis (v\d+|le départ)|Aucun changement/);
+  await latest.locator('.hist__summary--link').click();
   await expect(page.getByRole('dialog').getByRole('heading', { name: /^v\d+ (comparée à v\d+|· première version)$/ })).toBeVisible();
   await page.getByRole('dialog').getByRole('button', { name: 'Fermer' }).click();
+  await expect(latest.getByRole('button', { name: 'Revenir à cette version' })).toBeDisabled();
   await expect(page.getByRole('button', { name: /^v\d+ acceptée$/ })).toBeDisabled();
+  // Revenir à cette version : une modification enregistrée après, puis le
+  // retour prépare un diff qui la défait ; rien n'est écrit avant validation.
+  const v = Number(/v(\d+)/.exec((await latest.locator('.hist__head strong').textContent())!)![1]);
+  await page.getByRole('button', { name: 'Design system', exact: true }).click();
+  const radius = page.getByLabel('radius/md', { exact: true });
+  const old = await radius.inputValue();
+  await radius.fill(String(Number(old) + 2));
+  await page.getByRole('button', { name: 'Voir le diff et valider' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Valider et enregistrer' }).click();
+  await expect.poll(() => revision(page)).toBe(v + 1);
+  await page.getByRole('button', { name: 'Versions', exact: true }).click();
+  await page.getByRole('tab', { name: 'Historique' }).click();
+  const item = history.locator('.hist__item').filter({ has: page.locator('.hist__head strong', { hasText: new RegExp(`^v${v}$`) }) });
+  await item.getByRole('button', { name: 'Revenir à cette version' }).click();
+  const restore = page.getByRole('dialog');
+  await expect(restore.getByRole('code').filter({ hasText: 'radius/md' })).toBeVisible();
+  expect(await revision(page)).toBe(v + 1);
+  await restore.getByRole('button', { name: 'Valider et enregistrer' }).click();
+  await expect.poll(() => revision(page)).toBe(v + 2);
+  await page.getByRole('button', { name: 'Design system', exact: true }).click();
+  await expect(page.getByLabel('radius/md', { exact: true })).toHaveValue(old);
 });
 
 test('plugin Figma : code affiché, version calculée, fiches reçues relues par diff', async ({ page }) => {
@@ -530,16 +559,15 @@ test('générateur de gamme : couleur gardée à son palier, paliers manquants a
   await expect.poll(() => previewVar(page, '--color-brand-600')).toBe('#2F6BFF');
 });
 
-test('comparaison côte à côte : brouillon face à l’état enregistré, inversion, rien d’écrit', async ({ page }) => {
+test('comparaison côte à côte : brouillon face à l’état enregistré, rien d’écrit', async ({ page }) => {
   const before = await revision(page);
   await page.getByLabel('space/md', { exact: true }).fill('28');
   await page.getByRole('button', { name: 'Versions', exact: true }).click();
   await page.getByRole('tab', { name: 'Comparer' }).click();
   const view = page.getByRole('region', { name: 'Comparaison côte à côte' });
-  await expect(view.getByLabel('Version après')).toHaveValue('draft');
-  await expect(view.getByText('Tokens : 1 modifié(s)')).toBeVisible();
-  // G4 : projet sans site public, limite dite dans le panneau.
-  await expect(view.getByText(/Pas d’adresse https publique pour ce projet : comparaison sur les écrans d’exemple/)).toBeVisible();
+  // Gros libellés Avant / Après ; Après = les modifications en cours.
+  await expect(view.locator('.compare__tag')).toHaveText(['Avant', 'Après']);
+  await expect(view.locator('iframe[title="Droite : Tes modifications en cours"]')).toHaveCount(1);
   // Chaque cadre reçoit son propre jeu.
   const spaceIn = (side: string) =>
     view
@@ -553,15 +581,6 @@ test('comparaison côte à côte : brouillon face à l’état enregistré, inve
   await view.getByLabel('Contenu comparé').selectOption('dashboard');
   await expect(view.frameLocator('iframe[title^="Droite :"]').getByRole('heading', { name: 'Bonjour Camille' })).toBeVisible();
   await expect.poll(() => spaceIn('Droite')).toBe('28px');
-  await view.getByLabel('Contenu comparé').selectOption('ds');
-  await view.getByRole('button', { name: 'Inverser avant et après' }).click();
-  await expect(view.getByLabel('Version avant')).toHaveValue('draft');
-  // Le cadre reçoit son nouveau jeu après l'inversion : on attend, sans lecture unique.
-  await expect.poll(() => spaceIn('Gauche')).toBe('28px');
-  await view.getByRole('button', { name: 'Détail' }).click();
-  const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('code').filter({ hasText: 'space/md' })).toBeVisible();
-  await dialog.getByRole('button', { name: 'Fermer' }).click();
   await page.getByRole('button', { name: 'Design system', exact: true }).click();
   await page.getByRole('button', { name: 'Abandonner' }).click();
   expect(await revision(page)).toBe(before);
@@ -628,31 +647,33 @@ test('export code : CSS, Tailwind et JSON de l’état enregistré, télécharge
   await expect(dialog).toBeHidden();
 });
 
-test('évolution : le curseur rejoue le DS révision après révision, sans rien écrire', async ({ page }) => {
+test('comparer : le curseur Avant remonte le DS révision par révision, sans rien écrire', async ({ page }) => {
   const before = await revision(page);
   await page.getByRole('button', { name: 'Versions', exact: true }).click();
-  await page.getByRole('tab', { name: 'Évolution' }).click();
-  const view = page.getByRole('region', { name: 'Évolution du design system' });
-  const slider = view.getByLabel('Révision affichée');
-  await expect(slider).toHaveValue(String(before));
+  await page.getByRole('tab', { name: 'Comparer' }).click();
+  const view = page.getByRole('region', { name: 'Comparaison côte à côte' });
+  const slider = view.getByLabel('Version avant');
   const spaceSm = () =>
     view
-      .frameLocator('iframe[title^="Écran DS à"]')
+      .frameLocator('iframe[title^="Gauche :"]')
       .locator('.ds')
       .first()
       .evaluate((el) => el.style.getPropertyValue('--space-sm'));
   await slider.fill('1'); // r1 : correction de space/sm à 16 px (parcours « boucle »)
-  await expect(view.getByRole('status')).toContainText('space/sm');
+  await expect(slider).toHaveAttribute('aria-valuetext', /^[rv]1 · /);
   await expect.poll(spaceSm).toBe('16px');
   await slider.fill('0');
-  await expect(view.getByRole('status')).toContainText('Départ du projet');
+  await expect(slider).toHaveAttribute('aria-valuetext', 'Départ du projet');
   await expect.poll(spaceSm).not.toBe('16px');
   await view.getByRole('button', { name: 'Rejouer l’historique' }).click();
   await expect(view.getByRole('button', { name: 'Mettre en pause' })).toBeVisible();
   await expect(slider).toHaveValue('1', { timeout: 3000 });
   await view.getByRole('button', { name: 'Mettre en pause' }).click();
-  // Frise de la barre du haut : une marche ouvre l'évolution à sa version.
-  const step = page.getByRole('button', { name: /^Voir v\d+ dans l’évolution$/ }).first();
+  // Curseur au bout : les deux côtés sont identiques, et c'est dit.
+  await slider.fill(String(before));
+  await expect(view.getByRole('status')).toContainText('identiques');
+  // Frise de la barre du haut : une marche pose le curseur sur sa version.
+  const step = page.getByRole('button', { name: /^Comparer avec v\d+$/ }).first();
   const v = /v(\d+)/.exec((await step.getAttribute('aria-label'))!)![1];
   await step.click();
   await expect(slider).toHaveValue(v);

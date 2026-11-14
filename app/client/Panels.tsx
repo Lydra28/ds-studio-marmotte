@@ -4,7 +4,6 @@ import { exportCss, exportTailwind } from '../shared/export.js';
 import { downloadText } from './api.js';
 import { rules, type Finding } from '../shared/rules.js';
 import type { ComponentDoc } from '../shared/components.js';
-import type { VersionSummary } from './api.js';
 import type { Config } from '../shared/project.js';
 
 export const sourceLabel: Record<string, string> = {
@@ -255,66 +254,6 @@ export function Corrections({
         </ul>
       )}
     </section>
-  );
-}
-
-export function History({
-  state,
-  versions,
-  onUndo,
-  onCompare,
-  onSideBySide,
-}: {
-  state: State;
-  versions: VersionSummary[];
-  onUndo: (id: string) => void;
-  onCompare: (revision: number, previous?: number) => void;
-  onSideBySide: (revision: number, previous?: number) => void;
-}) {
-  return (
-    <div className="history" role="region" aria-label="Historique">
-      <section>
-        <h3>Versions acceptées</h3>
-        {versions.length ? (
-          <ul className="versions">
-            {versions.map((v, i) => (
-              <li key={v.file}>
-                <strong>v{v.revision}</strong> · {new Date(v.acceptedAt).toLocaleString('fr-FR')} ·{' '}
-                <code>{v.hash.slice(0, 8)}</code>
-                {v.findings > 0 && <small> · {v.findings} écart(s)</small>}
-                <button onClick={() => onCompare(v.revision, versions[i + 1]?.revision)}>
-                  {versions[i + 1] !== undefined ? `Comparer avec v${versions[i + 1].revision}` : 'Voir le contenu'}
-                </button>
-                <button onClick={() => onSideBySide(v.revision, versions[i + 1]?.revision)}>Côte à côte</button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="hint">Aucune version acceptée.</p>
-        )}
-      </section>
-      <section>
-        <h3>Révisions</h3>
-        <ol className="revisions" reversed>
-          {[...state.history].reverse().map((r) => (
-            <li key={r.id}>
-              <p>
-                <strong>r{r.revision}</strong> · {sourceLabel[r.source]} ·{' '}
-                {new Date(r.date).toLocaleString('fr-FR')}
-              </p>
-              <p className="keys">
-                {r.patches
-                  .slice(0, 4)
-                  .map((p) => p.key)
-                  .join(', ')}
-                {r.patches.length > 4 && ` +${r.patches.length - 4}`}
-              </p>
-              <button onClick={() => onUndo(r.id)}>Annuler cette révision</button>
-            </li>
-          ))}
-        </ol>
-      </section>
-    </div>
   );
 }
 

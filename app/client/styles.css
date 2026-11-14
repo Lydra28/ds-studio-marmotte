@@ -630,21 +630,6 @@ dialog.diff td {
   color: var(--c-muted);
   margin: 20px 0 8px;
 }
-.versions,
-.revisions {
-  padding-left: 18px;
-  font-size: 14px;
-  display: grid;
-  gap: 10px;
-}
-.revisions p {
-  margin: 0 0 4px;
-}
-.revisions .keys {
-  color: var(--c-muted);
-  font-size: 13px;
-}
-
 /* ---------- Composants du DS : uniquement des variables issues des tokens ---------- */
 body.preview-body {
   margin: 0;
@@ -1760,11 +1745,6 @@ dialog.diff .diff-summary {
   margin: 0 0 4px;
   font-weight: 600;
 }
-.versions li button {
-  margin-left: 8px;
-  padding: 2px 8px;
-  font-size: 12px;
-}
 .figma-dialog ol {
   padding-left: 20px;
   line-height: 1.6;
@@ -1992,25 +1972,10 @@ dialog.diff .diff-summary {
   margin-left: auto;
 }
 
-/* Comparaison côte à côte : deux cadres identiques, résumé du diff à droite. */
+/* Comparaison côte à côte : deux cadres identiques, Avant et Après. */
 .compare__frames {
   overflow-x: visible;
   justify-content: center;
-}
-.compare__frames figcaption strong {
-  color: var(--c-text);
-}
-.compare__summary {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-left: auto;
-  font-size: 13px;
-  color: var(--c-muted);
-}
-.compare__summary button {
-  padding: 2px 8px;
-  font-size: 12px;
 }
 
 /* Mascotte « Pastille » : sprite pixel du logo, flottante en bas à droite,
@@ -2216,12 +2181,7 @@ dialog.diff .diff-summary {
   margin-left: auto;
 }
 
-/* Évolution : curseur sur l'historique, un seul cadre qui rejoue le DS. */
-.timeline__bar {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-}
+/* Curseur « Avant » de Comparer (Compare.tsx) : lecture, piste et crans. */
 .timeline__play {
   flex: none;
   width: 40px;
@@ -2261,42 +2221,11 @@ dialog.diff .diff-summary {
   color: var(--c-text);
   font-weight: 700;
 }
-.timeline__marks li.is-draft {
-  color: var(--c-draft);
-}
 .timeline__marks li.is-current span {
   padding: 1px 6px;
   border-radius: 999px;
   background: var(--c-text);
   color: var(--c-bg);
-}
-.timeline__caption {
-  margin: 0;
-  font-size: 13px;
-  color: var(--c-muted);
-}
-.timeline__caption strong {
-  color: var(--c-text);
-}
-.timeline__badge {
-  margin-left: 8px;
-  padding: 1px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--c-line);
-  color: var(--c-text);
-  font-size: 12px;
-}
-.timeline__keys {
-  font-family: ui-monospace, Consolas, monospace;
-  font-size: 12px;
-}
-.timeline__frame {
-  display: flex;
-  justify-content: center;
-}
-.timeline__frame .site-frame {
-  border: 1px solid var(--c-line);
-  border-radius: 10px;
 }
 
 /* Lot 5 : panneau Extraction (styles lus sur un site), au-dessus de la planche */

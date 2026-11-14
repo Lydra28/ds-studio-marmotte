@@ -262,6 +262,8 @@ ils peuvent consommer du quota, contrairement aux autres commandes.
 
 Le starter est sous [licence MIT](LICENSE) pour le code original ; les dépendances
 conservent leurs licences. Aucune copie du code ou des mémoires personnelles de MARC.
+Le fond animé de l’accueil (`app/client/ocean/`) reprend ascii-sharks, MIT © 2026 drewdi
+([licence](app/client/ocean/LICENSE)).
 
 ## Pour aller plus loin
 

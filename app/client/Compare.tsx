@@ -1,17 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { diff, type State, type TokenSet } from '../shared/model.js';
+import { setsByRevision, type State, type TokenSet } from '../shared/model.js';
 import type { Config } from '../shared/project.js';
-import { getVersion, type VersionSummary } from './api.js';
-import { ChangesDialog, diffSummary } from './Panels.js';
+import type { VersionSummary } from './api.js';
 import { devices, SiteFrame, type Device } from './Site.js';
 import { PreviewGap, previewSrc, ScreenPicker, type Screen } from './DesignSystem.js';
 
-// Comparaison côte à côte : deux états du jeu (version acceptée, état
-// enregistré ou brouillon) rendus dans deux cadres identiques, défilement lié.
-// Lecture seule : rien n'est écrit depuis cette vue. `site` (G4) : le site tel
-// qu'en ligne, sans DS-Studio, face au site après la PR.
-
-export type Source = 'draft' | 'state' | 'site' | number;
+// Comparer (vue Versions, refondue le 2026-11-14 avec Romain) : deux rendus
+// côte à côte, en grand. « Après » = ce que tu modifies (brouillon, sinon
+// l'état enregistré) ; « Avant » se choisit au curseur, qui remonte le temps
+// révision par révision (versions acceptées marquées), avec lecture
+// automatique. Rendu seulement : la liste des valeurs changées est dans
+// Historique. Lecture seule : rien n'est écrit depuis cette vue.
 
 // Écran générique du DS (même page que la preview latérale), pour un jeu donné.
 export function DsFrame({
@@ -57,11 +56,16 @@ export function DsFrame({
   );
 }
 
-// Par défaut : le brouillon face à l'état enregistré (l'essai en cours), sinon
-// l'état enregistré face à la version acceptée qui le précède.
-export function defaultSources(state: State, versions: VersionSummary[], draft: boolean): [Source, Source] {
-  if (draft) return ['state', 'draft'];
-  return [versions.find((v) => v.revision < state.revision)?.revision ?? 'state', 'state'];
+// Cran -1 : le site tel qu'en ligne, sans DS-Studio (projet lu dans un dépôt,
+// G4). Cran 0 : départ du projet. Crans 1 à N : révisions enregistrées.
+const SITE = -1;
+const STEP_MS = 1400;
+
+// « Avant » par défaut : l'état enregistré quand un brouillon est en cours,
+// sinon la dernière version acceptée d'avant, sinon la révision précédente.
+export function defaultBefore(state: State, versions: VersionSummary[], draft: boolean) {
+  if (draft) return state.revision;
+  return versions.find((v) => v.revision < state.revision)?.revision ?? Math.max(0, state.revision - 1);
 }
 
 export default function CompareView({
@@ -81,46 +85,51 @@ export default function CompareView({
   versions: VersionSummary[];
   draftSet: TokenSet;
   draft: boolean;
-  initial?: [Source, Source];
+  // Révision « Avant » imposée (Historique, frise de la barre) ; sinon le défaut.
+  initial?: number;
 }) {
-  const [[left, right], setSources] = useState<[Source, Source]>(() => initial ?? defaultSources(state, versions, draft));
-  useEffect(() => {
-    if (initial) setSources(initial);
-  }, [initial]);
-  const [loaded, setLoaded] = useState<Record<number, TokenSet>>({});
-  const [error, setError] = useState('');
-  useEffect(() => {
-    for (const s of [left, right])
-      if (typeof s === 'number' && !loaded[s])
-        getVersion(s)
-          .then((v) => setLoaded((l) => ({ ...l, [s]: v.set })))
-          .catch((e) => setError((e as Error).message));
-  }, [left, right]);
-
-  const accepted = versions.some((v) => v.revision === state.revision);
+  const sets = useMemo(() => setsByRevision(state), [state]);
   const site = relay && config.site ? config.site : null;
   const repo = config.github?.source === 'repo';
-  const label = (s: Source) =>
-    s === 'draft'
-      ? 'Brouillon en cours'
-      : s === 'site'
-        ? 'Site actuel (sans DS-Studio)'
-        : s === 'state'
-        ? `Enregistré · r${state.revision}${accepted ? ` (= v${state.revision})` : ''}`
-        : `v${s} · ${new Date(versions.find((v) => v.revision === s)?.acceptedAt ?? '').toLocaleDateString('fr-FR')}`;
-  const options: Source[] = [
-    ...(site ? (['site'] as Source[]) : []),
-    ...(draft ? (['draft'] as Source[]) : []),
-    'state',
-    ...versions.map((v) => v.revision),
-  ];
-  // Site actuel : pas de jeu de tokens à lui (les siens), aucun écart de tokens calculé.
-  const resolve = (s: Source) => (s === 'draft' ? draftSet : s === 'state' || s === 'site' ? state.set : loaded[s]);
-  const before = resolve(left);
-  const after = resolve(right);
-  const vsSite = left === 'site' || right === 'site';
-  const patches = useMemo(() => (before && after && !vsSite ? diff(before, after) : []), [before, after, vsSite]);
-  const [detail, setDetail] = useState(false);
+  const min = site && repo ? SITE : 0;
+  const max = state.revision;
+  const clampAt = (n: number) => Math.max(min, Math.min(max, n));
+  const [at, setAt] = useState(() => clampAt(initial ?? defaultBefore(state, versions, draft)));
+  useEffect(() => {
+    setAt((a) => clampAt(a));
+  }, [min, max]);
+
+  // Lecture automatique : repart du départ si le curseur est au bout.
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => {
+    if (!playing) return;
+    if (at >= max) {
+      setPlaying(false);
+      return;
+    }
+    const timer = setTimeout(() => setAt((a) => a + 1), STEP_MS);
+    return () => clearTimeout(timer);
+  }, [playing, at, max]);
+  const play = () => {
+    if (playing) return setPlaying(false);
+    if (at >= max) setAt(min);
+    setPlaying(true);
+  };
+
+  const accepted = new Map(versions.map((v) => [v.revision, v]));
+  const name = (i: number) => (i === SITE ? 'Site actuel' : i === 0 ? 'Départ' : accepted.has(i) ? `v${i}` : `r${i}`);
+  const when = (i: number) => {
+    const r = i >= 1 ? state.history[i - 1] : undefined;
+    return r ? new Date(r.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+  };
+  const beforeLabel =
+    at === SITE ? 'Site actuel, sans DS-Studio' : at === 0 ? 'Départ du projet' : `${name(at)} · ${when(at)}`;
+  const afterLabel = draft ? 'Tes modifications en cours' : `Enregistré · ${name(state.revision)}`;
+  const before = at === SITE ? state.set : sets[at];
+  const after = draft ? draftSet : state.set;
+  const same = at === state.revision && !draft;
+  // Historique long : étiquettes aux bouts, aux versions et au cran courant.
+  const crowded = max - min > 12;
 
   const [content, setContent] = useState<Screen | 'site'>(site ? 'site' : 'ds');
   const [device, setDevice] = useState<Device>('desktop');
@@ -135,9 +144,16 @@ export default function CompareView({
   const [room, setRoom] = useState({ w: 1100, h: window.innerHeight });
   useEffect(() => {
     if (!box.current) return;
+    // Haut du cadre mesuré dans le document, pas dans la fenêtre : page
+    // défilée, la mesure suivrait le défilement et les cadres grandiraient
+    // sans fin (ancrage du défilement).
     const measure = () =>
       box.current &&
-      setRoom({ w: box.current.clientWidth, h: window.innerHeight - box.current.getBoundingClientRect().top - 48 });
+      setRoom({
+        w: box.current.clientWidth,
+        h: window.innerHeight - (box.current.getBoundingClientRect().top + window.scrollY) - 72,
+      });
+    measure(); // sans attendre le premier rappel de l'observateur
     const observer = new ResizeObserver(measure);
     observer.observe(box.current);
     window.addEventListener('resize', measure);
@@ -145,31 +161,32 @@ export default function CompareView({
       observer.disconnect();
       window.removeEventListener('resize', measure);
     };
-  }, []);
+    // Le bandeau « identiques » et les outils du contenu déplacent le haut
+    // des cadres sans changer leur taille : on remesure quand ils changent.
+  }, [same, content]);
   const gap = 24;
   const { width } = devices[device];
   const scale = Math.min(1, (room.w - gap) / 2 / width);
   const height = Math.max(360, room.h) / scale;
 
-  const frame = (s: Source, side: 'left' | 'right') => {
-    const set = resolve(s);
-    const title = `${side === 'left' ? 'Gauche' : 'Droite'} : ${label(s)}`;
+  const frame = (side: 'left' | 'right') => {
+    const set = side === 'left' ? before : after;
+    const label = side === 'left' ? beforeLabel : afterLabel;
+    const raw = side === 'left' && at === SITE;
+    const title = `${side === 'left' ? 'Gauche' : 'Droite'} : ${label}`;
     const props = { width, height, scale, title, onScroll: side === 'left' ? fromLeft : fromRight, follow: follow[side] };
     return (
-      <figure>
+      <figure className={`compare__side compare__side--${side === 'left' ? 'before' : 'after'}`}>
         <figcaption>
-          <strong>{side === 'left' ? 'Avant' : 'Après'}</strong> · {label(s)}
+          <span className="compare__tag">{side === 'left' ? 'Avant' : 'Après'}</span>
+          <span className="compare__what">{label}</span>
         </figcaption>
-        {!set ? (
-          <p className="hint" style={{ width: width * scale }}>
-            Chargement de la version…
-          </p>
-        ) : s === 'site' && content !== 'site' ? (
+        {raw && content !== 'site' ? (
           <p className="hint" style={{ width: width * scale }}>
             Le site actuel se compare sur le contenu « Site » seulement.
           </p>
         ) : content === 'site' && site ? (
-          <SiteFrame key={`${device}-${page}-${s === 'site'}`} slug={slug} relay={relay!} config={config} set={set} page={page} raw={s === 'site'} {...props} />
+          <SiteFrame key={`${device}-${page}-${raw}`} slug={slug} relay={relay!} config={config} set={set} page={page} raw={raw} {...props} />
         ) : (
           <DsFrame key={device} set={set} screen={content === 'site' ? 'ds' : content} {...props} />
         )}
@@ -179,35 +196,48 @@ export default function CompareView({
 
   return (
     <section className="site-view compare" aria-label="Comparaison côte à côte">
-      <div className="site-view__head">
-        <h2>Comparer côte à côte</h2>
-        <label>
+      <div className="compare__time">
+        <span className="compare__time-label" aria-hidden="true">
           Avant
-          <select aria-label="Version avant" value={String(left)} onChange={(e) => setSources([parse(e.target.value), right])}>
-            {options.map((o) => (
-              <option key={o} value={String(o)}>
-                {label(o)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button aria-label="Inverser avant et après" title="Inverser" onClick={() => setSources([right, left])}>
-          ⇄
+        </span>
+        <button className="timeline__play" onClick={play} aria-label={playing ? 'Mettre en pause' : 'Rejouer l’historique'}>
+          {playing ? '❚❚' : '▶'}
         </button>
-        <label>
-          Après
-          <select aria-label="Version après" value={String(right)} onChange={(e) => setSources([left, parse(e.target.value)])}>
-            {options.map((o) => (
-              <option key={o} value={String(o)}>
-                {label(o)}
-              </option>
+        <div className="timeline__track">
+          <input
+            type="range"
+            min={min}
+            max={max}
+            step={1}
+            value={at}
+            aria-label="Version avant"
+            aria-valuetext={beforeLabel}
+            disabled={max === min}
+            onChange={(e) => {
+              setPlaying(false);
+              setAt(Number(e.target.value));
+            }}
+          />
+          <ol className="timeline__marks" aria-hidden="true">
+            {Array.from({ length: max - min + 1 }, (_, k) => k + min).map((i) => (
+              <li
+                key={i}
+                style={{ left: `${max > min ? ((i - min) / (max - min)) * 100 : 0}%` }}
+                className={`${i === at ? 'is-current' : ''} ${accepted.has(i) ? 'is-version' : ''}`}
+              >
+                {(!crowded || i === min || i === max || i === at || accepted.has(i)) && <span>{name(i)}</span>}
+              </li>
             ))}
-          </select>
-        </label>
+          </ol>
+        </div>
       </div>
-      <div className="site-view__head">
+      {same && (
+        <p className="hint compare__same" role="status">
+          Avant et après sont identiques : fais glisser le curseur vers une version plus ancienne.
+        </p>
+      )}
+      <div className="compare__tools">
         <ScreenPicker value={content} onChange={setContent} site={!!site} label="Contenu comparé" />
-        {content !== 'site' && after && <PreviewGap set={after} site={!!site} />}
         <div className="devices" role="group" aria-label="Appareil">
           {(Object.keys(devices) as Device[]).map((d) => (
             <button key={d} aria-pressed={device === d} onClick={() => setDevice(d)}>
@@ -230,38 +260,12 @@ export default function CompareView({
         <label>
           <input type="checkbox" checked={linked} onChange={(e) => setLinked(e.target.checked)} /> Défilement lié
         </label>
-        <span className="compare__summary">
-          {vsSite ? 'Site tel qu’en ligne face aux tokens de l’atelier' : before && after ? diffSummary(patches) : '…'}
-          {patches.length > 0 && <button onClick={() => setDetail(true)}>Détail</button>}
-        </span>
+        {content !== 'site' && <PreviewGap set={after} site={!!site} />}
       </div>
-      <p className="hint">
-        {!site
-          ? `${config.site ? 'Relais du Site en direct arrêté (Réglages → Services)' : 'Pas d’adresse https publique pour ce projet'} : comparaison sur les écrans d’exemple de DS-Studio seulement. Les valeurs en dur de ton code n’y apparaissent pas : vérifie-les dans la pull request.`
-          : repo
-            ? 'Site en direct : les valeurs en dur du CSS et du HTML sont remplacées à la volée par les tokens du plan du dépôt, comme dans la pull request (JavaScript jamais réécrit). « Site actuel » montre le site sans DS-Studio.'
-            : 'Site en direct : seules les variables du site prennent les tokens de l’atelier ; ses valeurs en dur restent telles quelles (rattache un dépôt pour les remplacer).'}
-      </p>
-      {error && (
-        <p className="message error" role="alert">
-          {error}
-        </p>
-      )}
       <div className="site-view__frames compare__frames" ref={box}>
-        {frame(left, 'left')}
-        {frame(right, 'right')}
+        {frame('left')}
+        {frame('right')}
       </div>
-      {detail && (
-        <ChangesDialog
-          title={`${label(left)} → ${label(right)}`}
-          hint="Lecture seule : cette vue ne modifie rien."
-          patches={patches}
-          cancelLabel="Fermer"
-          onCancel={() => setDetail(false)}
-        />
-      )}
     </section>
   );
 }
-
-const parse = (v: string): Source => (v === 'draft' || v === 'state' || v === 'site' ? v : Number(v));

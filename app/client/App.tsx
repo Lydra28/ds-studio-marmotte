@@ -49,9 +49,9 @@ import RepoPanel from './Repo.js';
 import { SiteFrame, SiteFullscreen, type Device } from './Site.js';
 import { fontFamilies, loadFonts } from './fonts.js';
 import { PreviewGap, previewSrc, previewUnfit, ScreenPicker, type Screen } from './DesignSystem.js';
-import CompareView, { type Source } from './Compare.js';
-import TimelineView from './Timeline.js';
-import { ChangesDialog, Corrections, DiffDialog, ExportDialog, FigmaDialog, History } from './Panels.js';
+import CompareView from './Compare.js';
+import History from './History.js';
+import { ChangesDialog, Corrections, DiffDialog, ExportDialog, FigmaDialog } from './Panels.js';
 
 const devices = [
   { label: '320', width: 320 },
@@ -218,8 +218,9 @@ function Workspace({
     }
   }, []);
   // Vue Versions : onglet ouvert, et révision visée depuis la frise.
-  const [versionsTab, setVersionsTab] = useState<'history' | 'timeline' | 'compare'>('compare');
-  const [timelineAt, setTimelineAt] = useState<number>();
+  const [versionsTab, setVersionsTab] = useState<'compare' | 'history'>('compare');
+  // Révision « Avant » de Comparer imposée par Historique ou la frise.
+  const [compareAt, setCompareAt] = useState<number>();
   // Sections repliées de la planche : toutes au lancement (voulu par Romain),
   // puis gardées par projet le temps de la session (sessionStorage).
   const [folded, setFolded] = useState<Set<string>>(() => {
@@ -252,10 +253,12 @@ function Workspace({
     });
     setTimeout(() => void document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
-  const openVersions = (tab: 'history' | 'timeline' | 'compare', at?: number) => {
+  const openVersions = (tab: 'compare' | 'history', at?: number) => {
     setVersionsTab(tab);
-    setTimelineAt(at);
+    setCompareAt(at);
     setView('versions');
+    // Arrivée depuis une planche défilée : Versions s'ouvre en haut.
+    window.scrollTo(0, 0);
   };
   // Hauteur de la barre du haut (elle passe à la ligne en étroit) : ancres, preview collante.
   const top = useRef<HTMLDivElement>(null);
@@ -266,8 +269,6 @@ function Workspace({
     ro.observe(el);
     return () => ro.disconnect();
   });
-  // Côtés imposés depuis l'historique ; sinon la vue choisit les siens.
-  const [compareFrom, setCompareFrom] = useState<[Source, Source]>();
   const [assistantOpen, setAssistantOpen] = useState(() => {
     try {
       return localStorage.getItem('ds-assistant') === '1';
@@ -549,7 +550,7 @@ function Workspace({
         view={view}
         onView={(v) => (v === 'versions' ? openVersions(versionsTab) : setView(v))}
         versions={versions.map((v) => v.revision)}
-        onVersion={(revision) => openVersions('timeline', revision)}
+        onVersion={(revision) => openVersions('compare', revision)}
         boardBadge={
           findings.length ? (
             <button
@@ -697,19 +698,10 @@ function Workspace({
             {(
               [
                 ['compare', 'Comparer'],
-                ['timeline', 'Évolution'],
                 ['history', 'Historique'],
               ] as const
             ).map(([tab, label]) => (
-              <button
-                key={tab}
-                role="tab"
-                aria-selected={versionsTab === tab}
-                onClick={() => {
-                  if (tab === 'compare') setCompareFrom(undefined);
-                  openVersions(tab);
-                }}
-              >
+              <button key={tab} role="tab" aria-selected={versionsTab === tab} onClick={() => openVersions(tab)}>
                 {label}
               </button>
             ))}
@@ -718,29 +710,18 @@ function Workspace({
             <History
               state={state}
               versions={versions}
-              onUndo={(id) => run(async () => setProposal(await proposeUndo(state.revision, id)))}
-              onCompare={compareVersions}
-              onSideBySide={(revision, previous) => {
-                setCompareFrom([previous ?? revision, revision]);
-                openVersions('compare');
-              }}
-            />
-          )}
-          {versionsTab === 'timeline' && (
-            <TimelineView
-              key={timelineAt ?? 'last'}
-              slug={slug}
-              relay={relay}
-              config={config}
-              state={state}
-              versions={versions}
-              draftSet={draftSet}
               draft={draftCount > 0}
-              initial={timelineAt}
+              onView={(revision) => openVersions('compare', revision)}
+              onDetail={compareVersions}
+              onRestore={(revision) =>
+                run(async () => setProposal(await proposeImport(state.revision, await versionSet(revision))))
+              }
+              onUndo={(id) => run(async () => setProposal(await proposeUndo(state.revision, id)))}
             />
           )}
           {versionsTab === 'compare' && (
             <CompareView
+              key={compareAt ?? 'auto'}
               slug={slug}
               relay={relay}
               config={config}
@@ -748,7 +729,7 @@ function Workspace({
               versions={versions}
               draftSet={draftSet}
               draft={draftCount > 0}
-              initial={compareFrom}
+              initial={compareAt}
             />
           )}
         </div>
