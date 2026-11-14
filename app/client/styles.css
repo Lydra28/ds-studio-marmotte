@@ -1978,8 +1978,9 @@ dialog.diff .diff-summary {
   justify-content: center;
 }
 
-/* Mascotte « Pastille » : sprite pixel du logo, flottante en bas à droite,
-   ouvre l'assistant. Mouvements en escalier (steps) pour rester pixel. */
+/* Mascotte de l'assistant (requin marteau, grille 64) : flottante en bas à
+   droite, ouvre l'assistant. Mouvements en escalier (steps) pour rester
+   pixel ; déplacements en unités de la grille (4 = une case de l'ancien 16). */
 .mascot {
   position: relative;
   display: block;
@@ -2023,7 +2024,7 @@ dialog.diff .diff-summary {
 }
 @keyframes mascot-bob {
   50% {
-    transform: translateY(-1px);
+    transform: translateY(-4px);
   }
 }
 @keyframes mascot-blink {
@@ -2037,12 +2038,12 @@ dialog.diff .diff-summary {
 }
 @keyframes mascot-jump {
   50% {
-    transform: translateY(-3px);
+    transform: translateY(-12px);
   }
 }
 @keyframes mascot-drop {
   to {
-    transform: translateY(2px);
+    transform: translateY(8px);
   }
 }
 @keyframes mascot-thought {

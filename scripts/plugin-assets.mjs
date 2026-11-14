@@ -1,12 +1,14 @@
 // Visuels du plugin Figma pour la Community (icône 128 × 128, vignette
-// 1920 × 1080, dossier figma-plugin/community/) et mascotte en ligne de
-// figma-plugin/ui.html, tous dérivés du logo de l'app, desktop/icon.png
-// (pixel art, grille 16 × 16, comme desktop/icon-512.png). Aucune
+// 1920 × 1080, dossier figma-plugin/community/) et logo en ligne de
+// figma-plugin/ui.html, tous dérivés du logo de l'app : requin marteau en
+// pixel art généré par scripts/logo.mjs (desktop/icon.png, grille 64 × 64 ;
+// grille 32 × 32 de app/client/sprites.ts pour l'en-tête de 32 px). Aucune
 // dépendance : PNG lu et écrit avec zlib ; la vignette, qui porte du texte,
 // est rendue par le Chromium de Playwright, déjà installé pour les tests.
-// Polices Google chargées à la génération seulement ; hors ligne, repli
-// système. Le test tests/plugin-assets.test.ts vérifie que les fichiers
-// produits et la mascotte de ui.html correspondent toujours à l'icône.
+// Instrument Sans et Geist Mono chargées chez Google à la génération
+// seulement (hors ligne, repli système) ; Departure Mono embarquée depuis
+// app/client/fonts/. Le test tests/plugin-assets.test.ts vérifie que les
+// fichiers produits et le logo de ui.html correspondent toujours au logo.
 // Usage : node scripts/plugin-assets.mjs        écrit les deux PNG
 //         node scripts/plugin-assets.mjs --svg  affiche la mascotte SVG de ui.html
 import fs from 'node:fs/promises';
@@ -14,20 +16,35 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-export const GRID = 16;
+export const GRID = 64;
+export const SMALL = 32;
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const ICON = path.join(root, 'desktop/icon.png');
 export const UI = path.join(root, 'figma-plugin/ui.html');
 export const OUT = path.join(root, 'figma-plugin/community');
 export const ICON_128 = path.join(OUT, 'icon-128.png');
 export const COVER = path.join(OUT, 'cover-1920x1080.png');
+export const SPRITES = path.join(root, 'app/client/sprites.ts');
+const FONT = path.join(root, 'app/client/fonts/DepartureMono-Regular.woff2');
 
-// Palette de la DA « Atelier 8-bit » (app/client/pixel.css).
-const INK = '#0b0b0c';
-const PAPER = '#f2f1ec';
-const SOFT = '#c9c7bf';
-const ACCENT = '#e8ff3a';
-const DOTS = '#1d1d21';
+// Palette de la DA « Atelier acide » (app/client/da.css) ; ombre du logo
+// et couleurs des caractères de sprites.ts comme dans scripts/logo.mjs.
+const INK = '#07080a';
+const PAPER = '#f3f4ef';
+const SOFT = '#c4c9d0';
+const ACCENT = '#bdff2e';
+const DOTS = '#161a20';
+export const LOGO_COLORS = { '#': INK, Y: ACCENT, s: '#86b81c' };
+
+// Grille 32 × 32 du logo, yeux compris, lue dans app/client/sprites.ts.
+export async function smallLogo() {
+  const src = await fs.readFile(SPRITES, 'utf8');
+  const rows = [...src.split('export const LOGO_32 = [')[1].split('];')[0].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  const eyes = JSON.parse(src.split('LOGO_32_EYES: Rect[] = ')[1].split(';')[0]);
+  const grid = rows.map((row) => [...row].map((k) => (k === '.' ? '' : LOGO_COLORS[k])));
+  for (const [x, y, w, h] of eyes) for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) grid[y + j][x + i] = INK;
+  return grid;
+}
 
 const chunkType = (buf, offset) => buf.toString('ascii', offset + 4, offset + 8);
 
@@ -133,7 +150,7 @@ export function resample(png, width, height) {
 
 const hex = (pixels, i) => (pixels[i + 3] === 0 ? '' : '#' + pixels.subarray(i, i + 3).toString('hex'));
 
-// Grille 16 × 16 du sprite : '' pour une case transparente, sinon '#rrggbb'.
+// Grille 64 × 64 du logo : '' pour une case transparente, sinon '#rrggbb'.
 // Chaque case doit être unie, sinon l'image n'est pas le pixel art attendu.
 export function spriteOf(png) {
   if (png.width !== png.height || png.width % GRID !== 0) {
@@ -161,12 +178,13 @@ export function spriteOf(png) {
 // Plages horizontales de même couleur fusionnées en rectangles (comme Mascot.tsx).
 export function runsOf(grid) {
   const rects = [];
+  const n = grid.length;
   grid.forEach((row, y) => {
     let x = 0;
-    while (x < GRID) {
+    while (x < n) {
       const fill = row[x];
       let w = 1;
-      while (x + w < GRID && row[x + w] === fill) w++;
+      while (x + w < n && row[x + w] === fill) w++;
       if (fill) rects.push({ x, y, w, h: 1, fill });
       x += w;
     }
@@ -174,35 +192,37 @@ export function runsOf(grid) {
   return rects;
 }
 
-// Mascotte en SVG net (crispEdges) ; `size` en pixels CSS, multiple de 16
-// pour que chaque case tombe sur des pixels entiers.
+// Logo en SVG net (crispEdges) ; `size` en pixels CSS, multiple de la
+// grille pour que chaque case tombe sur des pixels entiers.
 export function spriteSvg(grid, size) {
   const rects = runsOf(grid)
     .map((r) => `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${r.fill}" />`)
     .join('');
-  return `<svg class="mascot" viewBox="0 0 ${GRID} ${GRID}" width="${size}" height="${size}" shape-rendering="crispEdges" aria-hidden="true">${rects}</svg>`;
+  return `<svg class="mascot" viewBox="0 0 ${grid.length} ${grid.length}" width="${size}" height="${size}" shape-rendering="crispEdges" aria-hidden="true">${rects}</svg>`;
 }
 
-// Vignette 1920 × 1080 : mascotte à gauche, nom et accroche à droite, fond
-// de la DA. Rendue par Chromium (texte), capturée à l'échelle 1.
+// Vignette 1920 × 1080 : logo à gauche, nom et accroche à droite, fond de
+// la DA. Rendue par Chromium (texte), capturée à l'échelle 1.
 export async function renderCover(grid, out) {
   const { chromium } = await import('@playwright/test');
+  const font = (await fs.readFile(FONT)).toString('base64');
   const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8" />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&family=Pixelify+Sans:wght@700&family=Silkscreen&display=block" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500&family=Geist+Mono:wght@500&display=block" />
 <style>
+  @font-face { font-family: 'Departure Mono'; src: url(data:font/woff2;base64,${font}) format('woff2'); }
   html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; }
   body {
     box-sizing: border-box; display: flex; align-items: center; gap: 128px; padding: 0 176px;
     background: ${INK} radial-gradient(${DOTS} 3px, transparent 3px) 16px 16px / 48px 48px;
-    color: ${PAPER}; font-family: 'Geist', 'Segoe UI', system-ui, sans-serif;
+    color: ${PAPER}; font-family: 'Instrument Sans', 'Segoe UI', system-ui, sans-serif;
   }
-  .mascot { width: 544px; height: 544px; flex: none; }
+  .mascot { width: 512px; height: 512px; flex: none; }
   .text { display: flex; flex-direction: column; gap: 32px; }
-  .kicker { font-family: 'Silkscreen', 'Geist Mono', ui-monospace, monospace; font-size: 30px; letter-spacing: 0.08em; text-transform: uppercase; color: ${ACCENT}; }
-  h1 { font-family: 'Pixelify Sans', 'Silkscreen', 'Geist', sans-serif; font-weight: 700; font-size: 176px; line-height: 0.95; margin: 0; }
+  .kicker { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 30px; letter-spacing: 0.08em; text-transform: uppercase; color: ${ACCENT}; }
+  h1 { font-family: 'Departure Mono', 'Geist Mono', monospace; font-weight: 400; font-size: 136px; line-height: 0.95; margin: 0; white-space: nowrap; }
   p { font-size: 46px; line-height: 1.3; margin: 0; color: ${SOFT}; max-width: 880px; }
 </style></head><body>
-${spriteSvg(grid, 544)}
+${spriteSvg(grid, 512)}
 <div class="text">
   <div class="kicker">Plugin Figma · atelier local</div>
   <h1>DS-Studio</h1>
@@ -225,7 +245,7 @@ ${spriteSvg(grid, 544)}
 async function main() {
   const grid = spriteOf(decodePng(await fs.readFile(ICON)));
   if (process.argv.includes('--svg')) {
-    process.stdout.write(spriteSvg(grid, 32) + '\n');
+    process.stdout.write(spriteSvg(await smallLogo(), SMALL) + '\n');
     return;
   }
   await fs.mkdir(OUT, { recursive: true });

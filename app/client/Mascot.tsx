@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { memo, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { resolve, type TokenSet } from '../shared/model.js';
+import { ASSISTANT_64, type Rect } from './sprites.js';
 
 // Couleur de marque du projet, brouillon compris : `bg/brand`, sinon le
 // premier token de couleur « brand », « primary » ou « accent ».
@@ -17,59 +18,41 @@ export function brandColor(set: TokenSet) {
   return '#7C5CFF';
 }
 
-// Pastille en pixel art, même sprite que le logo de l'app (desktop/icon.png,
-// grille 16 × 16) : nuancier à visage, teinté par la couleur de marque du
-// projet. Les traits passent en clair sur une marque sombre.
+// Mascotte de l'assistant : requin marteau de face en pixel art, 64 × 64
+// (choix de Romain du 2026-11-14), grille générée par scripts/logo.mjs
+// (sprites.ts). Teintée par la couleur de marque du projet, ombre assombrie ;
+// les traits du visage passent en clair sur une marque sombre.
 export type Mood = 'idle' | 'thinking' | 'worried';
-type Rect = [x: number, y: number, w: number, h: number];
 
-// # contour, Y teinte du projet, W étiquette, b trait de l'étiquette.
-const BODY = [
-  '..############..',
-  '.#YYYYYYYYYYYY#.',
-  '#YYYYYYYYYYYYYY#',
-  '#YYYYYYYYYYYYYY#',
-  '#YYYYYYYYYYYYYY#',
-  '#YYYYYYYYYYYYYY#',
-  '#YYYYYYYYYYYYYY#',
-  '#YYYYYYYYYYYYYY#',
-  '#YYYYYYYYYYYYYY#',
-  '#YYYYYYYYYYYYYY#',
-  '#YYYYYYYYYYYYYY#',
-  '#YWWWWWWWWWWWWY#',
-  '#YWbbbbbWWWWWWY#',
-  '#YWWWWWWWWWWWWY#',
-  '.#YYYYYYYYYYYY#.',
-  '..############..',
-];
-// Plages de même caractère fusionnées : une vingtaine de rectangles.
+// Plages de même caractère fusionnées en rectangles.
 const runs = (char: string): Rect[] =>
-  BODY.flatMap((row, y) => [...row.matchAll(new RegExp(`${char}+`, 'g'))].map((m): Rect => [m.index!, y, m[0].length, 1]));
+  ASSISTANT_64.flatMap((row, y) => [...row.matchAll(new RegExp(`${char}+`, 'g'))].map((m): Rect => [m.index!, y, m[0].length, 1]));
 const OUTLINE = runs('#');
 const FILL = runs('Y');
-const LABEL = runs('W');
-const BAR = runs('b');
+const SHADE = runs('s');
 
+// Yeux au bout du marteau (3 × 3), bouche sous le marteau ; coordonnées 0..64.
+// Sourire sans dents (demande de Romain du 2026-11-14).
 type Face = 'idle' | 'thinking' | 'worried' | 'joy';
 const FACES: Record<Face, { eyes: Rect[]; mouth: Rect[] }> = {
   idle: {
-    eyes: [[4, 4, 2, 2], [10, 4, 2, 2]],
-    mouth: [[5, 7, 1, 1], [10, 7, 1, 1], [6, 8, 4, 1]],
+    eyes: [[3, 28, 3, 3], [58, 28, 3, 3]],
+    mouth: [[25, 35, 2, 2], [37, 35, 2, 2], [27, 37, 10, 2]],
   },
-  // Regard en haut à droite, bouche pincée, bulles de réflexion.
+  // Regard en haut, bouche pincée, bulles de réflexion.
   thinking: {
-    eyes: [[5, 3, 2, 2], [11, 3, 2, 2]],
-    mouth: [[7, 8, 3, 1]],
+    eyes: [[3, 27, 3, 2], [58, 27, 3, 2]],
+    mouth: [[30, 37, 7, 2]],
   },
-  // Sourcils relevés au centre, bouche à l'envers.
+  // Yeux plissés, bouche à l'envers, goutte.
   worried: {
-    eyes: [[4, 5, 2, 1], [10, 5, 2, 1], [4, 3, 1, 1], [5, 2, 1, 1], [11, 3, 1, 1], [10, 2, 1, 1]],
-    mouth: [[6, 7, 4, 1], [5, 8, 1, 1], [10, 8, 1, 1]],
+    eyes: [[3, 29, 3, 2], [58, 29, 3, 2]],
+    mouth: [[27, 35, 10, 2], [25, 37, 2, 2], [37, 37, 2, 2]],
   },
   // Yeux en ^, grande bouche ouverte.
   joy: {
-    eyes: [[3, 5, 1, 1], [4, 4, 2, 1], [6, 5, 1, 1], [9, 5, 1, 1], [10, 4, 2, 1], [12, 5, 1, 1]],
-    mouth: [[5, 7, 6, 1], [6, 8, 4, 1]],
+    eyes: [[2, 30, 1, 1], [3, 29, 3, 1], [6, 30, 1, 1], [57, 30, 1, 1], [58, 29, 3, 1], [61, 30, 1, 1]],
+    mouth: [[24, 35, 16, 2], [26, 37, 12, 2], [29, 39, 6, 2]],
   },
 };
 
@@ -77,10 +60,21 @@ const luminance = (hex: string) => {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 };
-// Logo de l'app (même grille), pour l'apparition tramée de l'onboarding.
-export const LOGO = { body: BODY, eyes: FACES.idle.eyes, mouth: FACES.idle.mouth };
+// Ombre : la couleur de marque à 70 %.
+const darker = (hex: string) =>
+  '#' + [1, 3, 5].map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) * 0.7).toString(16).padStart(2, '0')).join('');
 const rects = (list: Rect[], fill: string, className?: string) =>
   list.map(([x, y, w, h]) => <rect key={`${x}-${y}-${w}`} className={className} x={x} y={y} width={w} height={h} fill={fill} />);
+// Corps (environ 300 plages) : ne se redessine que si la teinte change.
+const Body = memo(function Body({ color }: { color: string }) {
+  return (
+    <>
+      {rects(OUTLINE, '#07080a')}
+      {rects(FILL, color)}
+      {rects(SHADE, darker(color))}
+    </>
+  );
+});
 
 export function Mascot({ color, mood = 'idle', cheer = 0 }: { color: string; mood?: Mood; cheer?: number }) {
   // Fête : visage de joie et saut, puis retour à l'humeur.
@@ -92,23 +86,20 @@ export function Mascot({ color, mood = 'idle', cheer = 0 }: { color: string; moo
     return () => clearTimeout(timer);
   }, [cheer]);
   const face: Face = joy ? 'joy' : mood;
-  const ink = luminance(color) > 0.3 ? '#0b0b0c' : '#f2f1ec';
+  const ink = luminance(color) > 0.3 ? '#07080a' : '#f3f4ef';
   return (
     <span className={`mascot mascot--${face}`} aria-hidden="true">
-      <svg viewBox="-2 -4 20 22" shapeRendering="crispEdges">
-        <rect className="mascot__shadow" x={2} y={17} width={12} height={1} />
+      <svg viewBox="-8 -16 80 88" shapeRendering="crispEdges">
+        <rect className="mascot__shadow" x={16} y={60} width={32} height={3} />
         <g className="mascot__body">
-          {rects(OUTLINE, '#0b0b0c')}
-          {rects(FILL, color)}
-          {rects(LABEL, '#f2f1ec')}
-          {rects(BAR, '#0b0b0c')}
+          <Body color={color} />
           <g className="mascot__eyes">{rects(FACES[face].eyes, ink)}</g>
           {rects(FACES[face].mouth, ink)}
-          {face === 'worried' && rects([[13, 2, 1, 2]], '#7cc4ff', 'mascot__drop')}
+          {face === 'worried' && rects([[50, 14, 3, 6]], '#7cc4ff', 'mascot__drop')}
         </g>
         {face === 'thinking' && (
           <g className="mascot__thought">
-            {rects([[15, 0, 1, 1], [16, -2, 2, 2], [17, -4, 3, 2]], '#f2f1ec')}
+            {rects([[48, 4, 4, 4], [53, -4, 7, 7], [60, -14, 12, 8]], '#f3f4ef')}
           </g>
         )}
       </svg>

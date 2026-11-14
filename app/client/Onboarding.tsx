@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createProject, getGithub, githubAction, type AccountStatus, type GithubRepo, type GithubStatus } from './api.js';
 import { accountChanged, ACCOUNT_HASH, Avatar, FigmaMark, GithubMark, GlassBadge, rememberStart, useAccount } from './Chrome.js';
-import { LOGO } from './Mascot.js';
+import { LOGO_64, LOGO_64_EYES } from './sprites.js';
 import { AccountSection } from './Settings.js';
 
 // Pop-in d'accueil (cadrage navigation et UX du 2026-11-14) : trois étapes,
@@ -434,41 +434,41 @@ function FigmaStep({ plugin }: { plugin: string | null }) {
   );
 }
 
-// Motion Compte : le logo apparaît pixel par pixel, dans l'ordre d'une trame
-// de Bayer 4 × 4 (fondu 1-bit), puis cligne.
+// Motion Compte : le logo (requin marteau, grille 64) apparaît par blocs de
+// 4 × 4 cases, dans l'ordre d'une trame de Bayer 4 × 4 (fondu 1-bit), puis
+// cligne des yeux.
 const BAYER = [
   [0, 8, 2, 10],
   [12, 4, 14, 6],
   [3, 11, 1, 9],
   [15, 7, 13, 5],
 ];
-const INK: Record<string, string> = { '#': '#0b0b0c', Y: 'var(--c-accent)', W: '#f2f1ec', b: '#0b0b0c' };
+const INK: Record<string, string> = { '#': '#07080a', Y: 'var(--c-accent)', s: '#86b81c' };
+const BLOCK = 4;
+// Par bloc : ses plages de même couleur, ligne par ligne.
+const LOGO_BLOCKS = Array.from({ length: (64 / BLOCK) ** 2 }, (_, i) => {
+  const bx = i % (64 / BLOCK);
+  const by = Math.floor(i / (64 / BLOCK));
+  const rects: { x: number; y: number; w: number; fill: string }[] = [];
+  for (let y = by * BLOCK; y < (by + 1) * BLOCK; y++) {
+    const row = LOGO_64[y].slice(bx * BLOCK, (bx + 1) * BLOCK);
+    for (const m of row.matchAll(/([^.])\1*/g)) rects.push({ x: bx * BLOCK + m.index!, y, w: m[0].length, fill: INK[m[1]] });
+  }
+  return { bx, by, rects };
+}).filter((b) => b.rects.length);
 function LogoMotion() {
   return (
-    <svg className="onb-logo" viewBox="0 0 16 16" shapeRendering="crispEdges">
-      {LOGO.body.flatMap((row, y) =>
-        [...row].map((c, x) =>
-          c === '.' ? null : (
-            <rect
-              key={`${x}-${y}`}
-              x={x}
-              y={y}
-              width={1}
-              height={1}
-              fill={INK[c]}
-              style={{ '--d': `${BAYER[y % 4][x % 4] * 55 + (x + y) * 6}ms` } as CSSProperties}
-            />
-          ),
-        ),
-      )}
+    <svg className="onb-logo" viewBox="0 0 64 64" shapeRendering="crispEdges">
+      {LOGO_BLOCKS.map(({ bx, by, rects }) => (
+        <g key={`${bx}-${by}`} style={{ '--d': `${BAYER[by % 4][bx % 4] * 55 + (bx + by) * 6}ms` } as CSSProperties}>
+          {rects.map(({ x, y, w, fill }) => (
+            <rect key={`${x}-${y}`} x={x} y={y} width={w} height={1} fill={fill} />
+          ))}
+        </g>
+      ))}
       <g className="onb-logo__eyes">
-        {LOGO.eyes.map(([x, y, w, h]) => (
-          <rect key={`${x}-${y}`} x={x} y={y} width={w} height={h} fill="#0b0b0c" />
-        ))}
-      </g>
-      <g className="onb-logo__mouth">
-        {LOGO.mouth.map(([x, y, w, h]) => (
-          <rect key={`${x}-${y}`} x={x} y={y} width={w} height={h} fill="#0b0b0c" />
+        {LOGO_64_EYES.map(([x, y, w, h]) => (
+          <rect key={`${x}-${y}`} x={x} y={y} width={w} height={h} fill="#07080a" />
         ))}
       </g>
     </svg>

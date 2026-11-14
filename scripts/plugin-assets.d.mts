@@ -16,12 +16,17 @@ export interface SpriteRect {
 export type Sprite = string[][];
 
 export const GRID: number;
+export const SMALL: number;
 export const ICON: string;
 export const UI: string;
 export const OUT: string;
 export const ICON_128: string;
 export const COVER: string;
+export const SPRITES: string;
+/** Couleur de chaque caractère de app/client/sprites.ts. */
+export const LOGO_COLORS: { '#': string; Y: string; s: string };
 
+export function smallLogo(): Promise<Sprite>;
 export function decodePng(buf: Buffer): Png;
 export function encodePng(png: Png): Buffer;
 export function resample(png: Png, width: number, height: number): Png;

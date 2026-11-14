@@ -119,6 +119,103 @@ button.primary,
 :where(body:not(.preview-body)) input[type='radio'] {
   accent-color: var(--c-accent);
 }
+/* Listes déroulantes (demande de Romain du 2026-11-14 : la liste native de
+   Windows faisait « cheap ») : select stylable (Chromium 135+, donc
+   l'exe Electron et Chrome), liste ouverte comme le menu « ⋯ », pixel
+   lime sur le choix en cours. Ailleurs (Firefox, Safari) : liste native. */
+@supports (appearance: base-select) {
+  :where(body:not(.preview-body)) select,
+  :where(body:not(.preview-body)) ::picker(select) {
+    appearance: base-select;
+  }
+  /* Valeur sur une ligne, coupée avant la flèche (les selects étroits de
+     l'éditeur passaient sur deux lignes). La flèche est un fond, pas
+     ::picker-icon : le découpage au contenu la masquerait. Spécificité
+     (0,1,2) : passe devant les `background` et `padding` de chaque écran. */
+  body:not(.preview-body) select {
+    white-space: nowrap;
+    overflow: clip;
+    overflow-clip-margin: content-box;
+    padding-right: 24px;
+    cursor: pointer;
+    /* triangle couleur --c-muted (#8e96a1) */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='6'%3E%3Cpath d='M0 0h8L4 6z' fill='%238e96a1'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 9px center;
+    background-size: 8px 6px;
+  }
+  body:not(.preview-body) select:open {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='6'%3E%3Cpath d='M0 6h8L4 0z' fill='%238e96a1'/%3E%3C/svg%3E");
+  }
+  :where(body:not(.preview-body)) select::picker-icon {
+    display: none;
+  }
+  .project-pick:has(select:open)::after {
+    rotate: 180deg;
+  }
+  :where(body:not(.preview-body)) ::picker(select) {
+    /* Sous le champ ; au-dessus seulement si elle n'y tient pas (par défaut,
+       Chromium prend le côté le plus haut : la liste s'ouvrait vers le haut
+       à mi-écran). */
+    position-try-order: normal;
+    margin-block: 6px;
+    min-width: max(anchor-size(width), 180px);
+    padding: 4px;
+    color: var(--c-soft);
+    background: rgb(14 16 19 / 0.97);
+    border: 1px solid var(--glass-line);
+    border-radius: var(--r-panel);
+    box-shadow: 0 16px 40px rgb(0 0 0 / 0.5);
+    scrollbar-width: thin;
+    scrollbar-color: var(--c-line-strong) transparent;
+    animation: menu-in 0.16s ease-out;
+  }
+  :where(body:not(.preview-body)) option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-family: var(--f-label);
+    font-size: 13px;
+    color: var(--c-soft);
+    background: transparent;
+    cursor: pointer;
+  }
+  :where(body:not(.preview-body)) option:hover,
+  :where(body:not(.preview-body)) option:focus-visible {
+    color: var(--c-text);
+    background: rgb(255 255 255 / 0.06);
+    outline: 0;
+  }
+  /* Clavier : repère de focus net (le seul voile ne suffit pas). */
+  :where(body:not(.preview-body)) option:focus-visible {
+    outline: 1px solid var(--c-info);
+    outline-offset: -1px;
+  }
+  body:not(.preview-body) select:disabled {
+    cursor: not-allowed;
+  }
+  :where(body:not(.preview-body)) option:checked {
+    color: var(--c-text);
+  }
+  :where(body:not(.preview-body)) option::checkmark {
+    content: '';
+    order: -1;
+    width: 6px;
+    height: 6px;
+    background: var(--c-accent);
+  }
+  :where(body:not(.preview-body)) option:disabled {
+    color: var(--c-muted);
+    cursor: default;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(body:not(.preview-body)) ::picker(select) {
+    animation: none;
+  }
+}
 /* Avis : panneau sombre en verre, liseré de l'état (texte lisible, jamais sur fond clair). */
 .message,
 .message.ok,
@@ -1634,20 +1731,18 @@ dialog.onboarding[open] {
 
 /* Motion Compte : logo tramé pixel par pixel (état final = logo entier). */
 .onb-logo {
-  width: 112px;
-  height: 112px;
+  /* Grille 64 : 2 px par case. */
+  width: 128px;
+  height: 128px;
   filter: drop-shadow(0 0 24px rgb(189 255 46 / 0.25));
 }
-.onb-logo rect {
+.onb-logo > g:not(.onb-logo__eyes) {
   animation: onb-px 0.01s steps(1) var(--d) backwards;
 }
 @keyframes onb-px {
   from {
     opacity: 0;
   }
-}
-.onb-logo__mouth {
-  animation: onb-face 0.2s steps(1) 1.15s backwards;
 }
 .onb-logo__eyes {
   transform-box: fill-box;
@@ -1763,9 +1858,7 @@ dialog.onboarding[open] {
 }
 @media (prefers-reduced-motion: reduce) {
   .onb-panel,
-  .onb-logo rect,
-  .onb-logo__eyes,
-  .onb-logo__mouth,
+  .onb-logo > g,
   .onb-gh__cursor,
   .onb-gh__btn,
   .onb-gh__check,
