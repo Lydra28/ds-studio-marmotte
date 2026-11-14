@@ -76,7 +76,14 @@ test('app desktop : ouvre l’atelier, un projet, puis rend le port en quittant'
       expect(settings.update?.reason).toBe(updates.reason);
     }
     expect(JSON.stringify(settings)).not.toMatch(/sk-|ghp_|OPENROUTER|GITHUB_TOKEN/);
+    // Premier lancement : la pop-in d'accueil (Onboarding.tsx) couvre l'atelier
+    // et intercepte les clics ; on la ferme comme un utilisateur.
+    await expect(page.getByRole('dialog', { name: 'Ton compte DS-Studio' })).toBeVisible();
+    await page.getByRole('button', { name: 'Fermer la présentation' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     await page.getByRole('button', { name: 'Réglages' }).click();
+    // Dossier des projets replié dans « Avancé » (cadrage navigation du 2026-11-14).
+    await page.locator('summary', { hasText: 'Avancé' }).click();
     await expect(page.getByRole('button', { name: 'Changer de dossier…' })).toBeVisible();
     if (updates.enabled) {
       await expect(page.getByRole('button', { name: 'Rechercher une mise à jour' })).toBeVisible();
