@@ -436,7 +436,7 @@ function Consent({ preview, sending, onSend, onCancel }: { preview: AgentPreview
       </details>
       <p className="hint">
         Trajet : ton poste → serveur DS-Studio (rien conservé, seuls la consommation et le coût sont comptés) → OpenRouter, routé vers
-        des fournisseurs sans conservation des données (ZDR) seulement → modèle. Débité de tes crédits comme l’assistant ; si aucun fournisseur ZDR
+        des fournisseurs sans conservation des données (ZDR) seulement → modèle. Débité de tes crédits comme Lenny ; si aucun fournisseur ZDR
         n’est disponible pour le modèle, l’envoi échoue. La réponse arrive en brouillon, relue par diff.
       </p>
       <div className="form-actions">

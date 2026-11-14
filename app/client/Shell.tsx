@@ -306,7 +306,7 @@ export function Home({ onOpen, plugin }: { onOpen: (slug?: string) => void; plug
             </span>
             <span className="project-card__body">
               <strong>Nouveau projet</strong>
-              <small>Jeu de départ neutre, l’assistant aide pour la DA</small>
+              <small>Jeu de départ neutre, Lenny aide pour la DA</small>
             </span>
           </button>
         </li>
@@ -498,7 +498,7 @@ function NewProject({
         </>
       )}
       <p className="hint">
-        Projets perso seulement : l'assistant envoie la doctrine et les images à OpenRouter. Rien d'Enov ni de BRiiK.
+        Projets perso seulement : Lenny et le Mur des DA envoient la doctrine et les images à OpenRouter. Rien d'Enov ni de BRiiK.
       </p>
       {error && <p className="add-error" role="alert">{error}</p>}
       <div className="form-actions">

@@ -169,8 +169,8 @@ export function MascotDock({
       )}
       <button
         className="mascot-button"
-        aria-label="Ouvrir l’assistant"
-        title={findings ? `${findings} écart(s) · Demander à l’assistant` : 'Demander à l’assistant'}
+        aria-label="Ouvrir Lenny, l’assistant"
+        title={findings ? `${findings} écart(s) · Demander à Lenny` : 'Demander à Lenny'}
         onClick={onOpen}
       >
         <Mascot color={color} mood={findings ? 'worried' : 'idle'} cheer={party} />

@@ -228,7 +228,7 @@ export function Corrections({
         <p className="hint">
           {fixable.length
             ? 'Chaque correction rejoint le brouillon : rien n’est enregistré avant le diff.'
-            : 'Aucune correction automatique : ces écarts se règlent à la main (piste indiquée), ou avec l’assistant.'}
+            : 'Aucune correction automatique : ces écarts se règlent à la main (piste indiquée), ou avec Lenny.'}
         </p>
       )}
       {findings.length === 0 ? (

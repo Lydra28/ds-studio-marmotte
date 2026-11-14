@@ -1,5 +1,18 @@
 import { useEffect, useRef } from 'react';
 import { OceanEngine } from './ocean/engine.js';
+import type { SharkSpec } from './ocean/world.js';
+
+// Deux requins classiques du moteur (les « requins d'avant ») et deux requins
+// marteaux plus gros, pour Lenny (voulu par Romain le 2026-11-14). Taille
+// relative à la longueur de base du moteur ; au-delà de 1, l'éclat du requin
+// dépasse à peine le plein (0,7 + 0,3 × taille). Quatre requins, comme le
+// moteur par défaut (mesure de lenteur faite avec quatre).
+const SHARKS: SharkSpec[] = [
+  { kind: 'greathammer', size: 1.15 },
+  { kind: 'hammerhead', size: 1.08 },
+  { kind: 'classic', size: 1 },
+  { kind: 'classic', size: 0.84 },
+];
 
 // Machine trop lente (mesuré le 2026-11-14 : CPU bridé ×4, 19 à 25 i/s et
 // thread principal plein) : après un temps de chauffe, on mesure 2 s
@@ -42,7 +55,7 @@ export function Ocean() {
   useEffect(() => {
     const el = canvas.current;
     if (!el) return;
-    let engine = new OceanEngine(el);
+    let engine = new OceanEngine(el, SHARKS);
     let probeRaf = 0; // sonde de lenteur
     let stillRaf = 0; // image fixe
     let closed = false;
@@ -86,7 +99,7 @@ export function Ocean() {
       clearTimeout(timer);
       cancelAnimationFrame(stillRaf);
       engine.destroy();
-      engine = new OceanEngine(el);
+      engine = new OceanEngine(el, SHARKS);
       born = sizeOf();
       if (still) stillSoon();
     };

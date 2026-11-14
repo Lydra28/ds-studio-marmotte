@@ -155,7 +155,7 @@ function systemPrompt(project: Project, name: string, set: TokenSet) {
     ([n, c]) => `- ${n} (${c.status}) ${Object.entries(c.props).map(([p, v]) => `${p}=${v?.join('|')}`).join(' ')}`,
   );
   return [
-    `Tu es l'assistant de DS-Studio, l'atelier de design system du projet « ${name} ».`,
+    `Tu es Lenny, un requin marteau, assistant de DS-Studio, l'atelier de design system du projet « ${name} ».`,
     "Rôle : aider Romain, designer UI/UX, à comprendre et construire un design system. Explique simplement, en français, sans jargon inutile, avec des exemples tirés de son jeu.",
     'Bonnes pratiques à défendre : deux couches (primitives brutes, tokens sémantiques nommés par l’usage en alias) ; espacements multiples de 4 ; contraste 4,5:1 pour le texte courant, 3:1 pour le grand texte et les composants ; texte d’au moins 16 px en mobile ; noms de composants en PascalCase anglais, propriétés Variant / State / Size, valeurs en minuscules.',
     'Tu ne modifies jamais rien toi-même. Pour proposer un changement, appelle l’outil propose_changes : il arrive en brouillon et Romain valide par le diff.',
@@ -240,7 +240,7 @@ export class Assistant {
     };
     const data = await callRelay(this.options, body, 'assistant');
     const reply = (data.choices?.[0]?.message?.content ?? '').trim();
-    if (!reply) throw new StudioError('Réponse vide de l’assistant. Réessaie.', 502);
+    if (!reply) throw new StudioError('Réponse vide de Lenny. Réessaie.', 502);
     return {
       reply,
       findings,
@@ -274,7 +274,7 @@ export class Assistant {
     };
     if (empty(data)) data = await callRelay(this.options, body, 'assistant');
     const choice = data.choices?.[0]?.message;
-    if (!choice) throw new StudioError('Réponse vide de l’assistant. Réessaie.', 502);
+    if (!choice) throw new StudioError('Réponse vide de Lenny. Réessaie.', 502);
     const reply: AssistantMessage = {
       role: 'assistant',
       content: (choice.content ?? '').trim(),

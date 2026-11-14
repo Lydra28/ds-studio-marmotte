@@ -121,11 +121,11 @@ export default function AssistantPanel({
     void send(text);
   };
   return (
-    <aside className="assistant" aria-label="Assistant">
+    <aside className="assistant" aria-label="Lenny, l’assistant">
       <header className="assistant-head">
         <Mascot color={color} mood={busy ? 'thinking' : 'idle'} />
         <div>
-          <strong>Assistant</strong>
+          <strong>Lenny</strong>
         </div>
         <div className="assistant-tools">
           <button
@@ -145,7 +145,7 @@ export default function AssistantPanel({
           >
             Effacer
           </button>
-          <button onClick={onClose} aria-label="Fermer l’assistant">
+          <button onClick={onClose} aria-label="Fermer Lenny">
             ×
           </button>
         </div>
@@ -154,10 +154,10 @@ export default function AssistantPanel({
         {state && !state.enabled && (
           <p className="assistant-off">
             {state.reason === 'offline' ? (
-              <>Serveur DS-Studio injoignable : l’assistant revient avec le réseau. Tout le reste fonctionne sans lui.</>
+              <>Serveur DS-Studio injoignable : Lenny revient avec le réseau. Tout le reste fonctionne sans lui.</>
             ) : (
               <>
-                Connecte-toi à ton compte DS-Studio dans <a href="#/reglages">Réglages</a> pour utiliser l’assistant. Tout le
+                Connecte-toi à ton compte DS-Studio dans <a href="#/reglages">Réglages</a> pour parler à Lenny. Tout le
                 reste fonctionne sans lui.
               </>
             )}
@@ -198,7 +198,7 @@ export default function AssistantPanel({
             )}
           </div>
         ))}
-        {busy && <div className="bubble bubble--assistant bubble--pending">L’assistant réfléchit…</div>}
+        {busy && <div className="bubble bubble--assistant bubble--pending">Lenny réfléchit…</div>}
       </div>
       {error && (
         <p className="add-error assistant-error" role="alert">
@@ -207,7 +207,7 @@ export default function AssistantPanel({
       )}
       <form className="assistant-input" onSubmit={submit}>
         <textarea
-          aria-label="Message à l’assistant"
+          aria-label="Message à Lenny"
           rows={3}
           value={text}
           disabled={!state?.enabled}

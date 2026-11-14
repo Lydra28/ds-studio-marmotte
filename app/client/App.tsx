@@ -442,7 +442,7 @@ function Workspace({
   // Proposition de l'assistant : chaque changement rejoint le brouillon.
   // Le lot est d'abord essayé en entier sur le brouillon (alias, retraits) :
   // refusé, rien n'entre dans le brouillon.
-  const draftChanges = (list: Change[], from = 'de l’assistant') => {
+  const draftChanges = (list: Change[], from = 'de Lenny') => {
     if (draftSet) {
       try {
         applyChanges(draftSet, list);
@@ -564,9 +564,7 @@ function Workspace({
             >
               {findings.length}
             </button>
-          ) : (
-            <span className="tab-badge ok" role="img" aria-label="Aucun écart" title="Aucun écart" />
-          )
+          ) : null /* aucun écart : rien à côté de l'onglet (puce retirée, demande de Romain du 2026-11-14) */
         }
       >
           {inbox && (

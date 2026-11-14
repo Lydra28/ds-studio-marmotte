@@ -7,7 +7,7 @@ le logo de l'app `desktop/icon.png` ; ne pas les retoucher à la main.
 
 ## Visuels
 
-- Icône 128 × 128 : `icon-128.png` (mascotte « Pastille », fond transparent).
+- Icône 128 × 128 : `icon-128.png` (logo requin marteau, fond transparent).
 - Vignette 1920 × 1080 : `cover-1920x1080.png`.
 - Captures (jusqu'à neuf, facultatives) : à prendre dans Figma une fois le
   plugin testé en vrai (connexion, transfert, remise à zéro).

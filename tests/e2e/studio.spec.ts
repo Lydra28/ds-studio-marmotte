@@ -58,15 +58,15 @@ test('accueil : liste des projets, création d’un projet vierge à côté de M
 });
 
 test('assistant : ouvert par la mascotte, désactivé proprement sans compte, mascotte rendue à la fermeture', async ({ page }) => {
-  await page.getByRole('button', { name: 'Ouvrir l’assistant' }).click();
-  await expect(page.getByRole('button', { name: 'Ouvrir l’assistant' })).toHaveCount(0); // une seule scène 3D
-  const panel = page.getByRole('complementary', { name: 'Assistant' });
+  await page.getByRole('button', { name: 'Ouvrir Lenny' }).click();
+  await expect(page.getByRole('button', { name: 'Ouvrir Lenny' })).toHaveCount(0); // une seule scène 3D
+  const panel = page.getByRole('complementary', { name: 'Lenny, l’assistant' });
   await expect(panel).toContainText('Connecte-toi à ton compte DS-Studio');
-  await expect(panel.getByLabel('Message à l’assistant')).toBeDisabled();
+  await expect(panel.getByLabel('Message à Lenny')).toBeDisabled();
   await expect(page.locator('.bar .project')).toHaveText('Marmotte');
-  await panel.getByRole('button', { name: 'Fermer l’assistant' }).click();
+  await panel.getByRole('button', { name: 'Fermer Lenny' }).click();
   await expect(panel).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Ouvrir l’assistant' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Ouvrir Lenny' })).toBeVisible();
 });
 
 test('réglages : version, dossier et services affichés, aucune valeur de secret, actions réservées à l’app', async ({ page }) => {
@@ -145,15 +145,15 @@ test('compte : connexion sur la page Compte, Pro (offert) et usage affichés, as
   await page.getByRole('button', { name: '← Retour' }).click();
   await expect(page.locator('.bar .project')).toHaveText('Marmotte');
   await expect(page.getByRole('button', { name: 'Compte, associe@example.com, Pro' })).toBeVisible();
-  await page.getByRole('button', { name: 'Ouvrir l’assistant' }).click();
-  const panel = page.getByRole('complementary', { name: 'Assistant' });
-  await expect(panel.getByLabel('Message à l’assistant')).toBeEnabled();
-  await panel.getByLabel('Message à l’assistant').fill('Bonjour');
+  await page.getByRole('button', { name: 'Ouvrir Lenny' }).click();
+  const panel = page.getByRole('complementary', { name: 'Lenny, l’assistant' });
+  await expect(panel.getByLabel('Message à Lenny')).toBeEnabled();
+  await panel.getByLabel('Message à Lenny').fill('Bonjour');
   await panel.getByRole('button', { name: 'Envoyer' }).click();
   await expect(panel).toContainText('Réponse simulée 1 (assistant)');
   // Fil de bulles (recette du 2026-11-05) : des réponses longues ne s'empilent
   // plus en haut du fil, et le bas de la dernière se lit en défilant.
-  await panel.getByLabel('Message à l’assistant').fill('Deuxième question');
+  await panel.getByLabel('Message à Lenny').fill('Deuxième question');
   await panel.getByRole('button', { name: 'Envoyer' }).click();
   await expect(panel).toContainText('Réponse simulée 2 (assistant)');
   const log = panel.locator('.assistant-log');
@@ -169,7 +169,7 @@ test('compte : connexion sur la page Compte, Pro (offert) et usage affichés, as
   await expect(panel.getByText('Détail 25 de la réponse.').last()).toBeInViewport();
   await panel.screenshot({ path: 'test-results/assistant-fil.png' });
   await panel.getByRole('button', { name: 'Effacer' }).click();
-  await panel.getByRole('button', { name: 'Fermer l’assistant' }).click();
+  await panel.getByRole('button', { name: 'Fermer Lenny' }).click();
   // Déconnexion : le formulaire revient, l'assistant se grise de nouveau.
   await page.getByRole('button', { name: /^Compte,/ }).click();
   await page.getByRole('button', { name: 'Se déconnecter' }).click();
@@ -299,16 +299,16 @@ test('facturation : compte gratuit, génération offerte puis 402, recharge, Pro
   // Une génération offerte, puis 402 qui renvoie vers Réglages → Compte.
   await page.getByRole('button', { name: '← Retour' }).click();
   await expect(page.locator('.bar .project')).toHaveText('Marmotte');
-  await page.getByRole('button', { name: 'Ouvrir l’assistant' }).click();
-  const panel = page.getByRole('complementary', { name: 'Assistant' });
-  await panel.getByLabel('Message à l’assistant').fill('Bonjour');
+  await page.getByRole('button', { name: 'Ouvrir Lenny' }).click();
+  const panel = page.getByRole('complementary', { name: 'Lenny, l’assistant' });
+  await panel.getByLabel('Message à Lenny').fill('Bonjour');
   await panel.getByRole('button', { name: 'Envoyer' }).click();
   await expect(panel).toContainText('Réponse simulée 1 (assistant)');
-  await panel.getByLabel('Message à l’assistant').fill('Encore');
+  await panel.getByLabel('Message à Lenny').fill('Encore');
   await panel.getByRole('button', { name: 'Envoyer' }).click();
   await expect(panel.getByRole('alert')).toContainText('Réglages → Compte');
   await panel.getByRole('button', { name: 'Effacer' }).click();
-  await panel.getByRole('button', { name: 'Fermer l’assistant' }).click();
+  await panel.getByRole('button', { name: 'Fermer Lenny' }).click();
   // Recharge : la page de paiement s'ouvre dans un nouvel onglet ; le solde se met à jour tout seul (webhook simulé, relecture auto).
   await page.getByRole('button', { name: /^Compte,/ }).click();
   const [topup] = await Promise.all([page.waitForEvent('popup'), account.getByRole('button', { name: 'Recharger 5 €' }).click()]);
@@ -368,7 +368,7 @@ test('boucle : écart signalé, correction essayée, diff validé, preview à jo
   await expect(mascot.getByRole('status')).toHaveText('1 écart(s) : regarde « Corrections ».');
   await expect.poll(() => previewVar(page, '--space-sm')).toBe('15px');
   await page.getByRole('button', { name: 'Essayer 16 px' }).click();
-  await expect(page.getByRole('img', { name: 'Aucun écart' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /écart\(s\) · Corrections/ })).toHaveCount(0);
   await expect(mascot.getByRole('status')).toHaveText('Plus aucun écart !');
   await expect(mascot.locator('.mascot-badge')).toHaveCount(0);
   await validate(page);
@@ -385,7 +385,7 @@ test('écarts : le compteur du haut mène aux corrections, « Tout corriger » m
   await page.getByRole('button', { name: '2 écart(s) · Corrections' }).click();
   await expect(page.locator('#corrections')).toBeInViewport();
   await page.getByRole('button', { name: 'Tout corriger (2)' }).click();
-  await expect(page.getByRole('img', { name: 'Aucun écart' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /écart\(s\) · Corrections/ })).toHaveCount(0);
   await expect(page.getByLabel('space/sm', { exact: true })).toHaveValue('16');
   await expect(page.getByLabel('space/md', { exact: true })).toHaveValue('24');
   await expect(page.getByText(/2 correction\(s\) mises en brouillon/)).toBeVisible();

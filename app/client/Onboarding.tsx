@@ -146,7 +146,7 @@ function AccountStep({ account }: { account: AccountStatus | undefined }) {
   return (
     <>
       <h2 id="onb-title" tabIndex={-1}>Ton compte DS-Studio</h2>
-      <p className="onb-lead">Il active l’assistant et le Mur des DA. Tes projets restent sur cet ordinateur.</p>
+      <p className="onb-lead">Il active Lenny, l’assistant, et le Mur des DA. Tes projets restent sur cet ordinateur.</p>
       {connected ? (
         <div className="onb-done" role="status">
           <Avatar account={account} />

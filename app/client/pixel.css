@@ -1323,14 +1323,6 @@ dialog.diff th {
   background: #ff8a4a;
   color: var(--c-on-accent);
 }
-.tab-badge.ok {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-left: 0;
-  background: var(--c-accent);
-}
-
 /* Pages Compte et Réglages : une colonne, titres pixel, logos dans les titres. */
 .settings .home-hero {
   padding-bottom: 24px;

@@ -324,7 +324,7 @@ export function AccountSection({
             <dt>Licence</dt>
             <dd>{licenseLabel(a)}</dd>
             <dt>Serveur</dt>
-            <dd>{a.online ? 'En ligne.' : 'Injoignable : l’assistant et le Mur des DA reviennent avec le réseau.'}</dd>
+            <dd>{a.online ? 'En ligne.' : 'Injoignable : Lenny et le Mur des DA reviennent avec le réseau.'}</dd>
             {u && (
               <>
                 <dt>Aujourd’hui</dt>
@@ -349,7 +349,7 @@ export function AccountSection({
         <>
           <h2 id="s-account">Compte</h2>
           <p className="hint">
-            Un compte DS-Studio active l’assistant et le Mur des DA. Tes projets restent sur cet ordinateur : seuls la doctrine,
+            Un compte DS-Studio active Lenny, l’assistant, et le Mur des DA. Tes projets restent sur cet ordinateur : seuls la doctrine,
             les tokens et les images que tu envoies au modèle passent par le serveur.
           </p>
         </>
@@ -733,7 +733,7 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
               </dd>
               <dt>Dossier des projets</dt>
               <dd className="mono">{settings.projects ?? 'Instance fixe : un seul projet'}</dd>
-              <dt>Assistant et Mur des DA</dt>
+              <dt>Lenny (assistant) et Mur des DA</dt>
               <dd>
                 {on(settings.services.assistant, 'Actif', connected && account?.online === false ? 'Serveur injoignable' : 'Indisponible')}
                 {!settings.services.assistant && (
