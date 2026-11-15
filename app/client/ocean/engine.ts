@@ -1,7 +1,9 @@
 // Repris tel quel de ascii-sharks (© 2026 drewdi, licence MIT : voir LICENSE à côté),
 // à la demande de Romain le 2026-11-14. Ne pas réécrire : remplacer le fichier.
-// Seule modification, voulue par Romain le 2026-11-14 : dessin limité à 60 i/s
-// (`FRAME_MS`, `lastDraw`, début de `frame`) ; à reporter si le fichier est remplacé.
+// Modifications DS-Studio, à reporter si le fichier est remplacé :
+// - 2026-11-14 : dessin limité à 60 i/s (`FRAME_MS`, `lastDraw`, début de `frame`) ;
+// - 2026-11-15 : temps passé à dessiner (`busyMs`) et état `running`, lus par la
+//   sonde de lenteur d'oceanMount.ts.
 
 import { AsciiRenderer } from "./renderer";
 import { World, type SharkSpec } from "./world";
@@ -28,6 +30,13 @@ export class OceanEngine {
   private resizeObserver: ResizeObserver;
   private intersectionObserver: IntersectionObserver;
   private disposed = false;
+  /** DS-Studio : millisecondes passées à simuler et dessiner, cumulées. */
+  busyMs = 0;
+
+  /** DS-Studio : le moteur anime (visible, mouvement non réduit, pas arrêté). */
+  get running() {
+    return !this.disposed && this.visible && !this.reducedMotion.matches;
+  }
 
   constructor(private canvas: HTMLCanvasElement, sharks?: SharkSpec[]) {
     this.world = new World(sharks);
@@ -96,6 +105,7 @@ export class OceanEngine {
       return;
     }
     this.lastDraw = now - due > FRAME_MS ? now : due;
+    const start = performance.now(); // DS-Studio : busyMs
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
     this.acc += dt;
@@ -107,6 +117,7 @@ export class OceanEngine {
     }
     if (steps === MAX_STEPS) this.acc = 0;
     this.renderer.render(this.world, dt);
+    this.busyMs += performance.now() - start;
     this.raf = requestAnimationFrame(this.frame);
   };
 

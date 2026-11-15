@@ -18,12 +18,17 @@ export const SHARKS: SharkSpec[] = [
   { kind: 'classic', size: 0.84 },
 ];
 
-// Machine trop lente (mesuré le 2026-11-14 : CPU bridé ×4, 19 à 25 i/s et
-// thread principal plein) : après un temps de chauffe, on mesure 2 s
-// d'animation ; si l'intervalle médian entre deux images dépasse 1/28 s, le
-// moteur s'arrête et une image fixe reste affichée. Retenu pour la session.
-// Seuil sous 1/30 s : un écran bridé à 30 Hz (économie d'énergie) n'est pas
-// une machine lente.
+// Machine trop lente : après un temps de chauffe, on mesure 2 s d'animation
+// (moteur visible seulement) ; le moteur s'arrête et une image fixe reste
+// affichée si l'intervalle médian entre deux images dépasse 1/28 s, ou, pour
+// un canvas monté avec `maxBusy`, si le moteur passe plus que cette part du
+// temps à simuler et dessiner. Retenu pour la session. Seuil sous 1/30 s :
+// un écran bridé à 30 Hz (économie d'énergie) n'est pas une machine lente.
+// Part du temps mesurée le 2026-11-15 (Chromium, PC de Romain) : pied de
+// page (demi-largeur) 18 à 27 % à CPU ×1, 70 % à ×2, 82 % à ×3 et ×4, où
+// l'intervalle (33 ms) restait sous le seuil ; section interactive du site
+// (pleine largeur) 84 à 88 % dès ×1 : le coût suit la surface (un fillText
+// par case). D'où `maxBusy` réservé au décor du pied de page.
 const WARMUP_MS = 500;
 const PROBE_MS = 2000;
 const SLOW_MS = 1000 / 28;
@@ -31,33 +36,43 @@ const PAUSE_MS = 250; // au-delà : onglet masqué ou pause, pas une image lente
 const SETTLE_MS = 200; // image fixe : temps laissé au moteur pour dessiner
 const FONT_MS = 1500; // police Google injoignable : on fige sans elle
 const GROW = 0.15; // écart de taille au-delà duquel l'océan est repeuplé
+// Retenu pour la session : lenteur d'intervalle → tous les océans figés ;
+// part du temps de dessin dépassée → seuls ceux qui ont un `maxBusy` (le
+// pied de page à CPU ×2 ne doit pas figer la section interactive).
 const STILL = 'ds-ocean-still';
+const STILL_BUSY = 'ds-ocean-still-busy';
 
-export function tooSlow(gaps: number[]) {
+/** `busy` : part du temps mesuré passée par le moteur à simuler et dessiner. */
+export function tooSlow(gaps: number[], busy = 0, maxBusy = Infinity) {
   if (gaps.length === 0) return false;
   const sorted = [...gaps].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)] > SLOW_MS;
+  return sorted[Math.floor(sorted.length / 2)] > SLOW_MS || busy > maxBusy;
 }
 
-const remembered = () => {
+const remembered = (key: string) => {
   try {
-    return sessionStorage.getItem(STILL) === '1';
+    return sessionStorage.getItem(key) === '1';
   } catch {
     return false;
   }
 };
-const remember = () => {
+const remember = (key: string) => {
   try {
-    sessionStorage.setItem(STILL, '1');
+    sessionStorage.setItem(key, '1');
   } catch {
     // stockage indisponible : on remesurera à la prochaine visite
   }
 };
 
-/** Lance l'océan dans `el` ; renvoie la fonction qui l'arrête. */
-export function mountOcean(el: HTMLCanvasElement): () => void {
+/**
+ * Lance l'océan dans `el` ; renvoie la fonction qui l'arrête. `maxBusy` :
+ * part du temps de dessin au-delà de laquelle on fige (sans : intervalle
+ * entre images seulement).
+ */
+export function mountOcean(el: HTMLCanvasElement, { maxBusy = Infinity } = {}): () => void {
   let engine = new OceanEngine(el, SHARKS);
   let probeRaf = 0; // sonde de lenteur
+  let probeWait = 0; // sonde en attente : moteur en pause
   let stillRaf = 0; // image fixe
   let closed = false;
   let observer: ResizeObserver | undefined;
@@ -119,7 +134,7 @@ export function mountOcean(el: HTMLCanvasElement): () => void {
     clearTimeout(regrow);
   };
 
-  if (remembered()) {
+  if (remembered(STILL) || (maxBusy < Infinity && remembered(STILL_BUSY))) {
     keepStill();
     stillSoon();
   } else if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -127,20 +142,39 @@ export function mountOcean(el: HTMLCanvasElement): () => void {
     let last = 0;
     let warm = 0;
     let measured = 0;
-    const gaps: number[] = [];
+    let gaps: number[] = [];
+    let probed = engine;
+    let busyFrom = 0;
     const probe = (now: number) => {
       const gap = last ? now - last : 0;
       last = now;
+      if (engine !== probed) {
+        // Moteur neuf (fenêtre redimensionnée) : son compteur repart de zéro.
+        probed = engine;
+        warm = measured = 0;
+        gaps = [];
+      }
+      // Mesure seulement quand le moteur anime : le pied de page est hors
+      // écran au chargement, moteur en pause, il n'y a rien à juger. En
+      // attendant, un coup d'œil toutes les 250 ms, pas une boucle d'images ;
+      // le premier intervalle à la reprise (pause comprise) n'est pas compté.
+      if (!engine.running) {
+        last = 0;
+        probeWait = window.setTimeout(() => (probeRaf = requestAnimationFrame(probe)), PAUSE_MS);
+        return;
+      }
       if (gap > 0 && gap < PAUSE_MS) {
-        if (warm < WARMUP_MS) warm += gap;
-        else {
+        if (warm < WARMUP_MS) {
+          warm += gap;
+          busyFrom = engine.busyMs;
+        } else {
           gaps.push(gap);
           measured += gap;
         }
       }
       if (measured < PROBE_MS) probeRaf = requestAnimationFrame(probe);
-      else if (tooSlow(gaps)) {
-        remember();
+      else if (tooSlow(gaps, (engine.busyMs - busyFrom) / measured, maxBusy)) {
+        remember(tooSlow(gaps) ? STILL : STILL_BUSY);
         engine.destroy(); // l'image en cours reste affichée
         keepStill();
       }
@@ -150,6 +184,7 @@ export function mountOcean(el: HTMLCanvasElement): () => void {
   return () => {
     closed = true;
     cancelAnimationFrame(probeRaf);
+    clearTimeout(probeWait);
     cancelAnimationFrame(stillRaf);
     clearTimeout(timer);
     clearTimeout(regrow);

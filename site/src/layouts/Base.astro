@@ -8,7 +8,7 @@ interface Props {
   title: string;
   description?: string;
 }
-const { title, description = 'DS-Studio : l’atelier de design system installé sur ton poste. Tokens, aperçu en direct, versions, Figma.' } =
+const { title, description = 'DS-Studio : l’atelier de design system installé sur le poste. Tokens, aperçu en direct, versions, Figma.' } =
   Astro.props;
 const catalog = await loadCatalog();
 const path = Astro.url.pathname;
@@ -72,16 +72,51 @@ const nav = [
       <slot />
     </main>
     <footer class="foot">
-      <ul>
-        <li><a href="/mentions-legales/">Mentions légales</a></li>
-        <li><a href="/cgv/">Conditions de vente</a></li>
-        <li><a href="/confidentialite/">Confidentialité</a></li>
-        <li><a href="/compte/#retractation">Se rétracter</a></li>
-      </ul>
-      <p>DS-Studio, atelier de design system. Tes projets restent sur ton poste.</p>
+      {/* Requins en transparence (scripts/ocean.ts) et logo : demande de Romain du 2026-11-15, sans Lenny. */}
+      <canvas class="foot-ocean" aria-hidden="true"></canvas>
+      <div class="foot-main">
+        <div class="foot-brand">
+          <a class="brand" href="/">
+            <img src={icon.src} width="32" height="32" alt="" />
+            <span>DS-Studio</span>
+          </a>
+          <p>Le design system, de Figma au code.</p>
+          <a class="button primary" href="/telecharger/">Télécharger l’app</a>
+        </div>
+        <nav class="foot-nav" aria-label="Pied de page">
+          <div>
+            <p class="foot-h" id="pied-produit">Produit</p>
+            <ul aria-labelledby="pied-produit">
+              <li><a href="/telecharger/">Télécharger</a></li>
+              <li><a href="/plugin-figma/">Plugin Figma</a></li>
+              <li><a href="/prix/">Prix</a></li>
+            </ul>
+          </div>
+          <div>
+            <p class="foot-h" id="pied-compte">Compte</p>
+            <ul aria-labelledby="pied-compte">
+              <li><a href="/compte/">Compte</a></li>
+              <li><a href="/compte/#retractation">Se rétracter</a></li>
+            </ul>
+          </div>
+          <div>
+            <p class="foot-h" id="pied-legal">Légal</p>
+            <ul aria-labelledby="pied-legal">
+              <li><a href="/mentions-legales/">Mentions légales</a></li>
+              <li><a href="/cgv/">Conditions de vente</a></li>
+              <li><a href="/confidentialite/">Confidentialité</a></li>
+            </ul>
+          </div>
+        </nav>
+      </div>
+      <div class="foot-base">
+        <p>© {new Date().getFullYear()} DS-Studio</p>
+        <p>Les projets restent sur le poste.</p>
+      </div>
     </footer>
     <script>
       import '../scripts/menu.ts';
+      import '../scripts/ocean.ts';
     </script>
   </body>
 </html>

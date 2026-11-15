@@ -16,11 +16,11 @@ const per = (cents: number) => (c.generationCents.wall > 0 ? Math.floor(cents / 
     <h2>Gratuit</h2>
     <p class="amount">0 €</p>
     <ul>
-      <li>Tout l’atelier sur ton poste : projets, aperçu, règles, diff, versions</li>
+      <li>Tout l’atelier sur le poste : projets, aperçu, règles, diff, versions</li>
       <li>Export CSS, Tailwind et JSON</li>
       <li>Plugin Figma</li>
       <li>Extraction depuis l’adresse d’un site</li>
-      <li>Une génération du Mur offerte à la confirmation de ton adresse</li>
+      <li>Une génération du Mur offerte à la confirmation de l’adresse mail</li>
     </ul>
     <a class="button" href="/compte/#creer">Créer un compte</a>
   </div>
@@ -34,9 +34,9 @@ const per = (cents: number) => (c.generationCents.wall > 0 ? Math.floor(cents / 
           per(c.pro.includedCents) > 0 && ` (≈ ${per(c.pro.includedCents)} générations du Mur)`
         }
       </li>
-      <li>Connexion GitHub : projet lu dans ton dépôt, pull request mise à jour à chaque version acceptée</li>
-      <li>Au-delà, tes crédits prennent le relais</li>
-      <li>Sans engagement, résiliable depuis ton compte</li>
+      <li>Connexion GitHub : projet lu dans le dépôt, pull request mise à jour à chaque version acceptée</li>
+      <li>Au-delà, les crédits prennent le relais</li>
+      <li>Sans engagement, résiliable depuis le compte</li>
     </ul>
     <a class="button primary" href="/compte/">Passer Pro</a>
   </div>
@@ -76,5 +76,5 @@ const per = (cents: number) => (c.generationCents.wall > 0 ? Math.floor(cents / 
   </div>
 </div>
 <p class="plans-note">
-  Prix en euros. Le paiement se fait sur une page sécurisée Stripe ; DS-Studio ne voit jamais ta carte.
+  Prix en euros. Le paiement se fait sur une page sécurisée Stripe ; DS-Studio ne voit jamais la carte bancaire.
 </p>

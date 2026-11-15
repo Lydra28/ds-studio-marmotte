@@ -3,17 +3,17 @@ import Base from '../layouts/Base.astro';
 import { API } from '../lib/site';
 ---
 
-<Base title="Compte" description="Crée ton compte DS-Studio, connecte-toi, recharge tes crédits ou passe Pro.">
+<Base title="Compte" description="Créer un compte DS-Studio, se connecter, recharger des crédits ou passer Pro.">
   <div class="page-head">
-    <h1>Ton compte</h1>
+    <h1>Compte</h1>
   </div>
   <div class="account" data-api={API}>
     <p class="message" data-message role="status" aria-live="polite" hidden></p>
 
     <div data-out>
       <p class="muted">
-        Le même compte sert dans l’application et ici. Sur le site, tu recharges tes crédits, passes Pro ou gères ton
-        abonnement.
+        Le même compte sert dans l’application et ici. Sur le site : recharger des crédits, passer Pro ou gérer
+        l’abonnement.
       </p>
       <div class="tabs" role="group" aria-label="Choix du formulaire">
         <button type="button" data-tab="login">Se connecter</button>
@@ -42,7 +42,7 @@ import { API } from '../lib/site';
             /></label
           >
           <p class="muted">
-            En créant un compte, tu acceptes les <a href="/cgv/">conditions de vente</a> et la
+            En créant un compte, l’utilisateur accepte les <a href="/cgv/">conditions de vente</a> et la
             <a href="/confidentialite/">politique de confidentialité</a>.
           </p>
           <button class="primary" type="submit">Créer mon compte</button>
@@ -92,13 +92,13 @@ import { API } from '../lib/site';
         <button type="button" data-logout>Se déconnecter</button>
       </div>
       <p class="muted">
-        Paiement sur une page Stripe. Si l’app DS-Studio est ouverte, ton compte s’y met à jour tout seul ; sinon, clique « Actualiser » dans Réglages → Compte.
+        Paiement sur une page Stripe. Si l’app DS-Studio est ouverte, le compte s’y met à jour tout seul ; sinon, cliquer « Actualiser » dans Réglages → Compte.
       </p>
 
       <section id="retractation" aria-labelledby="retractation-titre">
         <h2 id="retractation-titre">Rétractation</h2>
         <p class="muted">
-          Tu as 14 jours après chaque achat pour te rétracter, sans motif. Ce que tu as déjà utilisé n’est pas remboursé
+          Le droit de rétractation s’exerce dans les 14 jours qui suivent chaque achat, sans motif. Ce qui a déjà été utilisé n’est pas remboursé
           (<a href="/cgv/">conditions de vente</a>, section 4).
         </p>
         <ul class="purchases" data-purchases></ul>
@@ -106,7 +106,7 @@ import { API } from '../lib/site';
         <form data-form="withdraw" hidden>
           <p><strong>Contrat :</strong> <span data-w-label></span></p>
           <p data-w-refund></p>
-          <label>Ton nom<input name="name" autocomplete="name" minlength="2" maxlength="120" required /></label>
+          <label>Nom<input name="name" autocomplete="name" minlength="2" maxlength="120" required /></label>
           <p class="muted">Accusé de réception envoyé à <span data-w-email></span>.</p>
           <div class="actions">
             <button class="primary" type="submit">Confirmer la rétractation</button>

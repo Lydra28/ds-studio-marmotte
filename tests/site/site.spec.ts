@@ -188,7 +188,7 @@ test('compte : rétractation d’un achat de moins de 14 jours, déclaration pui
   });
 
   await page.goto('/');
-  await page.getByRole('link', { name: 'Se rétracter' }).click();
+  await page.getByRole('navigation', { name: 'Pied de page' }).getByRole('link', { name: 'Se rétracter' }).click();
   await expect(page).toHaveURL(`${SITE}/compte/#retractation`);
   const box = page.locator('#retractation');
   await expect(box.getByText('Recharge de crédits de 10,00 € du 6 novembre 2026')).toBeVisible();
@@ -196,7 +196,7 @@ test('compte : rétractation d’un achat de moins de 14 jours, déclaration pui
   await box.getByRole('button', { name: 'Se rétracter du contrat ici' }).click();
   const form = page.locator('form[data-form="withdraw"]');
   await expect(form.getByText(`Accusé de réception envoyé à ${ME.email}.`)).toBeVisible();
-  await form.getByLabel('Ton nom').fill('Camille Test');
+  await form.getByLabel('Nom', { exact: true }).fill('Camille Test');
   await form.getByRole('button', { name: 'Confirmer la rétractation' }).click();
   await expect(page.getByRole('status')).toContainText('Rétractation reçue le');
   await expect(page.getByRole('status')).toContainText('7 € remboursés au plus tard le 22 novembre 2026. Accusé de réception envoyé par mail.');
@@ -221,13 +221,13 @@ test('compte : création, onglet ouvert par #creer, mot de passe oublié', async
   await signup.getByLabel('Adresse mail').fill('nouveau@example.test');
   await signup.getByLabel(/Mot de passe/).fill('un-mot-de-passe-long');
   await signup.getByRole('button', { name: 'Créer mon compte' }).click();
-  await expect(page.getByRole('status')).toContainText('Ouvre le lien du mail, puis connecte-toi.');
+  await expect(page.getByRole('status')).toContainText('Ouvrir le lien du mail, puis se connecter.');
   await expect(page.locator('form[data-form="login"]')).toBeVisible();
 
   await page.getByRole('button', { name: 'Mot de passe oublié' }).click();
   await page.locator('form[data-form="forgot"]').getByLabel('Adresse mail').fill('nouveau@example.test');
   await page.locator('form[data-form="forgot"]').getByRole('button').click();
-  await expect(page.getByRole('status')).toContainText('Colle le code reçu ci-dessous.');
+  await expect(page.getByRole('status')).toContainText('Coller le code reçu ci-dessous.');
   const reset = page.locator('form[data-form="reset"]');
   await reset.getByLabel('Code reçu par mail').fill('code-trop-vieux-1234');
   await reset.getByLabel('Nouveau mot de passe').fill('un-mot-de-passe-long');

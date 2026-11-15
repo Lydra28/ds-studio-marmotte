@@ -146,8 +146,9 @@
 .play-panel legend {
   padding: 0;
   margin-bottom: 10px;
-  font-size: 13px;
-  color: var(--c-muted);
+  font-size: 14px;
+  /* Consigne (« 1. Choisir… ») : lisible comme le texte, pas en gris. */
+  color: var(--c-text);
 }
 .play-swatches {
   display: flex;
@@ -404,4 +405,8 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 32px;
   }
+}
+/* Nom de l’app jamais coupé au trait d’union. */
+.play-intro .nobr {
+  white-space: nowrap;
 }

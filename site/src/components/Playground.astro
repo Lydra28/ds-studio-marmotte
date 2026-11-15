@@ -22,13 +22,16 @@ const surfaces = [
 <section class="play" aria-labelledby="essayer">
   <canvas class="play-ocean" aria-hidden="true"></canvas>
   <div class="play-intro">
-    <h2 id="essayer">Change une couleur. Tout suit.</h2>
-    <p>Deux tokens, une interface. Dans DS-Studio, c’est tout ton projet qui suit : l’app, Figma et ton code.</p>
+    <h2 id="essayer">À essayer : cliquer sur une couleur.</h2>
+    <p>
+      Choisir une marque et un fond : l’écran suit, le texte du bouton reste lisible, son contraste s’affiche.
+      Dans <span class="nobr">DS-Studio</span>, la même modification s’applique à l’app, à Figma et au code.
+    </p>
   </div>
   <div class="play-grid">
     <div class="play-panel">
       <fieldset>
-        <legend>Couleur de marque</legend>
+        <legend>1. Choisir une couleur de marque</legend>
         <div class="play-swatches">
           {
             brands.map((b, i) => (
@@ -42,7 +45,7 @@ const surfaces = [
         </div>
       </fieldset>
       <fieldset>
-        <legend>Fond</legend>
+        <legend>2. Choisir un fond</legend>
         <div class="play-swatches">
           {
             surfaces.map((s, i) => (
@@ -112,7 +115,4 @@ const surfaces = [
     </div>
   </div>
 </section>
-
-<script>
-  import '../scripts/ocean.ts';
-</script>
+{/* Requins : canvas .play-ocean monté par scripts/ocean.ts, chargé par layouts/Base.astro. */}

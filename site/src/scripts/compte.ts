@@ -56,7 +56,7 @@ function start(root: HTMLElement) {
         body: init.body ? JSON.stringify(init.body) : undefined,
       });
     } catch {
-      throw new Error('Serveur DS-Studio injoignable. Vérifie ta connexion et réessaie.');
+      throw new Error('Serveur DS-Studio injoignable. Vérifier la connexion et réessayer.');
     }
     if (res.status === 204) return undefined as T;
     const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -107,7 +107,7 @@ function start(root: HTMLElement) {
     const r = await call<{ message: string }>('/v1/auth/signup', {
       body: { email: value(f, 'email'), password: (f.elements.namedItem('password') as HTMLInputElement).value },
     });
-    say(`${r.message} Ouvre le lien du mail, puis connecte-toi.`);
+    say(`${r.message} Ouvrir le lien du mail, puis se connecter.`);
     f.reset();
     show('login');
   });
@@ -117,7 +117,7 @@ function start(root: HTMLElement) {
   });
   on('forgot', async (f) => {
     const r = await call<{ message: string }>('/v1/auth/forgot', { body: { email: value(f, 'email') } });
-    say(`${r.message} Colle le code reçu ci-dessous.`);
+    say(`${r.message} Coller le code reçu ci-dessous.`);
   });
   on('reset', async (f) => {
     const r = await call<{ message: string }>('/v1/auth/reset', {
@@ -219,7 +219,7 @@ function start(root: HTMLElement) {
     say(
       `Rétractation reçue le ${at} pour : ${r.label}. ` +
         (r.refundCents > 0 ? `${euros(r.refundCents)} remboursés au plus tard le ${day(r.refundBy)}. ` : '') +
-        (r.mailed ? 'Accusé de réception envoyé par mail.' : 'Le mail d’accusé de réception n’est pas parti : garde cette page, nous te l’envoyons.'),
+        (r.mailed ? 'Accusé de réception envoyé par mail.' : 'Le mail d’accusé de réception n’est pas parti : garder cette page, l’accusé sera envoyé ensuite.'),
     );
     f.reset();
     f.hidden = true;

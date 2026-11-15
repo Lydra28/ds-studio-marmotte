@@ -14,24 +14,24 @@ const c = await loadCatalog();
 const design = [
   { title: 'La planche', text: 'Primitives, tokens sémantiques et typographie par mode, avec un aperçu qui suit chaque brouillon.' },
   { title: 'Les règles', text: 'Multiples de 4, contraste, taille de texte, nommage : les écarts sont signalés et corrigés en un clic.' },
-  { title: 'Figma', text: 'Le plugin écrit la version acceptée dans tes variables Figma et renvoie tes composants à l’atelier.' },
-  { title: 'Lenny et le Mur des DA', text: 'Lenny propose des brouillons ; le Mur génère des directions artistiques à partir de tes inspirations.' },
+  { title: 'Figma', text: 'Le plugin écrit la version acceptée dans les variables Figma et renvoie les composants à l’atelier.' },
+  { title: 'Lenny et le Mur des DA', text: 'Lenny propose des brouillons ; le Mur génère des directions artistiques à partir d’inspirations.' },
 ];
 const code = [
-  { title: 'Depuis l’existant', text: 'Donne l’adresse d’un site public, ou ton dépôt GitHub en Pro : DS-Studio relève couleurs, polices et tailles, et propose un premier jeu.' },
-  { title: 'Diff et versions', text: 'Rien n’est écrit sans ton accord : chaque changement passe par un diff, Comparer montre l’avant et l’après.' },
+  { title: 'Depuis l’existant', text: 'Partir de l’adresse d’un site public, ou d’un dépôt GitHub en Pro : DS-Studio relève couleurs, polices et tailles, et propose un premier jeu.' },
+  { title: 'Diff et versions', text: 'Rien n’est écrit sans accord : chaque changement passe par un diff, Comparer montre l’avant et l’après.' },
   { title: 'Export', text: 'CSS, Tailwind v4 ou JSON, à copier ou à télécharger.' },
-  { title: 'Pull request', text: 'En Pro, la version acceptée part en pull request sur ton dépôt : les valeurs en dur deviennent des tokens.' },
+  { title: 'Pull request', text: 'En Pro, la version acceptée part en pull request sur le dépôt : les valeurs en dur deviennent des tokens.' },
 ];
 ---
 
 <Base title="DS-Studio">
   <div class="hero">
     <div>
-      <h1>Un design system.<br />Tout le projet.</h1>
+      <h1>Le design system,<br />de Figma au code.</h1>
       <p class="lead">
-        Designers et développeurs travaillent sur les mêmes tokens : tu les modifies dans DS-Studio, tu compares, puis tu les
-        envoies dans Figma et dans ton code.
+        Designers et développeurs partagent les mêmes tokens : modifiés dans DS-Studio, comparés, puis envoyés dans Figma
+        et dans le code.
       </p>
       <div class="actions">
         <a class="button primary" href="/telecharger/">Télécharger l’app</a>
@@ -86,8 +86,8 @@ const code = [
   </section>
 
   <section class="get" aria-labelledby="telecharger">
-    <h2 id="telecharger">Télécharge DS-Studio</h2>
-    <p class="muted">Gratuit, installé sur ton poste. Il se met ensuite à jour tout seul sur Windows et Linux.</p>
+    <h2 id="telecharger">Télécharger DS-Studio</h2>
+    <p class="muted">Gratuit, installé sur le poste. Mises à jour automatiques sur Windows et Linux.</p>
     <div class="get-os">
       {
         INSTALLERS.map((i) => (
@@ -106,7 +106,7 @@ const code = [
 
   <section class="pro" aria-labelledby="abonnement">
     <div>
-      <h2 id="abonnement">Passe Pro</h2>
+      <h2 id="abonnement">Passer Pro</h2>
       <p class="muted">
         {euros(c.pro.includedCents)} d’usage de l’assistant et du Mur inclus chaque mois, GitHub et ses pull requests. Sans
         engagement.
@@ -119,10 +119,35 @@ const code = [
   </section>
 
   <section class="local" aria-labelledby="poste">
-    <h2 id="poste">Tes projets restent chez toi</h2>
-    <p class="muted">
-      Le serveur DS-Studio ne garde que ton compte, ton abonnement, ton solde de crédits et le coût de tes générations. Tes
-      projets, tes conversations avec l’assistant et tes captures restent sur ton disque.
+    <div class="local-head">
+      <h2 id="poste">Les projets restent sur le poste.</h2>
+      <p class="muted">
+        DS-Studio travaille en local. Son serveur ne garde que ce qui sert au compte et à la facturation.
+      </p>
+    </div>
+    <div class="local-cols">
+      <div class="local-col local-col--here">
+        <span class="local-icon"><PixelIcon name="poste" scale={3} /></span>
+        <h3>Sur le poste</h3>
+        <ul>
+          <li>Projets, tokens et versions</li>
+          <li>Conversations avec l’assistant</li>
+          <li>Captures du Mur des DA</li>
+        </ul>
+      </div>
+      <div class="local-col">
+        <span class="local-icon"><PixelIcon name="serveur" scale={3} /></span>
+        <h3>Sur le serveur DS-Studio</h3>
+        <ul>
+          <li>Compte et abonnement</li>
+          <li>Solde de crédits</li>
+          <li>Coût des générations</li>
+        </ul>
+      </div>
+    </div>
+    <p class="local-note">
+      Les demandes à l’assistant et au Mur, et sur confirmation des extraits de code ou une sélection Figma, passent par le
+      serveur pour joindre le modèle d’IA, sans y être gardées. Détail dans la <a href="/confidentialite/">politique de confidentialité</a>.
     </p>
   </section>
 </Base>

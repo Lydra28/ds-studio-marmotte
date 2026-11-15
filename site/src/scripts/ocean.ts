@@ -21,11 +21,14 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-// Requins en fond de la section interactive (lot 2 du site) : même moteur et
-// mêmes garde-fous que l'accueil de l'app (app/client/oceanMount.ts). La
+// Requins en fond de la section interactive (lot 2 du site) et du pied de
+// page (2026-11-15) : même moteur et mêmes garde-fous que l'accueil de l'app
+// (app/client/oceanMount.ts), un moteur par canvas, en pause hors écran. La
 // notice MIT ci-dessus est un commentaire légal (/*!) : gardée dans le
 // fichier publié, comme l'exige la licence.
 import { mountOcean } from '../../../app/client/oceanMount.ts';
 
-const canvas = document.querySelector<HTMLCanvasElement>('.play-ocean');
-if (canvas) mountOcean(canvas);
+// Pied de page : simple décor, figé dès que dessiner prend plus de la moitié
+// du temps (demande de Romain du 2026-11-15 : figé si la machine ne suit pas).
+document.querySelectorAll<HTMLCanvasElement>('.play-ocean').forEach((canvas) => mountOcean(canvas));
+document.querySelectorAll<HTMLCanvasElement>('.foot-ocean').forEach((canvas) => mountOcean(canvas, { maxBusy: 0.5 }));

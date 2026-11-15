@@ -47,20 +47,20 @@ export const INSTALLERS = [
     icon: 'windows',
     file: 'DS-Studio-Setup.exe',
     detail: 'Windows 10 ou 11, 64 bits.',
-    note: 'L’installateur n’est pas encore signé : Windows affiche « Windows a protégé votre ordinateur ». Clique « Informations complémentaires », puis « Exécuter quand même ».',
+    note: 'L’installateur n’est pas encore signé : Windows affiche « Windows a protégé votre ordinateur ». Cliquer « Informations complémentaires », puis « Exécuter quand même ».',
   },
   {
     os: 'macOS',
     icon: 'apple',
     file: 'DS-Studio.dmg',
     detail: 'Mac à puce Apple (M1 et suivants).',
-    note: 'L’app n’est pas encore signée par Apple : après l’avoir glissée dans Applications, fais clic droit sur DS-Studio puis « Ouvrir », et confirme. Les mises à jour automatiques arriveront avec la signature.',
+    note: 'L’app n’est pas encore signée par Apple : après l’avoir glissée dans Applications, faire clic droit sur DS-Studio puis « Ouvrir », et confirmer. Les mises à jour automatiques arriveront avec la signature.',
   },
   {
     os: 'Linux',
     icon: 'linux',
     file: 'DS-Studio.AppImage',
     detail: 'AppImage 64 bits, sans installation.',
-    note: 'Rends le fichier exécutable (clic droit → Propriétés → Autoriser l’exécution, ou chmod +x DS-Studio.AppImage), puis lance-le.',
+    note: 'Rendre le fichier exécutable (clic droit → Propriétés → Autoriser l’exécution, ou chmod +x DS-Studio.AppImage), puis le lancer.',
   },
 ] as const;

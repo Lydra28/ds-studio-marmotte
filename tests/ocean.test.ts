@@ -37,3 +37,12 @@ test('océan : figé si l’intervalle médian dépasse 1/28 s, pas sur quelques
   assert.equal(tooSlow(Array(50).fill(40)), true); // ×4 : 25 i/s
   assert.equal(tooSlow([]), false);
 });
+
+test('océan : pied de page figé si dessiner prend plus de la moitié du temps', () => {
+  const smooth = Array(100).fill(1000 / 60);
+  assert.equal(tooSlow(smooth, 0.25, 0.5), false); // CPU ×1 (mesuré)
+  assert.equal(tooSlow(smooth, 0.7, 0.5), true); // CPU ×2 : thread plein
+  assert.equal(tooSlow(Array(60).fill(33.4), 0.82, 0.5), true); // ×4 : 30 i/s, sous le seuil d'intervalle
+  assert.equal(tooSlow([], 0.9, 0.5), false); // rien de mesuré
+  assert.equal(tooSlow(smooth, 0.88), false); // sans plafond (accueil de l'app, section interactive)
+});

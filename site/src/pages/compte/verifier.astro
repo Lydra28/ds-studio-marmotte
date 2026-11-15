@@ -4,7 +4,7 @@ import { API } from '../../lib/site';
 ---
 
 <Base title="Confirmer l’adresse">
-  <h1>Confirmation de ton adresse</h1>
+  <h1>Confirmation de l’adresse mail</h1>
   <div data-verify={API}>
     <p class="message" data-message role="status" aria-live="polite">Confirmation en cours…</p>
     <div class="actions" data-next hidden>
@@ -25,7 +25,7 @@ import { API } from '../../lib/site';
     message.className = `message ${kind}`;
     root.querySelector<HTMLElement>('[data-next]')!.hidden = false;
   };
-  if (!token) done('Lien incomplet : ouvre le lien du mail en entier, ou demande un nouveau mail depuis la page Compte.', 'error');
+  if (!token) done('Lien incomplet : ouvrir le lien du mail en entier, ou demander un nouveau mail depuis la page Compte.', 'error');
   else
     fetch(`${root.dataset.verify}/v1/auth/verify`, {
       method: 'POST',
@@ -34,8 +34,8 @@ import { API } from '../../lib/site';
     })
       .then(async (res) => {
         const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
-        if (res.ok) done(data.message ?? 'Adresse confirmée. Tu peux te connecter.', 'ok');
+        if (res.ok) done(data.message ?? 'Adresse confirmée. Connexion possible.', 'ok');
         else done(data.error ?? `Lien refusé (${res.status}).`, 'error');
       })
-      .catch(() => done('Serveur DS-Studio injoignable. Réessaie dans un instant.', 'error'));
+      .catch(() => done('Serveur DS-Studio injoignable. Réessayer dans un instant.', 'error'));
 </script>
