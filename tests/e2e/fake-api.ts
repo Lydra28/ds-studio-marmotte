@@ -42,6 +42,10 @@ const accounts: Fake[] = [
   { ...E2E_FREE, plan: 'free', gifted: false, creditCents: 1, welcome: true, includedLeftCents: 0, customer: false, subscription: null, todayCents: 0, monthCents: 0, relayCalls: 0 },
 ];
 const sessions = new Map<string, Fake>();
+// Connexion par le site (cadrage OAuth du 2026-11-16) : la page ouverte dans
+// le navigateur approuve d'elle-même pour le compte gratuit, comme un clic
+// sur « Connecter l'app » d'un visiteur déjà connecté sur le site.
+const links = new Map<string, { userCode: string; account: Fake | null }>();
 // Dépôt fictif `dev-e2e/site-vitrine` (commit e2e0c0de) : tokens déclarés,
 // alias, mode mobile, valeurs en dur, ombre non reprise.
 const VITRINE = tarGz([
@@ -181,13 +185,34 @@ const server = http.createServer(async (req, res) => {
     sessions.set(token, a);
     return send(200, { token, account: me(a) });
   }
-  if (route === 'POST /v1/auth/signup') return send(201, { message: 'Un mail de confirmation vient de partir : clique sur son lien.' });
+  if (route === 'POST /v1/auth/signup') return send(201, { message: 'Compte créé : un mail de confirmation vient de partir.' });
   if (route === 'POST /v1/auth/forgot') return send(200, { message: 'Si l’adresse existe, un mail vient de partir avec un code.' });
-  if (route === 'POST /v1/auth/reset') return send(200, { message: 'Mot de passe changé : connecte-toi.' });
+  if (route === 'POST /v1/auth/reset') return send(200, { message: 'Mot de passe changé : se reconnecter.' });
+  if (route === 'POST /v1/auth/app-link') {
+    const deviceCode = `appareil-e2e-${Date.now()}-${links.size}-0123456789`;
+    const userCode = 'BCDF-GHJK';
+    links.set(deviceCode, { userCode, account: null });
+    return send(200, { deviceCode, userCode, url: `${base}/v1/auth/app-link/page?code=${userCode}`, expiresAt: new Date(Date.now() + 600_000).toISOString(), interval: 2 });
+  }
+  if (route === 'GET /v1/auth/app-link/page') {
+    const code = new URL(req.url ?? '/', base).searchParams.get('code');
+    for (const link of links.values()) if (link.userCode === code && !link.account) link.account = accounts[1];
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    return res.end(`<!doctype html><title>Connecter l’app</title><p>Code ${code} : app connectée (simulé).</p>`);
+  }
+  if (route === 'POST /v1/auth/app-link/token') {
+    const link = links.get(String(body.deviceCode));
+    if (!link) return send(410, { error: 'Connexion expirée : la relancer depuis l’app.' });
+    if (!link.account) return send(202, { pending: true });
+    links.delete(String(body.deviceCode));
+    const token = `jeton-e2e-${Date.now()}-${sessions.size}`;
+    sessions.set(token, link.account);
+    return send(200, { token, expiresAt: new Date(Date.now() + 30 * 86400_000).toISOString(), account: me(link.account) });
+  }
   if (route === 'GET /v1/billing/done') {
     // Page de retour de Stripe, ouverte dans un nouvel onglet par Réglages.
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-    return res.end('<!doctype html><title>Paiement simulé</title><p>Paiement enregistré (simulé). Retourne dans DS-Studio : il se met à jour tout seul.</p>');
+    return res.end('<!doctype html><title>Paiement simulé</title><p>Paiement enregistré (simulé). Retourner dans DS-Studio : il se met à jour tout seul.</p>');
   }
   const token = (req.headers.authorization ?? '').replace(/^Bearer /, '');
   const a = sessions.get(token);
@@ -205,8 +230,8 @@ const server = http.createServer(async (req, res) => {
         return send(402, {
           error:
             a.plan === 'pro'
-              ? 'Usage inclus du mois épuisé et solde de crédits à zéro : recharge des crédits dans Réglages → Compte.'
-              : 'Solde de crédits à zéro : recharge des crédits dans Réglages → Compte pour utiliser l’agent et le Mur.',
+              ? 'Usage inclus du mois épuisé et solde de crédits à zéro : recharger des crédits dans Réglages → Compte.'
+              : 'Solde de crédits à zéro : recharger des crédits dans Réglages → Compte pour utiliser l’agent et le Mur.',
         });
       if (included) a.includedLeftCents -= 2;
       else {
@@ -242,7 +267,7 @@ const server = http.createServer(async (req, res) => {
     return void setTimeout(() => res.end(JSON.stringify(reply)), 50);
   }
   if (route === 'POST /v1/billing/checkout') {
-    if (body.kind === 'pro' && (a.gifted || a.plan === 'pro')) return send(409, { error: 'Déjà abonné à Pro : gère ton abonnement depuis le portail.' });
+    if (body.kind === 'pro' && (a.gifted || a.plan === 'pro')) return send(409, { error: 'Déjà abonné à Pro : gérer l’abonnement depuis le portail.' });
     // Le paiement et son webhook sont simulés sur-le-champ : l'e2e vérifie l'actualisation automatique (recharge) et « Actualiser » (Pro, portail).
     a.customer = true;
     if (body.kind === 'pro') {
@@ -253,10 +278,10 @@ const server = http.createServer(async (req, res) => {
     return send(200, { url: `${base}/v1/billing/done?s=ok` });
   }
   if (route === 'POST /v1/billing/portal') {
-    if (!a.customer) return send(409, { error: 'Aucun achat encore : rien à gérer.' });
-    // Résiliation programmée dans le portail, simulée.
+    // L'app reçoit la page Compte du site (server/billing.ts) ; résiliation
+    // programmée depuis le portail du site, simulée.
     if (a.subscription) a.subscription = { ...a.subscription, cancelAtPeriodEnd: true };
-    return send(200, { url: `${base}/v1/billing/done?s=portal` });
+    return send(200, { url: `${base}/v1/billing/done?s=portal`, site: true });
   }
   if (route === 'POST /v1/auth/logout') {
     sessions.delete(token);

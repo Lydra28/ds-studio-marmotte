@@ -11,6 +11,7 @@ const PAGES = [
   '/prix/',
   '/compte/',
   '/compte/verifier/',
+  '/compte/app/',
   '/merci/',
   '/paiement-annule/',
   '/mentions-legales/',
@@ -239,15 +240,132 @@ test('compte : création, onglet ouvert par #creer, mot de passe oublié', async
   await expect(page.getByRole('status')).toHaveText('Code invalide ou expiré.');
 });
 
+// Connexion avec Google et GitHub (cadrage du 2026-11-16) : de simples liens
+// vers l'API ; l'échec revient par `?oauth=`.
+test('compte : boutons Google et GitHub sous les formulaires, échec affiché puis retiré de l’adresse', async ({ page }) => {
+  const errors = await offline(page);
+  await page.route(`${API}/**`, (r) => json(r, 401, { error: 'Connexion requise.' }));
+  await page.goto('/compte/?oauth=adresse');
+  await expect(page.getByRole('status')).toContainText('Adresse mail non vérifiée chez ce fournisseur');
+  expect(page.url()).toBe(`${SITE}/compte/`);
+  const login = page.locator('[data-pane="login"]');
+  await expect(login.getByRole('link', { name: 'Continuer avec Google' })).toHaveAttribute('href', `${API}/v1/auth/oauth/google/start`);
+  await expect(login.getByRole('link', { name: 'Continuer avec GitHub' })).toHaveAttribute('href', `${API}/v1/auth/oauth/github/start`);
+  await page.goto('/compte/#creer');
+  await expect(page.getByRole('link', { name: 'Continuer avec Google' }).filter({ visible: true })).toHaveCount(1);
+  expect(errors.filter((e) => !e.includes('401'))).toEqual([]);
+});
+
+test('app : page « Connecter l’app », code montré, connexion puis approbation en un clic', async ({ page }) => {
+  const errors = await offline(page);
+  let logged = false;
+  let approved: unknown = null;
+  await page.route(`${API}/**`, (route) => {
+    const req = route.request();
+    const path = new URL(req.url()).pathname;
+    if (path === '/v1/me') return logged ? json(route, 200, ME) : json(route, 401, { error: 'Connexion requise.' });
+    if (path === '/v1/auth/login') {
+      logged = true;
+      return json(route, 200, { token: 'ignoré', account: { email: ME.email } });
+    }
+    if (path === '/v1/auth/app-link/approve') {
+      approved = req.postDataJSON();
+      return json(route, 200, { ok: true, message: 'App connectée : retourner dans DS-Studio.' });
+    }
+    return json(route, 404, { error: 'inconnu' });
+  });
+
+  await page.goto('/compte/app/');
+  await expect(page.getByRole('status')).toContainText('Lien incomplet');
+
+  // Pas connecté : le code est montré, les boutons Google et GitHub ramènent ici.
+  await page.goto('/compte/app/?code=bcdf-ghjk');
+  await expect(page.locator('[data-code]')).toHaveText('BCDF-GHJK');
+  await expect(page.getByRole('link', { name: 'Continuer avec Google' })).toHaveAttribute('href', `${API}/v1/auth/oauth/google/start?app=BCDF-GHJK`);
+  await expect(page.getByRole('button', { name: 'Connecter l’app' })).toBeHidden();
+
+  // Connexion par mail sur /compte/, puis retour automatique sur la page de l'app.
+  await page.getByRole('link', { name: 'Se connecter par mail' }).click();
+  await expect(page).toHaveURL(`${SITE}/compte/?app=BCDF-GHJK`);
+  await expect(page.getByRole('link', { name: 'Continuer avec GitHub' }).first()).toHaveAttribute('href', `${API}/v1/auth/oauth/github/start?app=BCDF-GHJK`);
+  const form = page.locator('form[data-form="login"]');
+  await form.getByLabel('Adresse mail').fill(ME.email);
+  await form.getByLabel('Mot de passe').fill('mot-de-passe-essai');
+  await form.getByRole('button', { name: 'Se connecter' }).click();
+  await expect(page).toHaveURL(`${SITE}/compte/app/?code=BCDF-GHJK`);
+
+  await expect(page.locator('[data-email]')).toHaveText(ME.email);
+  await page.getByRole('button', { name: 'Connecter l’app' }).click();
+  await expect(page.getByRole('status')).toHaveText('App connectée : retourner dans DS-Studio.');
+  expect(approved).toEqual({ code: 'BCDF-GHJK' });
+  await expect(page.locator('[data-code]')).toBeHidden();
+  expect(errors.filter((e) => !e.includes('401'))).toEqual([]);
+});
+
+// Lien créé depuis un autre réseau (peut-être envoyé par un tiers) : le clic
+// est refusé (409), le code du lien disparaît, il faut saisir celui de l'app.
+test('app : lien d’un autre réseau → code du lien masqué, code saisi', async ({ page }) => {
+  const errors = await offline(page);
+  const sent: unknown[] = [];
+  await page.route(`${API}/**`, (route) => {
+    const req = route.request();
+    const path = new URL(req.url()).pathname;
+    if (path === '/v1/me') return json(route, 200, ME);
+    if (path === '/v1/auth/app-link/approve') {
+      const b = req.postDataJSON() as { typed?: boolean };
+      sent.push(b);
+      return b.typed
+        ? json(route, 200, { ok: true, message: 'App connectée : retourner dans DS-Studio.' })
+        : json(route, 409, { error: 'Ce lien a été créé depuis un autre réseau que ce navigateur : saisir le code affiché dans votre DS-Studio.' });
+    }
+    return json(route, 404, { error: 'inconnu' });
+  });
+  await page.goto('/compte/app/?code=BCDF-GHJK');
+  await page.getByRole('button', { name: 'Connecter l’app' }).click();
+  await expect(page.getByRole('status')).toContainText('autre réseau');
+  await expect(page.locator('[data-code]')).toBeHidden();
+  const field = page.getByLabel('Code affiché dans DS-Studio');
+  await expect(field).toBeFocused();
+  await expect(field).toHaveValue('', { timeout: 1000 });
+  await field.fill('mnpq-rstv');
+  await page.getByRole('button', { name: 'Connecter l’app' }).click();
+  await expect(page.getByRole('status')).toHaveText('App connectée : retourner dans DS-Studio.');
+  expect(sent).toEqual([{ code: 'BCDF-GHJK' }, { code: 'mnpq-rstv', typed: true }]);
+  expect(errors.filter((e) => !e.includes('409'))).toEqual([]);
+});
+
+// Relecture du lot site : connecté avec le mauvais compte, « Changer de
+// compte » déconnecte sur place (plus de boucle /compte/ ↔ /compte/app/).
+test('app : « Changer de compte » déconnecte et propose les autres connexions', async ({ page }) => {
+  await offline(page);
+  let logged = true;
+  await page.route(`${API}/**`, (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/v1/me') return logged ? json(route, 200, ME) : json(route, 401, { error: 'Connexion requise.' });
+    if (path === '/v1/auth/logout') {
+      logged = false;
+      return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': SITE, 'access-control-allow-credentials': 'true' } });
+    }
+    return json(route, 404, { error: 'inconnu' });
+  });
+  await page.goto('/compte/app/?code=BCDF-GHJK');
+  await expect(page.locator('[data-email]')).toHaveText(ME.email);
+  await page.getByRole('button', { name: 'Changer de compte' }).click();
+  await expect(page.getByRole('link', { name: 'Continuer avec Google' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Connecter l’app' })).toBeHidden();
+  expect(logged).toBe(false);
+  expect(page.url()).toBe(`${SITE}/compte/app/?code=BCDF-GHJK`);
+});
+
 test('confirmation : jeton du lien envoyé puis retiré de l’adresse', async ({ page }) => {
   await offline(page);
   let token = '';
   await page.route(`${API}/v1/auth/verify`, (route) => {
     token = (route.request().postDataJSON() as { token: string }).token;
-    return json(route, 200, { ok: true, message: 'Adresse confirmée. Tu peux te connecter.' });
+    return json(route, 200, { ok: true, message: 'Adresse confirmée : vous pouvez vous connecter.' });
   });
   await page.goto('/compte/verifier/?token=jeton-du-mail-123456');
-  await expect(page.getByRole('status')).toHaveText('Adresse confirmée. Tu peux te connecter.');
+  await expect(page.getByRole('status')).toHaveText('Adresse confirmée : vous pouvez vous connecter.');
   expect(token).toBe('jeton-du-mail-123456');
   expect(page.url()).toBe(`${SITE}/compte/verifier/`);
   await page.goto('/compte/verifier/');

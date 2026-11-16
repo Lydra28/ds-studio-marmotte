@@ -31,7 +31,7 @@ export class ProjectStore {
       const current = await this.read();
       if (current.base !== base)
         throw new StudioError(
-          'Brief modifié dans un autre onglet. Rechargez le brief avant de le modifier.',
+          'Brief modifié dans un autre onglet : recharger le brief avant de le modifier.',
           409,
         );
       const validated = projectSchema.parse(project);

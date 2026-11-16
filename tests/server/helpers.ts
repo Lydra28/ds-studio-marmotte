@@ -81,6 +81,13 @@ export async function testApp(overrides: Partial<Deps> = {}) {
 export type TestApp = Awaited<ReturnType<typeof testApp>>;
 
 // Inscription, adresse confirmée, connexion : le jeton de session.
+/** Session du site (cookie httpOnly) d'un compte déjà confirmé : en-tête `cookie` à renvoyer. */
+export async function connectSite(t: TestApp, user: { email: string; password: string }, headers: Record<string, string> = {}) {
+  const login = await t.api('/v1/auth/login', { json: { ...user, client: 'site' }, headers });
+  if (login.status !== 200) throw new Error('connexion du site impossible : ' + JSON.stringify(login.body));
+  return String(login.headers.get('set-cookie')).split(';')[0];
+}
+
 export async function connect(t: TestApp, user: { email: string; password: string }) {
   await t.api('/v1/auth/signup', { json: user });
   await t.api('/v1/auth/verify', { json: { token: lastToken(t.mailer, user.email) } });

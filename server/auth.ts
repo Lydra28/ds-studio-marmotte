@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { ApiError, type Deps } from './core.js';
 import { hashPassword, verifyPassword } from './passwords.js';
 import { addCredits, WELCOME_CENTS } from './credits.js';
+import { oauthRoutes } from './oauth.js';
 
 export interface Account {
   id: string;
@@ -81,10 +82,11 @@ export async function body<T extends z.ZodTypeAny>(c: Context, schema: T): Promi
   return parsed.data;
 }
 
-type Row = {
+export type Row = {
   id: string;
   email: string;
-  password_hash: string;
+  /** `null` : compte créé par Google ou GitHub, sans mot de passe (migration 0008). */
+  password_hash: string | null;
   plan: 'free' | 'pro';
   gifted: boolean;
   daily_cap_cents: number;
@@ -181,8 +183,8 @@ export function authRoutes(deps: Deps) {
     const link = deps.siteUrl ? `${deps.siteUrl}/compte/verifier/?token=${token}` : `${deps.publicUrl}/v1/auth/verify?token=${token}`;
     await deps.mailer.send({
       to: account.email,
-      subject: 'DS-Studio : confirme ton adresse',
-      text: `Bonjour,\n\nPour activer ton compte DS-Studio, ouvre ce lien (valable ${VERIFY_HOURS} h) :\n${link}\n\nSi tu n’es pas à l’origine de cette demande, ignore ce mail.`,
+      subject: 'DS-Studio : confirmation de votre adresse',
+      text: `Bonjour,\n\nPour activer votre compte DS-Studio, voici le lien à ouvrir (valable ${VERIFY_HOURS} h) :\n${link}\n\nSi vous n’êtes pas à l’origine de cette demande, ce mail peut être ignoré.`,
     });
   }
 
@@ -195,6 +197,18 @@ export function authRoutes(deps: Deps) {
     );
     await markActive(db, accountId, now());
     return { token, expiresAt };
+  }
+
+  // Session du site : cookie httpOnly, jamais lu par le script de la page.
+  function siteCookie(c: Context, session: { token: string; expiresAt: Date }) {
+    setCookie(c, COOKIE, session.token, {
+      httpOnly: true,
+      secure: deps.publicUrl.startsWith('https://'),
+      sameSite: 'Lax',
+      path: '/',
+      expires: session.expiresAt,
+      ...(deps.cookieDomain ? { domain: deps.cookieDomain } : {}),
+    });
   }
 
   // Mail en échec : son jeton est retiré, pour que la demande suivante n'attende pas la minute.
@@ -221,14 +235,14 @@ export function authRoutes(deps: Deps) {
   let capReportedAt = 0;
   const clientIp = (c: Context) => c.req.header('cf-connecting-ip') ?? 'inconnue';
 
-  auth.post('/signup', async (c) => {
-    const data = await body(c, z.object({ email: emailSchema, password: passwordSchema }));
-    if (await accountByEmail(data.email)) throw new ApiError('Un compte existe déjà avec cette adresse. Connecte-toi ou utilise « mot de passe oublié ».', 409);
+  // Plafonds d'inscription (formulaire et Google ou GitHub) : lève un 429, sinon
+  // renvoie la fonction qui compte l'inscription une fois le compte créé.
+  async function admitSignup(c: Context) {
     // Par adresse IP d'abord : un seul poste ne ferme pas les inscriptions aux autres.
     const ip = clientIp(c);
     const since = now().getTime() - hours(1);
     const mine = (signupsByIp.get(ip) ?? []).filter((at) => at > since);
-    if (mine.length >= SIGNUPS_PER_IP_PER_HOUR) throw new ApiError('Trop d’inscriptions depuis cette connexion : réessaie dans une heure.', 429);
+    if (mine.length >= SIGNUPS_PER_IP_PER_HOUR) throw new ApiError('Trop d’inscriptions depuis cette connexion : réessayer dans une heure.', 429);
     // Puis tous clients confondus : qui remplit ce plafond (adresses falsifiées)
     // ferme les inscriptions une heure, ce qui reste moins grave que des mails
     // envoyés sans borne ; signalé (Sentry) au premier refus de l'heure.
@@ -239,15 +253,24 @@ export function authRoutes(deps: Deps) {
         console.warn(`Inscriptions : plafond de ${SIGNUPS_PER_HOUR} par heure atteint, inscriptions refusées.`);
         deps.report?.(new Error(`Inscriptions : plafond de ${SIGNUPS_PER_HOUR} par heure atteint`));
       }
-      throw new ApiError('Trop d’inscriptions en ce moment : réessaie dans quelques minutes.', 429);
+      throw new ApiError('Trop d’inscriptions en ce moment : réessayer dans quelques minutes.', 429);
     }
+    return () => {
+      // Mémoire bornée : les adresses sans inscription dans l'heure sont oubliées.
+      if (signupsByIp.size > 10_000) for (const [key, list] of signupsByIp) if (!list.some((at) => at > since)) signupsByIp.delete(key);
+      signupsByIp.set(ip, [...mine, now().getTime()]);
+    };
+  }
+
+  auth.post('/signup', async (c) => {
+    const data = await body(c, z.object({ email: emailSchema, password: passwordSchema }));
+    if (await accountByEmail(data.email)) throw new ApiError('Un compte existe déjà avec cette adresse : se connecter, ou utiliser « mot de passe oublié ».', 409);
+    const counted = await admitSignup(c);
     const { rows } = await db.query<{ id: string }>(
       'INSERT INTO accounts (email, password_hash, created_at, last_active_at) VALUES ($1, $2, $3, $3) RETURNING id',
       [data.email, await hashPassword(data.password), now()],
     );
-    // Mémoire bornée : les adresses sans inscription dans l'heure sont oubliées.
-    if (signupsByIp.size > 10_000) for (const [key, list] of signupsByIp) if (!list.some((at) => at > since)) signupsByIp.delete(key);
-    signupsByIp.set(ip, [...mine, now().getTime()]);
+    counted();
     await sendVerification({ id: rows[0].id, email: data.email }, await issueEmailToken(rows[0].id, 'verify'));
     return c.json({ ok: true, message: 'Compte créé : un mail de confirmation vient de partir.' }, 201);
   });
@@ -260,24 +283,27 @@ export function authRoutes(deps: Deps) {
     return c.json({ ok: true, message: 'Si un compte non confirmé existe à cette adresse, un nouveau mail vient de partir (un par minute au plus).' });
   });
 
+  // Crédit de bienvenue (lot 4) : une génération, posée une seule fois par compte.
+  async function welcome(accountId: string, on: Pick<Deps['db'], 'query'> = db) {
+    if (await addCredits(on, { accountId, deltaCents: WELCOME_CENTS, reason: 'welcome', ref: `welcome:${accountId}`, now: now() }))
+      await on.query('UPDATE accounts SET welcome_credited_at = $2 WHERE id = $1', [accountId, now()]);
+  }
   const verify = async (token: string) => {
     const accountId = await consumeEmailToken(token, 'verify');
     await db.query('UPDATE accounts SET email_verified_at = COALESCE(email_verified_at, $2) WHERE id = $1', [accountId, now()]);
-    // Crédit de bienvenue (lot 4) : une génération, posée une seule fois par compte.
-    if (await addCredits(db, { accountId, deltaCents: WELCOME_CENTS, reason: 'welcome', ref: `welcome:${accountId}`, now: now() }))
-      await db.query('UPDATE accounts SET welcome_credited_at = $2 WHERE id = $1', [accountId, now()]);
+    await welcome(accountId);
   };
   auth.post('/verify', async (c) => {
     const { token } = await body(c, z.object({ token: z.string().min(10) }));
     await verify(token);
-    return c.json({ ok: true, message: 'Adresse confirmée. Tu peux te connecter.' });
+    return c.json({ ok: true, message: 'Adresse confirmée : vous pouvez vous connecter.' });
   });
   // Lien du mail ouvert dans un navigateur : une page minimale, sans site vitrine (lot 7).
   auth.get('/verify', async (c) => {
     const token = c.req.query('token') ?? '';
     try {
       await verify(token);
-      return c.html(htmlPage('Adresse confirmée', 'Ton compte DS-Studio est actif. Retourne dans l’application pour te connecter.'));
+      return c.html(htmlPage('Adresse confirmée', 'Votre compte DS-Studio est actif. Retourner dans l’application pour se connecter.'));
     } catch (e) {
       const message = e instanceof ApiError ? e.message : 'Erreur inattendue.';
       return c.html(htmlPage('Lien refusé', message), e instanceof ApiError ? (e.status as 400) : 500);
@@ -287,18 +313,13 @@ export function authRoutes(deps: Deps) {
   auth.post('/login', async (c) => {
     const data = await body(c, z.object({ email: emailSchema, password: passwordSchema.or(z.string()), client: clientSchema }));
     const account = await accountByEmail(data.email);
-    if (!account || !(await verifyPassword(data.password, account.password_hash))) throw new ApiError('Adresse ou mot de passe incorrect.', 401);
-    if (!account.email_verified_at) throw new ApiError('Adresse non confirmée : ouvre le lien reçu par mail (ou demande-en un nouveau).', 403);
+    if (account && account.password_hash === null)
+      throw new ApiError('Ce compte se connecte avec Google ou GitHub. Pour avoir aussi un mot de passe : « mot de passe oublié ».', 401);
+    if (!account || !(await verifyPassword(data.password, account.password_hash as string))) throw new ApiError('Adresse ou mot de passe incorrect.', 401);
+    if (!account.email_verified_at) throw new ApiError('Adresse non confirmée : ouvrir le lien reçu par mail, ou en demander un nouveau.', 403);
     const session = await openSession(account.id, data.client);
     if (data.client === 'site') {
-      setCookie(c, COOKIE, session.token, {
-        httpOnly: true,
-        secure: deps.publicUrl.startsWith('https://'),
-        sameSite: 'Lax',
-        path: '/',
-        expires: session.expiresAt,
-        ...(deps.cookieDomain ? { domain: deps.cookieDomain } : {}),
-      });
+      siteCookie(c, session);
       // Le site ne voit jamais le jeton : il vit dans le cookie httpOnly seul.
       return c.json({ expiresAt: session.expiresAt.toISOString(), account: toAccount(account) });
     }
@@ -313,7 +334,7 @@ export function authRoutes(deps: Deps) {
       await sendOrForget(token, () => deps.mailer.send({
         to: account.email,
         subject: 'DS-Studio : nouveau mot de passe',
-        text: `Bonjour,\n\nPour choisir un nouveau mot de passe DS-Studio, utilise ce code dans l’application (valable ${RESET_HOURS} h) :\n${token}\n\nSi tu n’es pas à l’origine de cette demande, ignore ce mail : rien ne change.`,
+        text: `Bonjour,\n\nPour choisir un nouveau mot de passe DS-Studio, voici le code à saisir dans l’application (valable ${RESET_HOURS} h) :\n${token}\n\nSi vous n’êtes pas à l’origine de cette demande, ce mail peut être ignoré : rien ne change.`,
       }));
     }
     return c.json({ ok: true, message: 'Si un compte existe à cette adresse, un mail vient de partir (un par minute au plus).' });
@@ -327,10 +348,15 @@ export function authRoutes(deps: Deps) {
       await hashPassword(data.password),
       now(),
     ]);
-    // Toute session ouverte avec l'ancien mot de passe tombe.
+    // Toute session ouverte avec l'ancien mot de passe tombe, et les liaisons
+    // d'app approuvées mais pas encore récupérées (sinon session neuve après coup).
     await db.query('DELETE FROM sessions WHERE account_id = $1', [accountId]);
-    return c.json({ ok: true, message: 'Mot de passe changé. Reconnecte-toi.' });
+    await db.query('DELETE FROM app_links WHERE account_id = $1', [accountId]);
+    return c.json({ ok: true, message: 'Mot de passe changé : se reconnecter.' });
   });
+
+  // Connexion avec Google ou GitHub, et connexion de l'app par le site (oauth.ts).
+  auth.route('/', oauthRoutes(deps, { openSession, siteCookie, admitSignup, welcome, toAccount, accountColumns: ACCOUNT_COLUMNS }));
 
   auth.post('/logout', async (c) => {
     const token = bearer(c);
@@ -368,7 +394,7 @@ export function requireAccount(deps: Deps) {
       [sha256(token)],
     );
     const row = rows[0];
-    if (!row || new Date(row.expires_at) <= now()) throw new ApiError('Session expirée : reconnecte-toi.', 401);
+    if (!row || new Date(row.expires_at) <= now()) throw new ApiError('Session expirée : se reconnecter.', 401);
     if (now().getTime() - new Date(row.last_seen_at).getTime() > hours(1)) {
       await deps.db.query('UPDATE sessions SET last_seen_at = $2, expires_at = $3 WHERE token_hash = $1', [
         row.token_hash,
@@ -378,6 +404,16 @@ export function requireAccount(deps: Deps) {
       await markActive(deps.db, row.id as string, now());
     }
     return toAccount(row);
+  };
+}
+
+/** Client de la session portée par la requête (`app` ou `site`), après `requireAccount`. */
+export function sessionClient(deps: Deps) {
+  return async (c: Context): Promise<string | null> => {
+    const token = bearer(c);
+    if (!token) return null;
+    const { rows } = await deps.db.query<{ client: string }>('SELECT client FROM sessions WHERE token_hash = $1', [sha256(token)]);
+    return rows[0]?.client ?? null;
   };
 }
 

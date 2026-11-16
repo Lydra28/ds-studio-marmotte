@@ -73,7 +73,7 @@ async function receipt(known) {
 
 function guardFile(target, project) {
   const file = fileInfo();
-  if (!file.key) throw new Error('Fichier non identifié : lie-le au projet. Rien n’a été modifié.');
+  if (!file.key) throw new Error('Fichier non identifié : le lier au projet. Rien n’a été modifié.');
   if (file.key !== target.fileKey)
     throw new Error(`Mauvais fichier : la cible de ${project} est ${target.fileKey}, ce fichier est ${file.key}. Rien n’a été modifié.`);
   if ((target.protectedPages || []).includes(target.page)) throw new Error('La page cible est protégée. Rien n’a été modifié.');
@@ -398,7 +398,7 @@ async function readComponents() {
 // 3 niveaux sous la sélection. Demandé seulement si Romain a coché l'envoi.
 async function readSelection() {
   const selection = figma.currentPage.selection;
-  if (!selection.length) throw new Error('Sélectionne au moins un calque, ou décoche l’envoi de la sélection.');
+  if (!selection.length) throw new Error('Sélectionner au moins un calque, ou décocher l’envoi de la sélection.');
   const names = new Map();
   const variableName = async (alias) => {
     const id = alias && alias.id;

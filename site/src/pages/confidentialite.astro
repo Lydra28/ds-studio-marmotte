@@ -5,18 +5,25 @@ import Base from '../layouts/Base.astro';
 <Base title="Confidentialité">
   <div class="prose">
     <h1>Politique de confidentialité</h1>
-    <h2>Ce qui reste sur ton poste</h2>
+    <h2>Ce qui reste sur votre poste</h2>
     <p>
-      Tes projets, tokens, versions, conversations avec l’assistant, inspirations et captures du Mur restent dans le dossier
-      choisi sur ton ordinateur. Le serveur DS-Studio n’en garde aucune copie.
+      Vos projets, tokens, versions, conversations avec l’assistant, inspirations et captures du Mur restent dans le dossier
+      choisi sur votre ordinateur. Le serveur DS-Studio n’en garde aucune copie.
     </p>
     <h2>Ce que garde le serveur</h2>
     <ul>
-      <li>Ton adresse mail et une empreinte de ton mot de passe (jamais le mot de passe lui-même)</li>
-      <li>Ton palier, ton solde de crédits, ton abonnement et l’identifiant client Stripe</li>
-      <li>Tes achats (date, montant) et, si tu te rétractes, le nom donné dans ta déclaration</li>
+      <li>
+        Votre adresse mail et, si vous en avez choisi un, une empreinte de votre mot de passe (jamais le mot de passe
+        lui-même)
+      </li>
+      <li>
+        Si vous vous connectez avec Google ou GitHub : l’identifiant de votre compte chez ce fournisseur et l’adresse mail
+        qu’il a vérifiée
+      </li>
+      <li>Votre palier, votre solde de crédits, votre abonnement et l’identifiant client Stripe</li>
+      <li>Vos achats (date, montant) et, si vous vous rétractez, le nom donné dans votre déclaration</li>
       <li>Le coût et la date de chaque appel au modèle, sans son contenu</li>
-      <li>Tes sessions de connexion et la date de ta dernière activité</li>
+      <li>Vos sessions de connexion et la date de votre dernière activité</li>
     </ul>
     <h2>Ce qui passe sans être gardé</h2>
     <p>
@@ -24,33 +31,48 @@ import Base from '../layouts/Base.astro';
       (OpenRouter), sans être enregistrées par DS-Studio.
     </p>
     <p>
-      Sur ta demande seulement, l’agent peut nommer les valeurs de ton dépôt GitHub restées sans token : l’application te
-      montre d’abord les extraits exacts (la ligne de code et l’en-tête de son bloc, jamais un fichier entier ; fichiers
-      <code>.env</code>, configurations et lignes qui ressemblent à un secret écartés) et rien ne part avant ta
+      Sur votre demande seulement, l’agent peut nommer les valeurs de votre dépôt GitHub restées sans token : l’application
+      vous montre d’abord les extraits exacts (la ligne de code et l’en-tête de son bloc, jamais un fichier entier ;
+      fichiers <code>.env</code>, configurations et lignes qui ressemblent à un secret écartés) et rien ne part avant votre
       confirmation, redemandée à chaque fois. Ces extraits suivent le même trajet, sans être enregistrés par DS-Studio ;
       DS-Studio demande à OpenRouter de ne les router que vers des fournisseurs qui s’engagent à ne pas conserver les
       données (ZDR) ; sans fournisseur de ce type, l’envoi échoue.
     </p>
+    <h2>Connexion avec Google ou GitHub</h2>
+    <p>
+      Si vous choisissez « Continuer avec Google » ou « Continuer avec GitHub », DS-Studio reçoit de ce fournisseur, avec
+      votre accord, l’identifiant de votre compte et votre adresse mail vérifiée, rien d’autre. Ces données servent
+      uniquement à créer votre compte DS-Studio ou à vous y connecter : elles ne sont ni vendues, ni partagées, ni
+      utilisées pour de la publicité ou pour entraîner un modèle. Le jeton d’accès remis par le fournisseur sert une seule
+      fois, à lire votre identité, puis il est oublié. La connexion avec GitHub ne donne aucun accès à vos dépôts.
+    </p>
+    <p>
+      L’usage par DS-Studio des informations reçues des API Google respecte la <a
+        href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
+      y compris ses exigences d’usage limité (Limited Use). Vous pouvez retirer cet accès à tout moment depuis votre compte
+      Google ou GitHub : votre compte DS-Studio reste, et « mot de passe oublié » vous permet d’y revenir.
+    </p>
     <h2>GitHub</h2>
     <p>
-      La connexion GitHub (DS-Studio Pro) relie l’application à ton compte GitHub, sans passer par le serveur DS-Studio : les
-      jetons de connexion restent sur ton poste. L’application lit le dépôt que tu choisis en mémoire, sans rien exécuter, et
-      n’y écrit qu’une branche et une pull request quand tu acceptes une version. GitHub traite ces données selon ses
-      propres conditions, comme pour tout outil connecté à ton compte.
+      La connexion GitHub (DS-Studio Pro) relie l’application à votre compte GitHub, sans passer par le serveur DS-Studio :
+      les jetons de connexion restent sur votre poste. L’application lit le dépôt que vous choisissez en mémoire, sans rien
+      exécuter, et n’y écrit qu’une branche et une pull request quand vous acceptez une version. GitHub traite ces données
+      selon ses propres conditions, comme pour tout outil connecté à votre compte.
     </p>
     <h2>Sous-traitants</h2>
     <ul>
       <li>Render (hébergement du serveur et de la base)</li>
       <li>Cloudflare (site et réseau)</li>
-      <li>Stripe (paiement : DS-Studio ne voit jamais ta carte)</li>
-      <li>Resend (mails de confirmation et de mot de passe)</li>
+      <li>Stripe (paiement : DS-Studio ne voit jamais votre carte)</li>
+      <li>Resend (mails de confirmation, de mot de passe et d’alerte de connexion)</li>
       <li>OpenRouter (modèles d’IA)</li>
       <li>Sentry (erreurs du serveur)</li>
     </ul>
     <h2>Cookies</h2>
     <p>
-      Un seul cookie, nécessaire à la connexion sur ce site (<code>ds_session</code>). Aucun cookie de mesure d’audience ni de
-      publicité.
+      Deux cookies, nécessaires à la connexion : <code>ds_session</code> sur ce site, et <code>ds_oauth</code>, posé dix
+      minutes par le serveur pendant une connexion avec Google ou GitHub pour vérifier que le retour vient bien de votre
+      navigateur. Aucun cookie de mesure d’audience ni de publicité.
     </p>
     <h2>Durées de conservation</h2>
     <ul>
@@ -61,6 +83,11 @@ import Base from '../layouts/Base.astro';
       </li>
       <li>Sessions de connexion : supprimées à leur expiration (30 jours sans utilisation).</li>
       <li>Liens et codes envoyés par mail : supprimés 30 jours après leur expiration.</li>
+      <li>Identifiant Google ou GitHub : gardé tant que le compte existe, effacé avec lui.</li>
+      <li>
+        Code de connexion de l’app, avec une empreinte de l’adresse IP et le pays de la demande : supprimés dès son
+        expiration (10 minutes).
+      </li>
       <li>Détail de chaque appel au modèle : 12 mois, puis seulement un total par mois.</li>
       <li>
         Après la suppression d’un compte qui a payé : l’adresse, le mot de passe, les sessions et l’usage sont effacés ;
@@ -68,12 +95,12 @@ import Base from '../layouts/Base.astro';
         (obligation comptable), sans adresse mail ni nom, puis effacés.
       </li>
     </ul>
-    <h2>Tes droits</h2>
+    <h2>Vos droits</h2>
     <p>
-      Tu peux demander l’accès, la rectification ou la suppression de ton compte à
-      <a href="mailto:aubertromain85@gmail.com">aubertromain85@gmail.com</a> : réponse sous un mois. Un abonnement en cours
-      est d’abord résilié ; le solde de crédits restant est perdu à la suppression, sauf dans les cas prévus par les
-      <a href="/cgv/">conditions de vente</a> (sections 2, 4, 5 et 11). Réclamation possible auprès de la CNIL.
+      Vous pouvez demander l’accès, la rectification ou la suppression de votre compte à <a
+        href="mailto:design.sys.studio@gmail.com">design.sys.studio@gmail.com</a> : réponse sous un mois. Un abonnement en
+      cours est d’abord résilié ; le solde de crédits restant est perdu à la suppression, sauf dans les cas prévus par les <a
+        href="/cgv/">conditions de vente</a> (sections 2, 4, 5 et 11). Réclamation possible auprès de la CNIL.
     </p>
   </div>
 </Base>

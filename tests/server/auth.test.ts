@@ -140,15 +140,15 @@ test('comptes : un mail par minute et par type, inscriptions plafonnées par heu
     const email = 'romain@example.com';
     const mails = (subject: RegExp) => t.mailer.sent.filter((m) => m.to === email && subject.test(m.subject)).length;
     await t.api('/v1/auth/signup', { json: user });
-    assert.equal(mails(/confirme/), 1);
+    assert.equal(mails(/confirmation/), 1);
 
     // Confirmation redemandée en boucle : même réponse, un seul mail de plus par minute.
     for (let i = 0; i < 5; i++) assert.equal((await t.api('/v1/auth/resend', { json: { email } })).status, 200);
-    assert.equal(mails(/confirme/), 1, 'le mail de l’inscription date de moins d’une minute');
+    assert.equal(mails(/confirmation/), 1, 'le mail de l’inscription date de moins d’une minute');
     t.tick((MAIL_GAP_SECONDS + 1) * 1000);
     // En rafale aussi : le compte est verrouillé le temps du contrôle.
     await Promise.all(Array.from({ length: 5 }, () => t.api('/v1/auth/resend', { json: { email } })));
-    assert.equal(mails(/confirme/), 2);
+    assert.equal(mails(/confirmation/), 2);
 
     // Même frein pour le code de mot de passe oublié, compté à part.
     for (let i = 0; i < 5; i++) assert.equal((await t.api('/v1/auth/forgot', { json: { email } })).status, 200);

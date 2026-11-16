@@ -5,6 +5,7 @@ import type { Billing } from './billing.js';
 import type { Db } from './db.js';
 import type { LicenseKeys } from './license.js';
 import type { Mailer } from './mail.js';
+import type { OAuthConfig } from './oauth.js';
 
 export interface Deps {
   db: Db;
@@ -27,6 +28,8 @@ export interface Deps {
    * Absent : pages minimales de l'API, aucune origine admise.
    */
   siteUrl?: string;
+  /** Connexion avec Google et GitHub (2026-11-16) : clients OAuth ; un fournisseur absent répond « indisponible ». */
+  oauth?: OAuthConfig;
   /** Adresse de Romain prévenue à chaque rétractation (server/withdrawal.ts) ; absente : aucun mail. */
   adminEmail?: string;
   /** Version affichée par /v1/health (paquet + commit déployé). */

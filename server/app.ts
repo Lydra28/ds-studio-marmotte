@@ -41,7 +41,7 @@ export function createApp(deps: Deps) {
   app.use('/v1/*', async (c, next) => {
     if (c.req.path === '/v1/health') return next();
     if (originCheck(deps, c.req.header(ORIGIN_HEADER)) !== 'bad') return next();
-    if (deps.originSecret?.enforce) return c.json({ error: 'Accès direct refusé : passe par api.design-system-studio.fr.' }, 403);
+    if (deps.originSecret?.enforce) return c.json({ error: 'Accès direct refusé : passer par api.design-system-studio.fr.' }, 403);
     unverified++;
     const at = clock(deps)().getTime();
     if (at - unverifiedLoggedAt >= 60_000) {
@@ -58,7 +58,7 @@ export function createApp(deps: Deps) {
   // (sans en-tête Authorization) : refusée si l'origine n'est pas le site,
   // en plus de SameSite=Lax (sous-domaines voisins compris).
   const siteOrigin = deps.siteUrl ? new URL(deps.siteUrl).origin : null;
-  const SITE_ROUTES = /^\/v1\/(auth\/[a-z]+|me|billing\/(checkout|portal|withdrawals|withdraw))$/;
+  const SITE_ROUTES = /^\/v1\/(auth\/[a-z]+|auth\/app-link\/approve|me|billing\/(checkout|portal|withdrawals|withdraw))$/;
   app.use('/v1/*', async (c, next) => {
     const origin = c.req.header('origin');
     const allowed = siteOrigin !== null && origin === siteOrigin && SITE_ROUTES.test(c.req.path);

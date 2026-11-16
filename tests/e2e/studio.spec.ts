@@ -61,7 +61,7 @@ test('assistant : ouvert par la mascotte, désactivé proprement sans compte, ma
   await page.getByRole('button', { name: 'Ouvrir Lenny' }).click();
   await expect(page.getByRole('button', { name: 'Ouvrir Lenny' })).toHaveCount(0); // une seule scène 3D
   const panel = page.getByRole('complementary', { name: 'Lenny, l’assistant' });
-  await expect(panel).toContainText('Connecte-toi à ton compte DS-Studio');
+  await expect(panel).toContainText('Se connecter à votre compte DS-Studio');
   await expect(panel.getByLabel('Message à Lenny')).toBeDisabled();
   await expect(page.locator('.bar .project')).toHaveText('Marmotte');
   await panel.getByRole('button', { name: 'Fermer Lenny' }).click();
@@ -179,6 +179,30 @@ test('compte : connexion sur la page Compte, Pro (offert) et usage affichés, as
   await expect(page.locator('.bar .project')).toHaveText('Marmotte');
 });
 
+// Connexion par le site (cadrage OAuth du 2026-11-16) : code affiché dans
+// l'app, page du site ouverte dans le navigateur, session récupérée seule.
+test('compte : « Continuer avec Google ou GitHub », code affiché, page ouverte, connecté sans mot de passe', async ({ page }) => {
+  await page.getByRole('button', { name: /^Compte,/ }).click();
+  const browser = page.getByRole('group', { name: 'Connexion par le navigateur' });
+  const opened = page.waitForEvent('popup');
+  await browser.getByRole('button', { name: 'Continuer avec Google ou GitHub' }).click();
+  await expect(browser.getByLabel('Code de connexion')).toHaveText('BCDF-GHJK');
+  await expect(browser.getByRole('link', { name: 'Rouvrir la page' })).toHaveAttribute('href', /app-link\/page\?code=BCDF-GHJK$/);
+  const tab = await opened;
+  await expect(tab.getByText('app connectée (simulé)')).toBeVisible();
+  await tab.close();
+  const account = page.getByRole('region', { name: 'Compte' });
+  await expect(account).toContainText('libre@example.com');
+  const status = await (await page.request.get('/api/account')).json();
+  expect(status.status).toBe('connected');
+  expect(status.link).toBeNull();
+  expect(JSON.stringify(status)).not.toMatch(/jeton-e2e|appareil-e2e/);
+  await page.getByRole('button', { name: 'Se déconnecter' }).click();
+  await expect(page.getByRole('form', { name: 'Compte DS-Studio' })).toBeVisible();
+  await expect(browser.getByRole('button', { name: 'Continuer avec Google ou GitHub' })).toBeVisible();
+  await page.getByRole('button', { name: '← Retour' }).click();
+});
+
 test('github : réservé à Pro, connexion par code contre le faux GitHub, dépôts listés, jetons jamais dans la page', async ({ page }) => {
   // Sondage réel du serveur local au rythme du faux GitHub (1 s), relu par la page toutes les 3 s.
   test.setTimeout(45_000);
@@ -228,13 +252,13 @@ test('onboarding : pop-in au premier lancement, compte, GitHub, Figma, passable 
   await page.goto('/');
   await page.evaluate(() => sessionStorage.removeItem('ds-onboarding'));
   await page.reload();
-  const dialog = page.getByRole('dialog', { name: 'Ton compte DS-Studio' });
+  const dialog = page.getByRole('dialog', { name: 'Compte DS-Studio' });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('button', { name: /^Étape \d sur 3/ })).toHaveCount(3);
   await page.screenshot({ path: 'test-results/onboarding-compte.png' });
   // Étapes consultables sans compte : GitHub demande d'abord le compte.
   await dialog.getByRole('button', { name: 'Suivant' }).click();
-  await expect(page.getByRole('dialog', { name: 'Ton dépôt GitHub' })).toContainText('Connecte d’abord ton compte');
+  await expect(page.getByRole('dialog', { name: 'Dépôt GitHub' })).toContainText('Connecter d’abord le compte');
   await page.getByRole('button', { name: 'Retour' }).click();
   const form = dialog.getByRole('form', { name: 'Compte DS-Studio' });
   await form.getByLabel('Adresse mail').fill('associe@example.com');
@@ -242,7 +266,7 @@ test('onboarding : pop-in au premier lancement, compte, GitHub, Figma, passable 
   await form.getByRole('button', { name: 'Se connecter' }).click();
   await expect(dialog.getByRole('status')).toContainText('associe@example.com');
   await dialog.getByRole('button', { name: 'Étape 2 sur 3 : GitHub' }).click();
-  const gh = page.getByRole('dialog', { name: 'Ton dépôt GitHub' });
+  const gh = page.getByRole('dialog', { name: 'Dépôt GitHub' });
   const popup = page.waitForEvent('popup');
   await gh.getByRole('button', { name: 'Continuer avec GitHub' }).click();
   await expect(gh.getByLabel('Code GitHub')).toHaveText('E2E0-CODE');
@@ -268,7 +292,7 @@ test('onboarding : pop-in au premier lancement, compte, GitHub, Figma, passable 
   // Rouvrable depuis la page Compte, fermée par Échap.
   await page.getByRole('button', { name: /^Compte,/ }).click();
   await page.getByRole('link', { name: 'Revoir la présentation' }).click();
-  await expect(page.getByRole('dialog', { name: 'Ton compte DS-Studio' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Compte DS-Studio' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page).not.toHaveURL(/bienvenue/);
@@ -567,7 +591,7 @@ test('comparaison côte à côte : brouillon face à l’état enregistré, rien
   const view = page.getByRole('region', { name: 'Comparaison côte à côte' });
   // Gros libellés Avant / Après ; Après = les modifications en cours.
   await expect(view.locator('.compare__tag')).toHaveText(['Avant', 'Après']);
-  await expect(view.locator('iframe[title="Droite : Tes modifications en cours"]')).toHaveCount(1);
+  await expect(view.locator('iframe[title="Droite : Modifications en cours"]')).toHaveCount(1);
   // Chaque cadre reçoit son propre jeu.
   const spaceIn = (side: string) =>
     view
@@ -593,7 +617,7 @@ test('écrans d’exemple : la preview passe d’un écran à l’autre, brouill
   const frame = page.frameLocator('iframe[title="Preview du design system"]');
   for (const [screen, heading] of [
     ['dashboard', 'Bonjour Camille'],
-    ['form', 'Ton espace'],
+    ['form', 'Votre espace'],
     ['article', 'Construire un design system qui dure'],
   ]) {
     await picker.selectOption(screen);

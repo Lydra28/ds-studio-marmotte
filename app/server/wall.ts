@@ -108,7 +108,7 @@ export class Wall {
   private async add(entry: Omit<Inspiration, 'id' | 'date'>, data: Buffer) {
     const index = await this.read();
     if (index.inspirations.length >= MAX_INSPIRATIONS)
-      throw new StudioError(`${MAX_INSPIRATIONS} inspirations au plus : retires-en une d'abord.`);
+      throw new StudioError(`${MAX_INSPIRATIONS} inspirations au plus : en retirer une d'abord.`);
     const item: Inspiration = { ...entry, id: randomUUID(), date: new Date().toISOString() };
     await fs.mkdir(this.dir, { recursive: true, mode: 0o700 });
     await atomicWrite(path.join(this.dir, `${item.id}.${imageTypes[item.type]}`), data);
@@ -130,7 +130,7 @@ export class Wall {
       try {
         data = await this.capture(url);
       } catch {
-        throw new StudioError('Capture impossible (site injoignable ou Chromium absent). Fournis la capture toi-même.', 502);
+        throw new StudioError('Capture impossible (site injoignable ou Chromium absent). Fournir la capture soi-même.', 502);
       }
       return this.add({ kind: 'capture', name: new URL(url).hostname, url, type: 'image/jpeg' }, data);
     });
@@ -188,7 +188,7 @@ export class Wall {
       await fs.mkdir(this.dir, { recursive: true, mode: 0o700 });
       await atomicWrite(path.join(this.dir, 'last-response.txt'), raw);
       const directions = parseDirections(raw, context.set).slice(0, request.count);
-      if (!directions.length) throw new StudioError('L’assistant n’a rendu aucune DA exploitable. Réessaie.', 502);
+      if (!directions.length) throw new StudioError('L’assistant n’a rendu aucune DA exploitable. Réessayer.', 502);
       const result: WallResult = {
         date: new Date().toISOString(),
         model,

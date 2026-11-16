@@ -296,7 +296,7 @@ async function showDetail() {
   fact('Coût du mois', usd(a.monthCents));
   fact('Inscription', date(a.createdAt));
   $('d-gift-text').textContent = a.gifted
-    ? 'Ce compte n’est jamais débité : tout son usage est un coût pour toi. Retirer l’accès gratuit le rend classique (plafond 200 c$).'
+    ? 'Ce compte n’est jamais débité : tout son usage est un coût pour l’éditeur. Retirer l’accès gratuit le rend classique (plafond 200 c$).'
     : 'Passer en offert : palier Pro, jamais débité, plafond ramené à 10 c$ par jour.';
   const gift = $('d-gift');
   gift.textContent = a.gifted ? 'Retirer l’accès gratuit' : 'Passer en compte offert';
@@ -337,7 +337,7 @@ $('d-gift').addEventListener('click', async () => {
   const a = accounts.find((x) => x.id === selected);
   if (!a) return;
   const on = !a.gifted;
-  if (!confirm(on ? `Offrir l’accès à ${a.email} ? Son usage sera à ta charge (10 c$ par jour au plus).` : `Retirer l’accès gratuit de ${a.email} ?`)) return;
+  if (!confirm(on ? `Offrir l’accès à ${a.email} ? Son usage sera à la charge de l’éditeur (10 c$ par jour au plus).` : `Retirer l’accès gratuit de ${a.email} ?`)) return;
   try {
     const r = await api(`/api/accounts/${a.id}/gift`, { gifted: on });
     toast(on ? `${a.email} : compte offert, plafond ${r.dailyCapCents} c$.` : `${a.email} : accès gratuit retiré.`);
@@ -399,7 +399,7 @@ ${what}${lost}`)) return;
     toast(err.message, true);
   }
 });
-if (!token) toast('Lien sans jeton : relance npm run admin:ui et utilise le lien affiché.', true);
+if (!token) toast('Lien sans jeton : relancer npm run admin:ui et utiliser le lien affiché.', true);
 else load();
 </script>
 </body>

@@ -55,16 +55,16 @@ function updateLabel(u: UpdateState | null) {
 const tierLabel = (a: AccountStatus) => (a.tier === 'pro' ? (a.gifted ? 'Pro (offert)' : 'Pro') : 'Gratuit');
 function licenseLabel(a: AccountStatus) {
   const l = a.license;
-  if (!l || l.state === 'none') return 'Pas encore de licence : actualise une fois en ligne.';
+  if (!l || l.state === 'none') return 'Pas encore de licence : actualiser une fois en ligne.';
   if (l.state === 'valid' && l.expiresAt) return `Valide jusqu’au ${day(l.expiresAt)}, renouvelée en ligne.`;
-  if (l.state === 'grace' && l.graceUntil) return `Expirée : tolérée hors ligne jusqu’au ${day(l.graceUntil)}, reconnecte-toi au réseau.`;
+  if (l.state === 'grace' && l.graceUntil) return `Expirée : tolérée hors ligne jusqu’au ${day(l.graceUntil)}, se reconnecter au réseau.`;
   if (l.state === 'expired') return 'Expirée : palier Gratuit jusqu’au prochain contact avec le serveur.';
-  return 'Illisible : actualise, ou déconnecte-toi puis reconnecte-toi.';
+  return 'Illisible : actualiser, ou se déconnecter puis se reconnecter.';
 }
 function subscriptionLabel(a: AccountStatus) {
   const s = a.subscription;
   if (!s || a.plan !== 'pro') return '';
-  if (s.status === 'past_due') return 'Paiement en attente : mets ta carte à jour (Gérer mon abonnement).';
+  if (s.status === 'past_due') return 'Paiement en attente : mettre la carte à jour (Gérer mon abonnement).';
   const end = s.currentPeriodEnd ? `Pro jusqu’au ${day(s.currentPeriodEnd)}` : 'Pro';
   return s.cancelAtPeriodEnd ? `${end}, résiliation programmée à cette date.` : `${end}, renouvelé automatiquement.`;
 }
@@ -90,6 +90,9 @@ const SUBMIT: Record<Mode, string> = {
 // fenêtre reprend la main, pendant WATCH_MS, jusqu'au changement attendu
 // (watchDone). « Actualiser » reste là.
 export const WATCH_MS = 3 * 60_000;
+// Connexion par le site : l'app demande sa session toutes les LINK_EVERY_MS
+// (même valeur que `LINK_INTERVAL` de server/oauth.ts, à changer ensemble).
+export const LINK_EVERY_MS = 2000;
 export const WATCH_EVERY_MS = 3000;
 export type WatchKind = 'credits' | 'pro' | 'portal';
 const billingKey = (a: AccountStatus | undefined) =>
@@ -140,8 +143,8 @@ export function AccountSection({
         setWatch(null);
         setNotice(
           watch.kind === 'portal'
-            ? 'Abonnement inchangé pour l’instant : si tu viens de le modifier, clique Actualiser dans un moment.'
-            : 'Pas encore de changement sur ton compte : clique Actualiser dans un moment.',
+            ? 'Abonnement inchangé pour l’instant : en cas de modification récente, cliquer Actualiser dans un moment.'
+            : 'Pas encore de changement sur le compte : cliquer Actualiser dans un moment.',
         );
         return;
       }
@@ -180,6 +183,60 @@ export function AccountSection({
       window.removeEventListener('focus', onFocus);
     };
   }, [watch]);
+  // Connexion par le site en attente : l'app demande sa session jusqu'à
+  // l'approbation sur la page « Connecter l'app ». Réseau coupé : on
+  // réessaie ; lien refusé ou expiré (le serveur local l'a retiré) : arrêt.
+  const linkCode = account?.status === 'none' ? (account.link?.userCode ?? null) : null;
+  useEffect(() => {
+    if (!linkCode) return;
+    let pending = false;
+    let cancelled = false;
+    const poll = async () => {
+      if (pending || cancelled) return;
+      pending = true;
+      try {
+        const r = await accountAction({ action: 'link-poll' });
+        if (cancelled) return;
+        onChange(r.account);
+        if (r.account.status === 'connected') {
+          accountChanged();
+          setNotice('App connectée.');
+        }
+      } catch (e) {
+        if (cancelled) return;
+        const now = await getAccount().catch(() => null);
+        if (cancelled || !now || now.link) return;
+        onChange(now);
+        // Connecté entre-temps (autre fenêtre, mot de passe) : rien à signaler.
+        if (now.status === 'none') setError((e as Error).message);
+      } finally {
+        pending = false;
+      }
+    };
+    const timer = setInterval(() => void poll(), LINK_EVERY_MS);
+    const onFocus = () => void poll();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [linkCode]);
+  const startLink = async () => {
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const r = await accountAction({ action: 'link-start' });
+      onChange(r.account);
+      // Page du site dans le navigateur : l'app installée ouvre les liens externes dehors (desktop/main.mjs).
+      if (r.account.link) window.open(r.account.link.url, '_blank', 'noopener');
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
   const run = async (action: AccountAction, fields = false, buy?: { kind: 'pro' | 'credits'; pack?: Pack }) => {
     setBusy(true);
     setError('');
@@ -200,8 +257,8 @@ export function AccountSection({
         setWatch({ kind: action === 'portal' ? 'portal' : buy?.kind === 'pro' ? 'pro' : 'credits', before: r.account, until: Date.now() + WATCH_MS });
         setNotice(
           action === 'portal'
-            ? 'Portail d’abonnement ouvert dans ton navigateur. Ton compte se met à jour ici tout seul après un changement (pendant 3 minutes).'
-            : 'Page de paiement ouverte dans ton navigateur. Ton compte se met à jour ici tout seul après le paiement (pendant 3 minutes).',
+            ? 'Page Compte du site ouverte dans le navigateur : « Gérer mon abonnement » s’y trouve. Le compte se met à jour ici tout seul après un changement (pendant 3 minutes).'
+            : 'Page de paiement ouverte dans le navigateur. Le compte se met à jour ici tout seul après le paiement (pendant 3 minutes).',
         );
       } else setPayUrl('');
       if (action === 'signup') setMode('login');
@@ -246,7 +303,7 @@ export function AccountSection({
               {a.gifted ? 'Compte offert : jamais débité.' : a.welcome ? `${euros(u.creditCents)} : une génération offerte` : 'Crédits disponibles.'}
             </p>
           ) : (
-            <p className="billing-sub">Solde indisponible hors ligne : actualise une fois en ligne.</p>
+            <p className="billing-sub">Solde indisponible hors ligne : actualiser une fois en ligne.</p>
           )}
           {u && a.plan === 'pro' && !a.gifted && (
             <p className="billing-sub">
@@ -258,7 +315,7 @@ export function AccountSection({
             </p>
           )}
           {subscriptionLabel(a) && <p className="billing-sub">{subscriptionLabel(a)}</p>}
-          {!a.gifted && !a.catalog && <p className="hint">Prix indisponibles : clique Actualiser une fois en ligne.</p>}
+          {!a.gifted && !a.catalog && <p className="hint">Prix indisponibles : cliquer Actualiser une fois en ligne.</p>}
           {!a.gifted && a.catalog && (
             <>
               <div className="form-actions">
@@ -278,7 +335,7 @@ export function AccountSection({
                 )}
               </div>
               <p className="hint">
-                Le paiement se fait sur une page Stripe dans ton navigateur ; l’app guette ensuite ton compte pendant 3 minutes.
+                Le paiement se fait sur une page Stripe dans le navigateur ; l’app guette ensuite le compte pendant 3 minutes.
                 {a.catalog.mode === 'test' ? ' Paiements de test : aucune carte réelle débitée.' : ''}
               </p>
             </>
@@ -349,8 +406,8 @@ export function AccountSection({
         <>
           <h2 id="s-account">Compte</h2>
           <p className="hint">
-            Un compte DS-Studio active Lenny, l’assistant, et le Mur des DA. Tes projets restent sur cet ordinateur : seuls la doctrine,
-            les tokens et les images que tu envoies au modèle passent par le serveur.
+            Un compte DS-Studio active Lenny, l’assistant, et le Mur des DA. Vos projets restent sur cet ordinateur : seuls la doctrine,
+            les tokens et les images envoyées au modèle passent par le serveur.
           </p>
         </>
       )}
@@ -391,7 +448,7 @@ export function AccountSection({
             />
           </label>
         )}
-        {mode === 'signup' && <p className="hint">Un mail de confirmation arrive : clique sur son lien, puis connecte-toi ici.</p>}
+        {mode === 'signup' && <p className="hint">Un mail de confirmation arrive : cliquer sur son lien, puis se connecter ici.</p>}
         {mode === 'forgot' && <p className="hint">Un code arrive par mail ; il sert à choisir un nouveau mot de passe.</p>}
         {notice && (
           <p className="message ok" role="status">
@@ -414,7 +471,47 @@ export function AccountSection({
           )}
         </div>
       </form>
+      {/* Connexion par le site : Google, GitHub ou mail, approuvée en un clic (cadrage OAuth du 2026-11-16). */}
+      <div className="account-link" aria-label="Connexion par le navigateur" role="group">
+        <p className="account-or">
+          <span>ou</span>
+        </p>
+        {account?.link ? (
+          <>
+            <p className="hint">Page ouverte dans le navigateur. Vérifier qu’elle affiche ce code, puis cliquer « Connecter l’app » :</p>
+            <p className="mono link-code" aria-label="Code de connexion">
+              {account.link.userCode}
+            </p>
+            <div className="form-actions">
+              <a className="button" href={account.link.url} target="_blank" rel="noopener noreferrer">
+                Rouvrir la page
+              </a>
+              <button type="button" disabled={busy} onClick={() => void run('link-cancel')}>
+                Annuler
+              </button>
+            </div>
+          </>
+        ) : (
+          <button type="button" className="account-link-start" disabled={busy} onClick={() => void startLink()}>
+            <GoogleMark />
+            <GithubMark />
+            Continuer avec Google ou GitHub
+          </button>
+        )}
+      </div>
     </section>
+  );
+}
+
+// Logo Google officiel (quatre couleurs, non modifié), comme sur le site.
+function GoogleMark() {
+  return (
+    <svg viewBox="0 0 48 48" width="16" height="16" aria-hidden="true" focusable="false">
+      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+    </svg>
   );
 }
 
@@ -473,12 +570,12 @@ function GithubSection({ tier }: { tier: string | undefined }) {
         {!g.pro && <GlassBadge>Pro</GlassBadge>}
       </h2>
       <p className="hint">
-        DS-Studio lit le design system d’un dépôt et propose une pull request qui modifie ses valeurs de design ; tu merges
-        toi-même sur GitHub. Le code est lu sur cet ordinateur.
+        DS-Studio lit le design system d’un dépôt et propose une pull request qui modifie ses valeurs de design ; vous mergez
+        vous-même sur GitHub. Le code est lu sur cet ordinateur.
       </p>
       {!g.pro && (
         <p className="message" role="status">
-          Réservé à DS-Studio Pro : passe Pro depuis ta page <a href={ACCOUNT_HASH}>Compte</a>.
+          Réservé à DS-Studio Pro : passer Pro depuis la page <a href={ACCOUNT_HASH}>Compte</a>.
         </p>
       )}
       {g.status === 'connected' && (
@@ -490,13 +587,13 @@ function GithubSection({ tier }: { tier: string | undefined }) {
       {g.status === 'pending' && g.userCode && (
         <div className="github-code">
           <p>
-            Saisis ce code sur <span className="mono">{g.verificationUri}</span> :
+            Saisir ce code sur <span className="mono">{g.verificationUri}</span> :
           </p>
           <p className="mono github-user-code" aria-label="Code GitHub">
             {g.userCode}
           </p>
           <p className="hint">
-            En attente de GitHub{g.expiresAt ? `, code valable jusqu’à ${time(g.expiresAt)}` : ''}. Choisis ensuite les dépôts
+            En attente de GitHub{g.expiresAt ? `, code valable jusqu’à ${time(g.expiresAt)}` : ''}. Choisir ensuite les dépôts
             auxquels DS-Studio a accès.
           </p>
         </div>
@@ -513,7 +610,7 @@ function GithubSection({ tier }: { tier: string | undefined }) {
               ))}
             </ul>
           ) : (
-            <p className="hint">Aucun dépôt accessible : ajoute DS-Studio à un dépôt sur GitHub.</p>
+            <p className="hint">Aucun dépôt accessible : ajouter DS-Studio à un dépôt sur GitHub.</p>
           )}
         </div>
       )}
@@ -587,7 +684,7 @@ export function AccountPage({ onBack, welcome = true }: { onBack: () => void; we
       <header className="home-hero">
         <div>
           <h1>Compte</h1>
-          <p className="home-lead">Ton compte DS-Studio, ton solde et ton abonnement.</p>
+          <p className="home-lead">Compte DS-Studio, solde et abonnement.</p>
         </div>
       </header>
       {error && (
@@ -666,7 +763,7 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
       <header className="home-hero">
         <div>
           <h1>Réglages</h1>
-          <p className="home-lead">Tes connexions et les mises à jour de l’app.</p>
+          <p className="home-lead">Connexions et mises à jour de l’app.</p>
         </div>
       </header>
       {error && (
@@ -694,7 +791,7 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
               Plugin Figma
             </h2>
             <p className="hint">
-              Le plugin transfère la version acceptée dans ton fichier Figma et renvoie tes composants ici. Le code
+              Le plugin transfère la version acceptée dans le fichier Figma et renvoie les composants ici. Le code
               d’appairage est dans le bouton Figma de chaque projet.
             </p>
             <p>{on(settings.services.plugin, 'Prêt à être appairé', 'Fermé')}</p>
@@ -739,16 +836,16 @@ export function SettingsPage({ onBack }: { onBack: () => void }) {
                 {!settings.services.assistant && (
                   <small className="hint">
                     {' '}
-                    {connected ? 'Ils reviennent dès que le serveur DS-Studio répond.' : 'Connecte-toi à ton compte DS-Studio (page Compte).'}
+                    {connected ? 'Ils reviennent dès que le serveur DS-Studio répond.' : 'Se connecter à votre compte DS-Studio (page Compte).'}
                   </small>
                 )}
               </dd>
               <dt>Site en direct</dt>
               <dd>{on(settings.services.relay, 'Relais actif', 'Relais arrêté')}</dd>
               <dt>Pull request GitHub</dt>
-              <dd>{on(settings.services.github, 'Par ta connexion GitHub', 'GitHub non connecté')}</dd>
+              <dd>{on(settings.services.github, 'Par la connexion GitHub', 'GitHub non connecté')}</dd>
             </dl>
-            <p className="hint">Tes projets restent sur cet ordinateur. Rien n’est envoyé ailleurs sans ton action.</p>
+            <p className="hint">Vos projets restent sur cet ordinateur. Rien n’est envoyé ailleurs sans votre action.</p>
             {settings.desktop && settings.projects && (
               <div className="form-actions">
                 <button disabled={busy} onClick={() => void act('choose-projects')}>

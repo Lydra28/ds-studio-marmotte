@@ -145,8 +145,8 @@ function AccountStep({ account }: { account: AccountStatus | undefined }) {
   const connected = account?.status === 'connected';
   return (
     <>
-      <h2 id="onb-title" tabIndex={-1}>Ton compte DS-Studio</h2>
-      <p className="onb-lead">Il active Lenny, l’assistant, et le Mur des DA. Tes projets restent sur cet ordinateur.</p>
+      <h2 id="onb-title" tabIndex={-1}>Compte DS-Studio</h2>
+      <p className="onb-lead">Il active Lenny, l’assistant, et le Mur des DA. Vos projets restent sur cet ordinateur.</p>
       {connected ? (
         <div className="onb-done" role="status">
           <Avatar account={account} />
@@ -279,13 +279,13 @@ function GithubStep({
   };
   return (
     <>
-      <h2 id="onb-title" tabIndex={-1}>Ton dépôt GitHub</h2>
+      <h2 id="onb-title" tabIndex={-1}>Dépôt GitHub</h2>
       <p className="onb-lead">
-        DS-Studio lit le design system de ton dépôt, tu le modifies ici, et chaque version acceptée part en pull request sur une
-        branche. Tu merges toi-même.
+        DS-Studio lit le design system de votre dépôt, vous le modifiez ici, et chaque version acceptée part en pull request sur une
+        branche. Vous mergez vous-même.
       </p>
       {!connected ? (
-        <p className="hint">Connecte d’abord ton compte DS-Studio (étape précédente).</p>
+        <p className="hint">Connecter d’abord le compte DS-Studio (étape précédente).</p>
       ) : !gh ? (
         error ? (
           <div className="form-actions">
@@ -312,7 +312,7 @@ function GithubStep({
             <span>
               GitHub fait partie de DS-Studio Pro.{' '}
               <a href={ACCOUNT_HASH} onClick={onAccount}>
-                Voir sur ta page Compte
+                Voir sur la page Compte
               </a>
             </span>
           </p>
@@ -322,7 +322,7 @@ function GithubStep({
           {gh.userCode ? (
             <>
               <p>
-                Saisis ce code sur <span className="mono">{gh.verificationUri}</span> :
+                Saisir ce code sur <span className="mono">{gh.verificationUri}</span> :
               </p>
               <p className="mono github-user-code" aria-label="Code GitHub">
                 {gh.userCode}
@@ -352,7 +352,7 @@ function GithubStep({
                 <button onClick={readRepos}>Relire mes dépôts</button>
               </div>
             ) : (
-              <p className="hint">Lecture de tes dépôts…</p>
+              <p className="hint">Lecture des dépôts…</p>
             )
           ) : repos.length ? (
             <div className="onb-repo">
@@ -379,7 +379,7 @@ function GithubStep({
             </div>
           ) : (
             <div className="form-actions">
-              <p className="hint">Aucun dépôt accessible : ajoute DS-Studio à un dépôt sur GitHub.</p>
+              <p className="hint">Aucun dépôt accessible : ajouter DS-Studio à un dépôt sur GitHub.</p>
               <button onClick={() => openUrl(gh.installUrl)}>Ajouter un dépôt</button>
               <button onClick={readRepos}>Relire mes dépôts</button>
             </div>
@@ -391,7 +391,7 @@ function GithubStep({
             <GithubMark size={18} />
             Continuer avec GitHub
           </button>
-          <p className="hint">Un code s’affiche ici, à saisir sur github.com. Puis tu choisis les dépôts que DS-Studio peut lire.</p>
+          <p className="hint">Un code s’affiche ici, à saisir sur github.com. Puis choisir les dépôts que DS-Studio peut lire.</p>
         </div>
       )}
       {gh?.message && (
@@ -417,7 +417,7 @@ function FigmaStep({ plugin }: { plugin: string | null }) {
         <GlassBadge>Bientôt disponible</GlassBadge>
       </h2>
       <p className="onb-lead">
-        Il envoie la version acceptée dans ton fichier Figma (variables et styles) et renvoie tes composants ici, à relire par
+        Il envoie la version acceptée dans le fichier Figma (variables et styles) et renvoie les composants ici, à relire par
         diff.
       </p>
       <ol className="onb-list">
@@ -425,7 +425,7 @@ function FigmaStep({ plugin }: { plugin: string | null }) {
           Dans Figma : Plugins, rechercher « DS-Studio » dans la Community (en cours de validation par Figma), puis l’ajouter.
         </li>
         <li>
-          Ouvre ton fichier, lance DS-Studio et colle le code d’appairage :{' '}
+          Ouvrir le fichier, lancer DS-Studio et coller le code d’appairage :{' '}
           {plugin ? <code className="pair">{plugin}</code> : 'il s’affiche dans le bouton Figma de chaque projet'}.
         </li>
         <li>« Transférer » écrit la dernière version acceptée ; « Envoyer les composants » les renvoie ici.</li>

@@ -78,7 +78,7 @@ export function readTarGz(archive: Buffer, limits: TarLimits): TarResult {
     const code = (e as NodeJS.ErrnoException).code;
     throw new Error(
       code === 'ERR_BUFFER_TOO_LARGE' || /maxOutputLength|buffer/i.test(String((e as Error).message))
-        ? `Dépôt trop volumineux (plus de ${Math.round(limits.maxBytes / 1e6)} Mo décompressés) : choisis un sous-dossier.`
+        ? `Dépôt trop volumineux (plus de ${Math.round(limits.maxBytes / 1e6)} Mo décompressés) : choisir un sous-dossier.`
         : 'Archive du dépôt illisible.',
     );
   }

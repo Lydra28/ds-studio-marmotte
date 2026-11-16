@@ -178,7 +178,7 @@ export function PreviewScreen({ set }: { set: TokenSet }) {
             label="E-mail"
             type="email"
             placeholder="camille@"
-            error="Ajoute une adresse complète pour recevoir les alertes."
+            error="Ajouter une adresse complète pour recevoir les alertes."
           />
           <Input label="Champ désactivé" placeholder="Non disponible" disabled />
           <Button>{sent ? 'Enregistré ✓' : 'Enregistrer'}</Button>
@@ -233,8 +233,8 @@ export function PreviewGap({ set, site = false }: { set: TokenSet; site?: boolea
   return (
     <p className="hint preview-gap" role="note">
       Les écrans d’exemple lisent les noms du gabarit (<code>bg/brand</code>, <code>text/primary</code>…), absents de
-      ce projet : ils ne suivent pas tes tokens. Tes tokens sont sur la planche.
-      {site ? ' Ton site avec tes tokens : « Site en direct ».' : ''}
+      ce projet : ils ne suivent pas vos tokens. Vos tokens sont sur la planche.
+      {site ? ' Votre site avec vos tokens : « Site en direct ».' : ''}
     </p>
   );
 }
@@ -334,7 +334,7 @@ function DashboardScreen({ set }: { set: TokenSet }) {
         </section>
         <div className="ds-banner">
           <p>
-            <strong>Une alerte demande ton attention.</strong> Le contraste du bouton secondaire est sous 4,5:1.
+            <strong>Une alerte demande votre attention.</strong> Le contraste du bouton secondaire est sous 4,5:1.
           </p>
           <Button variant="secondary">Corriger</Button>
         </div>
@@ -352,8 +352,8 @@ function FormScreen({ set }: { set: TokenSet }) {
       <main>
         <div className="ds-intro">
           <p className="ds-kicker">Inscription · étape 2 sur 3</p>
-          <h1>Ton espace</h1>
-          <p className="ds-lead">Quelques informations pour préparer ton compte.</p>
+          <h1>Votre espace</h1>
+          <p className="ds-lead">Quelques informations pour préparer votre compte.</p>
         </div>
         <div className="ds-progress" aria-hidden="true">
           <span className="done" />
@@ -371,7 +371,7 @@ function FormScreen({ set }: { set: TokenSet }) {
             <Input label="Prénom" placeholder="Camille" />
             <Input label="Nom" placeholder="Martin" />
           </div>
-          <Input label="Adresse e-mail" type="email" placeholder="camille@" error="Ajoute une adresse complète." />
+          <Input label="Adresse e-mail" type="email" placeholder="camille@" error="Ajouter une adresse complète." />
           <fieldset className="ds-choices">
             <legend>Formule</legend>
             {[
@@ -424,7 +424,7 @@ function ArticleScreen({ set }: { set: TokenSet }) {
         <aside className="ds-cta">
           <div>
             <strong>Prêt à essayer ?</strong>
-            <p>Change une couleur dans l’atelier et regarde cette page suivre.</p>
+            <p>Changer une couleur dans l’atelier et regarder cette page suivre.</p>
           </div>
           <Button variant="secondary">Commencer</Button>
         </aside>

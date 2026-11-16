@@ -21,6 +21,8 @@ export const RETENTION = {
   warningDays: 30,
   /** Jeton de mail expiré : gardé ce délai (traces d'un abus), puis supprimé. */
   emailTokenDays: 30,
+  /** Code de connexion de l'app (oauth.ts) : supprimé dès son expiration (10 min). */
+  appLinkDays: 0,
   /** Usage appel par appel ; au-delà, total mensuel par compte et origine. */
   usageDetailMonths: 12,
   /** Compte supprimé qui a acheté : ligne anonymisée gardée ce délai. */
@@ -100,7 +102,7 @@ export async function deleteAccount(db: Db, accountId: string, now: Date): Promi
 }
 
 async function purgeDetail(tx: Tx, accountId: string) {
-  for (const table of ['sessions', 'email_tokens', 'usage_events', 'usage_monthly'])
+  for (const table of ['sessions', 'email_tokens', 'usage_events', 'usage_monthly', 'account_identities', 'app_links'])
     await tx.query(`DELETE FROM ${table} WHERE account_id = $1`, [accountId]);
   // Achats gardés (pièces comptables), sans le nom donné à une rétractation.
   await tx.query('UPDATE purchases SET withdrawal_name = NULL WHERE account_id = $1', [accountId]);
@@ -112,6 +114,7 @@ export interface PurgeReport {
   inactive: number;
   sessions: number;
   emailTokens: number;
+  appLinks: number;
   usageRolledUp: number;
   ledgerExpired: number;
   errors: string[];
@@ -119,7 +122,7 @@ export interface PurgeReport {
 
 export const formatPurge = (r: PurgeReport) =>
   `${r.unverified} compte(s) non confirmé(s), ${r.warned} avertissement(s), ${r.inactive} compte(s) inactif(s), ` +
-  `${r.sessions} session(s), ${r.emailTokens} jeton(s) de mail, ${r.usageRolledUp} appel(s) résumé(s), ${r.ledgerExpired} ligne(s) de plus de 10 ans` +
+  `${r.sessions} session(s), ${r.emailTokens} jeton(s) de mail, ${r.appLinks} code(s) de l’app, ${r.usageRolledUp} appel(s) résumé(s), ${r.ledgerExpired} ligne(s) de plus de 10 ans` +
   (r.errors.length ? ` ; ${r.errors.length} erreur(s) : ${r.errors.join(' | ')}` : '');
 
 /**
@@ -128,7 +131,7 @@ export const formatPurge = (r: PurgeReport) =>
  * connexion du mail d'avertissement.
  */
 export async function purge(db: Db, mailer: Mailer, now: Date, siteUrl?: string): Promise<PurgeReport> {
-  const report: PurgeReport = { unverified: 0, warned: 0, inactive: 0, sessions: 0, emailTokens: 0, usageRolledUp: 0, ledgerExpired: 0, errors: [] };
+  const report: PurgeReport = { unverified: 0, warned: 0, inactive: 0, sessions: 0, emailTokens: 0, appLinks: 0, usageRolledUp: 0, ledgerExpired: 0, errors: [] };
   const step = async (name: string, fn: () => Promise<void>) => {
     try {
       await fn();
@@ -170,11 +173,11 @@ export async function purge(db: Db, mailer: Mailer, now: Date, siteUrl?: string)
       try {
         await mailer.send({
           to: a.email,
-          subject: 'DS-Studio : ton compte sera supprimé dans 30 jours',
+          subject: 'DS-Studio : votre compte sera supprimé dans 30 jours',
           text:
-            `Bonjour,\n\nTu ne t’es pas connecté à ton compte DS-Studio depuis ${RETENTION.inactiveYears} ans. ` +
+            `Bonjour,\n\nVous ne vous êtes pas connecté à votre compte DS-Studio depuis ${RETENTION.inactiveYears} ans. ` +
             `Sans connexion d’ici le ${date}, il sera supprimé avec son historique d’usage.\n\n` +
-            `Pour le garder, connecte-toi simplement ${where}.\n\nTes projets restent sur ton poste : ils ne sont pas concernés.`,
+            `Pour le garder, il suffit de vous connecter ${where}.\n\nVos projets restent sur votre poste : ils ne sont pas concernés.`,
         });
         await db.query('UPDATE accounts SET inactivity_warned_at = $2 WHERE id = $1', [a.id, now]);
         report.warned++;
@@ -200,6 +203,10 @@ export async function purge(db: Db, mailer: Mailer, now: Date, siteUrl?: string)
 
   await step('jetons de mail', async () => {
     report.emailTokens = (await db.query('DELETE FROM email_tokens WHERE expires_at < $1 RETURNING 1', [minusDays(now, RETENTION.emailTokenDays)])).rows.length;
+  });
+
+  await step('codes de l’app', async () => {
+    report.appLinks = (await db.query('DELETE FROM app_links WHERE expires_at < $1 RETURNING 1', [minusDays(now, RETENTION.appLinkDays)])).rows.length;
   });
 
   await step('usage', async () => {

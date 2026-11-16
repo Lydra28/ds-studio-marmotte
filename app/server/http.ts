@@ -37,7 +37,7 @@ const desktopActionSchema = z
 // Compte DS-Studio depuis Réglages : adresse et mot de passe ne font que passer, jamais gardés ici.
 const accountSchema = z
   .object({
-    action: z.enum(['signup', 'login', 'forgot', 'reset', 'logout', 'refresh', 'checkout', 'portal']),
+    action: z.enum(['signup', 'login', 'forgot', 'reset', 'logout', 'refresh', 'checkout', 'portal', 'link-start', 'link-poll', 'link-cancel']),
     email: z.string().trim().max(200).optional(),
     password: z.string().max(200).optional(),
     code: z.string().trim().max(200).optional(),
@@ -59,6 +59,7 @@ const repoActionSchema = z
   .strict();
 const NO_ACCOUNT: AccountStatus = {
   status: 'none',
+  link: null,
   online: true,
   email: null,
   tier: 'free',
@@ -134,7 +135,7 @@ export async function createStudioServer(
       let result;
       if (config.github.source === 'repo') {
         const plan = await readPlan(dataDir);
-        if (!plan) throw new StudioError('Lis le dépôt (bouton Dépôt) avant de publier : aucun plan de remplacement à jour.', 409);
+        if (!plan) throw new StudioError('Lire le dépôt (bouton Dépôt) avant de publier : aucun plan de remplacement à jour.', 409);
         const auth = options.githubAuth;
         const target = config.github;
         result = await publishRepoVersion(access, target, version, plan, async (sha) => {
@@ -188,7 +189,7 @@ export async function createStudioServer(
       const pluginRoute = pluginUrl.pathname.startsWith('/api/plugin/');
       if (req.headers.host !== `127.0.0.1:${port}` && !(pluginRoute && req.headers.host === `localhost:${port}`))
         throw new StudioError(
-          'Hôte refusé. Utilisez l’adresse 127.0.0.1 affichée au démarrage.',
+          'Hôte refusé : utiliser l’adresse 127.0.0.1 affichée au démarrage.',
           403,
         );
       if (pluginRoute)
@@ -293,7 +294,7 @@ export async function createStudioServer(
           throw new StudioError('Méthode non autorisée.', 405);
         if (req.headers['x-ds-studio'] !== csrf)
           throw new StudioError(
-            'Validation de session manquante. Rechargez la page.',
+            'Validation de session manquante : recharger la page.',
             403,
           );
         if (!req.headers['content-type']?.startsWith('application/json'))
@@ -340,6 +341,9 @@ export async function createStudioServer(
           else if (b.action === 'logout') await a.logout();
           else if (b.action === 'checkout') url = (await a.checkout(b.kind ?? 'credits', b.pack)).url;
           else if (b.action === 'portal') url = (await a.portal()).url;
+          else if (b.action === 'link-start') await a.linkStart();
+          else if (b.action === 'link-poll') await a.linkPoll();
+          else if (b.action === 'link-cancel') a.linkCancel();
           else await a.refresh();
           return send(200, { ok: true, message, url, account: a.status() });
         }
@@ -408,7 +412,7 @@ export async function createStudioServer(
             const subdir = cleanSubdir(b.subdir);
             current = await registry.updateConfig(typeof header === 'string' ? header : undefined, (c) => withRepo(c, b.repo!, b.base ?? '', subdir));
           }
-          if (!current.github) throw new StudioError('Ce projet n’a pas de dépôt : rattache-le d’abord.', 409);
+          if (!current.github) throw new StudioError('Ce projet n’a pas de dépôt : le rattacher d’abord.', 409);
           const snapshot = store.snapshot();
           const mode = b.mode === 'create' && snapshot.revision === 0 ? 'create' : 'attach';
           return send(200, { config: current, mode, ...(await readProjectRepo(g, store.directory, current.github, snapshot.set, mode)) });
@@ -419,10 +423,10 @@ export async function createStudioServer(
           if (!g) throw new StudioError('GitHub indisponible dans cette instance.', 409);
           await g.token();
           if (!assistant.status.enabled && assistant.status.reason === 'account')
-            throw new StudioError('Connecte ton compte DS-Studio (Réglages) pour demander à l’agent.', 503);
+            throw new StudioError('Connecter votre compte DS-Studio (Réglages) pour demander à l’agent.', 503);
           const plan = await readPlan(store.directory);
           if (!plan || !config.github || plan.repo !== config.github.repo)
-            throw new StudioError('Relis le dépôt avant de demander à l’agent.', 409);
+            throw new StudioError('Relire le dépôt avant de demander à l’agent.', 409);
           // Branche lue (le commit du plan n'est qu'un préfixe) : ligne changée depuis, sans la valeur → jamais envoyée.
           const files = new Map((await readRepoFiles(g, plan.repo, plan.ref, plan.subdir)).map((f) => [f.path, f.text]));
           return send(200, repoAgent.preview(store.directory, plan, files));
@@ -538,7 +542,7 @@ export async function createStudioServer(
         return send(error.status, { error: error.message });
       if ((error as NodeJS.ErrnoException).code === 'ENOENT')
         return send(404, {
-          error: 'Fichier introuvable. Exécutez npm run build avant npm start.',
+          error: 'Fichier introuvable : exécuter npm run build avant npm start.',
         });
       return send(500, { error: urlSafeMessage(error) });
     }
@@ -575,5 +579,5 @@ function urlSafeMessage(error: unknown) {
     /^(Token inconnu|Token déjà existant|Token utilisé|Composant inconnu|Mode inconnu|Un token ne peut|Alias circulaire)/.test(message)
   )
     return message;
-  return 'Opération impossible. Aucune validation automatique. Vérifiez les données et relancez si nécessaire.';
+  return 'Opération impossible. Aucune validation automatique : vérifier les données et relancer si nécessaire.';
 }

@@ -427,7 +427,7 @@ function Workspace({
     const users = draftSet && !checked ? referrers(draftSet, key) : [];
     if (users.length) {
       setNotice('');
-      setError(`${key} est utilisé par ${users.join(', ')} : change ces alias avant de le retirer.`);
+      setError(`${key} est utilisé par ${users.join(', ')} : changer ces alias avant de le retirer.`);
       return;
     }
     setError('');
@@ -458,7 +458,7 @@ function Workspace({
       else if (c.op === 'remove') remove(c.key, true);
       else saveComponent(c.name, c.component);
     }
-    setNotice(`${list.length} changement(s) ${from} mis en brouillon : relis le diff avant de valider.`);
+    setNotice(`${list.length} changement(s) ${from} mis en brouillon : relire le diff avant de valider.`);
   };
   const reviewDrafts = () =>
     run(async () => setProposal(await propose(state!.revision, changes)));
@@ -492,8 +492,8 @@ function Workspace({
       const code = config?.github
         ? connected
           ? config.github.source === 'repo'
-            ? ` La pull request DS-Studio de ${config.github.repo} (branche ds-studio/design-system) sera ouverte ou mise à jour : le code est réécrit d’après la dernière lecture du dépôt ; rien n’arrive sur ${config.github.base} sans ton merge.`
-            : ` Une pull request sera ouverte sur ${config.github.repo} (branche ds-studio/v${state!.revision}) ; rien n’arrive sur ${config.github.base} sans ton merge.`
+            ? ` La pull request DS-Studio de ${config.github.repo} (branche ds-studio/design-system) sera ouverte ou mise à jour : le code est réécrit d’après la dernière lecture du dépôt ; rien n’arrive sur ${config.github.base} sans votre merge.`
+            : ` Une pull request sera ouverte sur ${config.github.repo} (branche ds-studio/v${state!.revision}) ; rien n’arrive sur ${config.github.base} sans votre merge.`
           : ' GitHub n’est pas connecté (Réglages → GitHub) : la pull request ne sera pas ouverte.'
         : '';
       setComparison({
@@ -618,10 +618,10 @@ function Workspace({
             disabled={busy || draftCount > 0 || !!accepted}
             title={
               draftCount
-                ? 'Valide ou abandonne le brouillon avant d’accepter.'
+                ? 'Valider ou abandonner le brouillon avant d’accepter.'
                 : accepted
                   ? `Déjà acceptée : v${accepted.revision}`
-                  : 'Fige cette révision pour le transfert Figma'
+                  : 'Figer cette révision pour le transfert Figma'
             }
             onClick={reviewAcceptance}
           >
@@ -763,7 +763,7 @@ function Workspace({
               return;
             }
             draftChanges(layer.changes, 'de la couche sémantique');
-            setNotice(`${layer.notes.join(' ')} Relis le diff avant de valider.`);
+            setNotice(`${layer.notes.join(' ')} Relire le diff avant de valider.`);
             setRepoPanel(null);
           }}
         />
@@ -829,7 +829,7 @@ function Workspace({
             onFix={(f) => f.fix && edit(f.fix.key, f.fix.mode, f.fix.value)}
             onFixAll={(list) => {
               for (const f of list) if (f.fix) edit(f.fix.key, f.fix.mode, f.fix.value);
-              setNotice(`${list.length} correction(s) mises en brouillon : relis le diff avant de valider.`);
+              setNotice(`${list.length} correction(s) mises en brouillon : relire le diff avant de valider.`);
             }}
           />
         </aside>

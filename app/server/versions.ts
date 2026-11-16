@@ -29,7 +29,7 @@ export async function acceptVersion(
 ): Promise<VersionSummary> {
   if (revision !== state.revision)
     throw new StudioError(
-      'Le Design System a changé depuis votre affichage. Rechargez avant d’accepter.',
+      'Le Design System a changé depuis l’affichage : recharger avant d’accepter.',
       409,
     );
   const folder = path.join(projectDir, 'versions');

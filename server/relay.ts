@@ -136,8 +136,8 @@ export const MAX_COMPLETION_TOKENS = 32_000;
 export const MAX_PARALLEL = 2;
 /** Marge de la source débitée, centimes d'euro, pour un second appel en même temps ; en dessous, un seul à la fois. */
 export const PARALLEL_MARGIN_CENTS = 100;
-const BUSY = 'Une génération est déjà en cours sur ce compte : attends sa fin, puis réessaie.';
-const BUSY_LOW = `Une génération est déjà en cours sur ce compte et il reste moins de ${PARALLEL_MARGIN_CENTS / 100} € à débiter : une seule à la fois. Attends sa fin, puis réessaie.`;
+const BUSY = 'Une génération est déjà en cours sur ce compte : attendre sa fin, puis réessayer.';
+const BUSY_LOW = `Une génération est déjà en cours sur ce compte et il reste moins de ${PARALLEL_MARGIN_CENTS / 100} € à débiter : une seule à la fois. Attendre sa fin, puis réessayer.`;
 
 // Appels en cours par compte (revue du 2026-11-13, n° 1). Le solde et le
 // plafond sont lus avant l'appel, le débit arrive après : sans cette garde,
@@ -218,8 +218,8 @@ export function relayRoutes(deps: Deps) {
     if (charged === 'credits' && me.creditCents <= 0) {
       throw new ApiError(
         me.plan === 'pro'
-          ? 'Usage inclus du mois épuisé et solde de crédits à zéro : recharge des crédits dans Réglages → Compte.'
-          : 'Solde de crédits à zéro : recharge des crédits dans Réglages → Compte pour utiliser l’agent et le Mur.',
+          ? 'Usage inclus du mois épuisé et solde de crédits à zéro : recharger des crédits dans Réglages → Compte.'
+          : 'Solde de crédits à zéro : recharger des crédits dans Réglages → Compte pour utiliser l’agent et le Mur.',
         402,
       );
     }
@@ -264,7 +264,7 @@ export function relayRoutes(deps: Deps) {
           signal,
         });
       } catch {
-        throw new ApiError('OpenRouter injoignable (réseau ou délai dépassé). Réessaie.', 502);
+        throw new ApiError('OpenRouter injoignable (réseau ou délai dépassé) : réessayer.', 502);
       }
       const data = (await res.json().catch(() => ({}))) as Completion;
       if (!res.ok) {
@@ -274,7 +274,7 @@ export function relayRoutes(deps: Deps) {
       // 200 sans réponse ni usage (fournisseur tombé en cours d'appel, vu le
       // 2026-11-04) : échec, rien compté, au lieu d'un événement à 0.
       if (!data.choices?.length && !data.usage)
-        throw new ApiError(`OpenRouter n’a rendu aucune réponse${data.error?.message ? ' : ' + data.error.message.slice(0, 200) : ''}. Réessaie.`, 502);
+        throw new ApiError(`OpenRouter n’a rendu aucune réponse${data.error?.message ? ' : ' + data.error.message.slice(0, 200) : ''}. Réessayer.`, 502);
 
       // Comptage : coût lu dans la réponse (crédits OpenRouter = dollars), sinon
       // estimé par les prix publics, sinon inconnu (0, signalé).

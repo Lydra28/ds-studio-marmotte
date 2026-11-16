@@ -16,30 +16,30 @@ le logo de l'app `desktop/icon.png` ; ne pas les retoucher à la main.
 
 Nom : DS-Studio
 
-Accroche (tagline) : Écrit la version acceptée de ton design system dans
-Figma, et renvoie tes composants à l'atelier.
+Accroche (tagline) : Écrit la version acceptée de votre design system dans
+Figma, et renvoie vos composants à l'atelier.
 
 Description :
 
-DS-Studio est un atelier de design system installé sur ton poste (Windows,
-macOS, Linux). Tu y fais évoluer tes tokens avec un aperçu en direct, des
-règles de correction et un historique de versions acceptées. Ce plugin relie
-Figma à cet atelier, sur ton ordinateur seulement.
+DS-Studio est un atelier de design system installé sur votre poste
+(Windows, macOS, Linux), pour faire évoluer vos tokens avec un aperçu en
+direct, des règles de correction et un historique de versions acceptées. Ce
+plugin relie Figma à cet atelier, sur votre ordinateur seulement.
 
-Ce que le plugin écrit dans ton fichier : les variables (collections
+Ce que le plugin écrit dans votre fichier : les variables (collections
 dédiées) et le composant Button de la dernière version acceptée, dans une
 page qui lui est réservée. Il ne renomme rien et ne touche pas à ce qu'il
 n'a pas créé.
 
 Ce que le plugin lit : la liste des composants du fichier, pour les renvoyer
 à l'atelier sous forme de fiches à importer ; la sélection courante, résumée
-en lecture seule et seulement si tu coches la case, pour l'assistant.
+en lecture seule et seulement si la case est cochée, pour l'assistant.
 
-Remise à zéro : supprime uniquement ce que DS-Studio a écrit, après t'avoir
+Remise à zéro : supprime uniquement ce que DS-Studio a écrit, après avoir
 montré la liste et demandé une confirmation.
 
-Réseau : le plugin parle uniquement à l'application DS-Studio sur ton poste
-(localhost). Aucune donnée ne quitte ton ordinateur. Il faut l'application
+Réseau : le plugin parle uniquement à l'application DS-Studio sur votre poste
+(localhost). Aucune donnée ne quitte votre ordinateur. Il faut l'application
 DS-Studio installée et un code d'appairage affiché par celle-ci.
 
 Catégorie : Design tools.

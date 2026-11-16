@@ -50,7 +50,7 @@ async function chooseProjects(cancelLabel) {
   const { response } = await dialog.showMessageBox({
     type: 'question',
     title: appName,
-    message: 'Où ranger tes projets ?',
+    message: 'Où ranger les projets ?',
     detail: `Par défaut : ${fallback}\nOu un dossier qui contient déjà des projets DS-Studio (par exemple studio/projects).`,
     buttons: ['Dossier par défaut', 'Choisir un dossier…', cancelLabel],
     defaultId: 0,
@@ -74,7 +74,7 @@ async function chooseProjects(cancelLabel) {
       type: 'warning',
       title: appName,
       message: 'Ce dossier ne contient aucun projet DS-Studio.',
-      detail: `${folder}\nChoisis le dossier qui contient tes projets (par exemple studio/projects), ou un dossier vide pour repartir de zéro.`,
+      detail: `${folder}\nChoisir le dossier qui contient les projets (par exemple studio/projects), ou un dossier vide pour repartir de zéro.`,
       buttons: ['Choisir un autre dossier', 'Utiliser quand même', cancelLabel],
       defaultId: 0,
       cancelId: 2,
@@ -287,7 +287,7 @@ async function run(projects) {
     dialog.showErrorBox(
       `${appName} ne démarre pas`,
       busy
-        ? `Un autre DS-Studio utilise déjà le port ${PORT} ou ce dossier de projets (un « npm start » ?). Ferme-le, puis relance l'app.\n\n${e.message}`
+        ? `Un autre DS-Studio utilise déjà le port ${PORT} ou ce dossier de projets (un « npm start » ?). Le fermer, puis relancer l'app.\n\n${e.message}`
         : e.message,
     );
     app.quit();

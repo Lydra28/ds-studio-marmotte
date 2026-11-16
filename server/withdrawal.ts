@@ -146,7 +146,7 @@ export async function markRefunded(db: Pick<Db, 'query'>, purchaseId: number, no
 
 const withdrawBody = z.object({
   purchaseId: z.number().int().positive(),
-  name: z.string().trim().min(2, 'Indique ton nom.').max(120),
+  name: z.string().trim().min(2, 'Nom requis.').max(120),
 });
 
 export function withdrawalRoutes(deps: Deps) {
@@ -174,9 +174,9 @@ export function withdrawalRoutes(deps: Deps) {
     try {
       await deps.mailer.send({
         to: me.email,
-        subject: 'DS-Studio : accusé de réception de ta rétractation',
+        subject: 'DS-Studio : accusé de réception de votre rétractation',
         text:
-          `Bonjour ${input.name},\n\nNous avons reçu ta rétractation le ${received} pour : ${r.label}.\n\n${refund}\n` +
+          `Bonjour ${input.name},\n\nNous avons reçu votre rétractation le ${received} pour : ${r.label}.\n\n${refund}\n` +
           (r.kind === 'pro' ? '\nL’abonnement Pro est résilié sans renouvellement, et son usage inclus est arrêté.\n' : '') +
           `\nRomain Aubert, DS-Studio`,
       });

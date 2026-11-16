@@ -157,7 +157,7 @@ export default function AssistantPanel({
               <>Serveur DS-Studio injoignable : Lenny revient avec le réseau. Tout le reste fonctionne sans lui.</>
             ) : (
               <>
-                Connecte-toi à ton compte DS-Studio dans <a href="#/reglages">Réglages</a> pour parler à Lenny. Tout le
+                Se connecter à votre compte DS-Studio dans <a href="#/reglages">Réglages</a> pour parler à Lenny. Tout le
                 reste fonctionne sans lui.
               </>
             )}

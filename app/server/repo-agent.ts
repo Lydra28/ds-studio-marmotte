@@ -178,7 +178,7 @@ export function createRepoAgent(options: { now?: () => number } = {}) {
     async send(project: string, nonce: string, set: TokenSet, relay: Relay) {
       sweep();
       const p = pending.get(nonce);
-      if (!p || p.project !== project) throw new StudioError('Aperçu expiré ou inconnu : redemande à l’agent, rien n’a été envoyé.', 409);
+      if (!p || p.project !== project) throw new StudioError('Aperçu expiré ou inconnu : redemander à l’agent, rien n’a été envoyé.', 409);
       pending.delete(nonce);
       const data = await relay({
         messages: prompt(set, p.values, p.excerpts),

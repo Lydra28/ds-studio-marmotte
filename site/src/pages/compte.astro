@@ -1,5 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
+import OAuthButtons from '../components/OAuthButtons.astro';
 import { API } from '../lib/site';
 ---
 
@@ -27,6 +28,7 @@ import { API } from '../lib/site';
           <label>Mot de passe<input name="password" type="password" autocomplete="current-password" required /></label>
           <button class="primary" type="submit">Se connecter</button>
         </form>
+        <OAuthButtons />
       </div>
 
       <div data-pane="signup" hidden>
@@ -47,6 +49,7 @@ import { API } from '../lib/site';
           </p>
           <button class="primary" type="submit">Créer mon compte</button>
         </form>
+        <OAuthButtons />
         <h2>Mail de confirmation perdu ?</h2>
         <form data-form="resend">
           <label>Adresse mail<input name="email" type="email" autocomplete="email" required /></label>

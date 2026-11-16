@@ -32,7 +32,7 @@ test('compte : inscription, confirmation, connexion, licence pro offerte, relais
   const account = await open();
   assert.equal(account.status().status, 'none');
   assert.deepEqual(account.enabled(), { enabled: false, reason: 'account' });
-  await assert.rejects(account.relay({ messages: [] }, 'assistant'), /connecte-toi/i);
+  await assert.rejects(account.relay({ messages: [] }, 'assistant'), /se connecter/i);
 
   assert.match(await account.signup(user.email, user.password), /mail de confirmation/);
   await assert.rejects(account.signup(user.email, user.password), /existe déjà/);
@@ -169,11 +169,11 @@ test('compte : bienvenue, achats (URL Stripe transmise), passage Pro vu sans att
   assert.equal(account.status().tier, 'free');
   assert.equal((await account.refresh()).welcome, false, 'bienvenue consommée');
 
-  // Achats : portail refusé avant le premier achat ; Checkout rend l'URL de Stripe, telle quelle.
-  await assert.rejects(account.portal(), /rien à gérer/);
+  // Achats : Checkout rend l'URL de Stripe, telle quelle. Portail jamais ouvert par l'app :
+  // elle reçoit la page Compte du site (ici sans site : page de l'API), où il redemande le cookie.
   assert.equal((await account.checkout('credits', '10')).url, 'https://checkout.stripe.test/payment');
   assert.equal((await account.checkout('pro')).url, 'https://checkout.stripe.test/subscription');
-  assert.match((await account.portal()).url, /portal\.stripe\.test/);
+  assert.equal((await account.portal()).url, 'http://server.test/v1/billing/done?s=portal');
   assert.ok(!JSON.stringify(account.status()).includes('cus_app'), 'client Stripe jamais rendu');
 
   // Passage Pro côté serveur (webhook Stripe) : la licence suit au rafraîchissement suivant, sans attendre 6 h.
@@ -250,4 +250,77 @@ test('compte : réponse coupée en cours de lecture = hors ligne, `refresh` ne r
     await rm(dir, { force: true });
   }
   assert.equal(errors.length, 1, 'échec d’écriture journalisé une fois');
+});
+
+// Connexion par le site (cadrage OAuth du 2026-11-16) : l'app demande un code,
+// le site connecté l'approuve, l'app récupère sa session comme après `login`.
+test('compte : connexion par le site, en attente, approuvée, annulée, expirée', async (t) => {
+  const SITE = 'http://site.test';
+  const srv = await testApp({ siteUrl: SITE });
+  const dir = await mkdtemp(path.join(tmpdir(), 'ds-account-'));
+  t.after(async () => {
+    await srv.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+  const fetchImpl = ((url: RequestInfo | URL, init?: RequestInit) => srv.app.request(String(url), init)) as typeof fetch;
+  const account = await AccountClient.open({ dir, apiUrl: 'http://server.test', publicKey: srv.keys.publicKeyPem, fetch: fetchImpl, now: srv.now });
+  await srv.api('/v1/auth/signup', { json: user });
+  await srv.api('/v1/auth/verify', { json: { token: lastToken(srv.mailer, user.email) } });
+  const site = await srv.api('/v1/auth/login', { json: { ...user, client: 'site' } });
+  const cookie = String(site.headers.get('set-cookie')).split(';')[0];
+  // Code saisi sur le site (le clic seul exige le même réseau, prouvé par tests/server/oauth.test.ts).
+  const approve = (code: string) => srv.api('/v1/auth/app-link/approve', { json: { code, typed: true }, headers: { cookie, origin: SITE } });
+
+  const started = await account.linkStart();
+  assert.equal(started.status, 'none');
+  const link = started.link!;
+  assert.match(link.userCode, /^[A-Z]{4}-[A-Z]{4}$/);
+  assert.equal(link.url, `${SITE}/compte/app/?code=${link.userCode}`);
+  assert.ok(!JSON.stringify(started).includes('deviceCode'), 'le deviceCode reste dans le serveur local');
+  assert.equal((await account.linkPoll()).status, 'none', 'en attente');
+  assert.equal((await approve(link.userCode)).status, 200);
+  const done = await account.linkPoll();
+  assert.equal(done.status, 'connected');
+  assert.equal(done.email, user.email);
+  assert.equal(done.link, null);
+  assert.equal(done.license?.state, 'valid', 'licence demandée comme après login');
+  const saved = JSON.parse(await readFile(path.join(dir, 'account.json'), 'utf8')) as { token: string };
+  assert.equal((await srv.api('/v1/me', { token: saved.token })).status, 200, 'session de l’app gardée');
+
+  // Annulée : plus rien à demander ; expirée : message, lien retiré.
+  await account.logout();
+  assert.equal((await account.linkStart()).link !== null, true);
+  assert.equal(account.linkCancel().link, null);
+  assert.equal((await account.linkPoll()).status, 'none');
+  await account.linkStart();
+  srv.tick(11 * 60_000);
+  await assert.rejects(account.linkPoll(), /expirée/);
+  assert.equal(account.status().link, null);
+
+  // Relecture du lot app : connexion par mot de passe pendant une connexion
+  // par le site déjà approuvée → la session du mot de passe reste.
+  const raced = await account.linkStart();
+  assert.equal((await approve(raced.link!.userCode)).status, 200);
+  await account.login(user.email, user.password);
+  const before = await readFile(path.join(dir, 'account.json'), 'utf8');
+  assert.equal(account.status().link, null, 'lien oublié à la connexion');
+  await account.linkPoll();
+  assert.equal(await readFile(path.join(dir, 'account.json'), 'utf8'), before, 'session du mot de passe gardée');
+  await assert.rejects(account.linkStart(), (e: Error & { status?: number }) => e.status === 409);
+});
+
+test('compte : connexion par le site, adresse rendue par le serveur vérifiée avant d’aller au navigateur', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ds-account-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  let reply: Record<string, unknown> = {};
+  const fetchImpl = (async () => Response.json(reply)) as unknown as typeof fetch;
+  const account = await AccountClient.open({ dir, apiUrl: 'https://api.example', publicKey: null, fetch: fetchImpl });
+  const good = { deviceCode: 'appareil-0123456789abcdef-0123', userCode: 'BCDF-GHJK', url: 'https://site.example/compte/app/?code=BCDF-GHJK', expiresAt: '2030-01-01T00:00:00.000Z' };
+  for (const bad of [{ url: 'javascript:alert(1)' }, { url: 'http://site.example/compte/app/' }, { url: 'pas une adresse' }, { expiresAt: 'jamais' }, { deviceCode: 42 }]) {
+    reply = { ...good, ...bad };
+    await assert.rejects(account.linkStart(), (e: Error & { status?: number }) => e.status === 502, JSON.stringify(bad));
+    assert.equal(account.status().link, null);
+  }
+  reply = good;
+  assert.equal((await account.linkStart()).link?.url, good.url);
 });

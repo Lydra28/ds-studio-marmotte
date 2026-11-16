@@ -91,7 +91,7 @@ test('mur : inspirations privées, génération avec images, résultat gardé po
   }, dir);
   const wall = new Wall(dir, { account, model: 'test/model' }, async () => Buffer.from('capture'));
 
-  await assert.rejects(() => new Wall(dir, {}).directions({ note: '', count: 3 }, context), /connecte-toi/i);
+  await assert.rejects(() => new Wall(dir, {}).directions({ note: '', count: 3 }, context), /se connecter/i);
   const image = await wall.addImage({ name: 'mood.png', dataUrl: png });
   const capture = await wall.addLink('https://example.com/inspi');
   await assert.rejects(() => wall.addLink('http://127.0.0.1:4310/api/state'), /Lien refusé/);

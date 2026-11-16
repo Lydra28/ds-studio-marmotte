@@ -110,6 +110,16 @@ const stripeWebhookSecret = env.STRIPE_WEBHOOK_SECRET ?? '';
 if (!stripeKey || !stripeWebhookSecret) console.warn('STRIPE_SECRET_KEY ou STRIPE_WEBHOOK_SECRET absente : paiement désactivé (503).');
 else console.log(`Stripe en mode ${isLiveKey(stripeKey) ? 'LIVE' : 'test'}.`);
 const siteUrl = env.SITE_URL ? env.SITE_URL.replace(/\/+$/, '') : undefined;
+// Connexion avec Google et GitHub (2026-11-16) : identifiant et secret du
+// client OAuth de chaque fournisseur, ensemble ; sans eux, ses boutons
+// renvoient « indisponible » sur le site.
+const oauthClient = (id?: string, secret?: string) => (id && secret ? { clientId: id, clientSecret: secret } : undefined);
+const oauth = {
+  google: oauthClient(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET),
+  github: oauthClient(env.GITHUB_CLIENT_ID, env.GITHUB_CLIENT_SECRET),
+};
+for (const [name, client] of Object.entries(oauth))
+  if (!client) console.warn(`Connexion ${name === 'google' ? 'Google' : 'GitHub'} désactivée (identifiant ou secret OAuth absent).`);
 // Secret d'origine (revue du 2026-11-13, n° 9) : même valeur que l'en-tête
 // ajouté par la règle Cloudflare ; ORIGIN_SECRET_ENFORCE=1 refuse les requêtes
 // sans lui (second temps, après vérification par /v1/health).
@@ -138,8 +148,9 @@ const app = createApp({
   publicUrl: (env.API_PUBLIC_URL ?? `http://127.0.0.1:${port}`).replace(/\/+$/, ''),
   cookieDomain: env.COOKIE_DOMAIN || undefined,
   siteUrl,
+  oauth,
   // Rétractations (server/withdrawal.ts) : adresse de contact publique des mentions légales par défaut.
-  adminEmail: env.ADMIN_EMAIL || 'aubertromain85@gmail.com',
+  adminEmail: env.ADMIN_EMAIL || 'design.sys.studio@gmail.com',
   version,
   originSecret: originSecret ? { value: originSecret, enforce: enforceOrigin } : undefined,
   report: sentryDsn ? (err) => Sentry.captureException(err) : undefined,

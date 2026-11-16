@@ -97,7 +97,7 @@ export default function ExtractPanel({
         <div>
           <h2>Styles lus sur {host(url)}</h2>
           <p className="hint">
-            Lecture faite sur ton poste, à 1280 et 390 px de large. Inventaire d’usage : les noms et les modes du design system
+            Lecture faite sur cet ordinateur, à 1280 et 390 px de large. Inventaire d’usage : les noms et les modes du design system
             d’origine ne sont pas lisibles depuis la page.
           </p>
         </div>
@@ -160,7 +160,7 @@ function Result({ result, set, onDraft }: { result: ExtractResult; set: TokenSet
         )}
         {report.candidates.length > 1 && (
           <>
-            <p className="hint">Pas la bonne teinte ? Choisis la marque parmi celles du site :</p>
+            <p className="hint">Pas la bonne teinte ? Choisir la marque parmi celles du site :</p>
             <div className="extract-picks">
               {report.candidates.map((c) => (
                 <button

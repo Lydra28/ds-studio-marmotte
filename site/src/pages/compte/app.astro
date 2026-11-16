@@ -1,0 +1,60 @@
+---
+// Connexion de l'app par le site (cadrage du 2026-11-16) : l'app ouvre
+// cette page avec son code ; connecté, un clic « Connecter l'app » la
+// connecte (scripts/compte-app.ts). Lien créé depuis un autre réseau : le
+// serveur refuse le clic (409) et la page fait saisir le code lu dans l'app.
+import Base from '../../layouts/Base.astro';
+import OAuthButtons from '../../components/OAuthButtons.astro';
+import { API } from '../../lib/site';
+---
+
+<Base title="Connecter l’app" description="Connecter l’app DS-Studio à son compte en un clic.">
+  <div class="page-head">
+    <h1>Connecter l’app</h1>
+  </div>
+  <div class="account link-app" data-link-app={API}>
+    <p class="message" data-message role="status" aria-live="polite" hidden></p>
+
+    <div data-code-box hidden>
+      <p class="muted">Code de ce lien :</p>
+      <p class="link-code" data-code></p>
+      <p class="muted">
+        Ne connecter l’app que si DS-Studio, ouvert sur ce poste, affiche le même code. Lien reçu d’un tiers : fermer cette
+        page. Personne de DS-Studio ne demande ce code.
+      </p>
+    </div>
+
+    <div data-in hidden>
+      <p>Compte : <strong data-email></strong></p>
+      <form data-retype hidden>
+        <label
+          >Code affiché dans DS-Studio<input
+            name="code"
+            autocomplete="off"
+            autocapitalize="characters"
+            spellcheck="false"
+            maxlength="9"
+            required
+          /></label
+        >
+        <button class="primary" type="submit">Connecter l’app</button>
+      </form>
+      <div class="actions">
+        <button class="primary" type="button" data-approve>Connecter l’app</button>
+        <button type="button" data-switch>Changer de compte</button>
+      </div>
+    </div>
+
+    <div data-out hidden>
+      <p class="muted">Se connecter d’abord, puis confirmer.</p>
+      <div class="actions">
+        <a class="button primary" href="/compte/" data-mail-login>Se connecter par mail</a>
+      </div>
+      <OAuthButtons />
+    </div>
+  </div>
+</Base>
+
+<script>
+  import '../../scripts/compte-app.ts';
+</script>

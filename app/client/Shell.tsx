@@ -404,7 +404,7 @@ function NewProject({
   }, []);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return setError('Donne un nom au projet.');
+    if (!name.trim()) return setError('Donner un nom au projet.');
     const site = siteUrl.trim();
     if (site) {
       let parsed: URL | null = null;
@@ -468,7 +468,7 @@ function NewProject({
         <input value={siteUrl} onChange={(e) => setSiteUrl(e.target.value)} placeholder="https://exemple.fr" inputMode="url" />
       </label>
       <p className="hint">
-        Avec une adresse, DS-Studio lit les styles de la page sur ton poste et propose un premier jeu de tokens, à valider par le
+        Avec une adresse, DS-Studio lit les styles de la page sur cet ordinateur et propose un premier jeu de tokens, à valider par le
         diff. Jamais un site client ou d’Enov.
       </p>
       {repos.length > 0 && (
@@ -492,7 +492,7 @@ function NewProject({
             </label>
           )}
           <p className="hint">
-            Avec un dépôt, DS-Studio lit ses tokens sur ton poste (rien n’est exécuté ni écrit dans le dépôt) et les propose en
+            Avec un dépôt, DS-Studio lit ses tokens sur cet ordinateur (rien n’est exécuté ni écrit dans le dépôt) et les propose en
             brouillon à la place du gabarit.
           </p>
         </>

@@ -473,7 +473,7 @@ export default function Board({
   return (
     <div className="board">
       <Fold {...fold('h-colors', 'Couleurs · Primitives', '01')}>
-        <p className="hint">Valeurs brutes. Les tokens sémantiques y renvoient : change une primitive, tout suit.</p>
+        <p className="hint">Valeurs brutes. Les tokens sémantiques y renvoient : changer une primitive, tout suit.</p>
         {[...ramps].map(([ramp, list]) => (
           <div className="ramp" key={ramp}>
             <h3>
@@ -640,8 +640,8 @@ export default function Board({
       <Fold {...fold('h-components', 'Composants', '05')}>
         <p className="hint">
           Nom anglais, fiche en français. « Figma » : composant créé au transfert ; « Fiche » :
-          documenté seulement. Depuis Figma : demande à ton agent « ajoute les composants de mon
-          Figma », puis importe le fichier qu’il prépare.
+          documenté seulement. Depuis Figma : demander à votre agent « ajoute les composants de mon
+          Figma », puis importer le fichier qu’il prépare.
         </p>
         <div className="fiches">
           {Object.entries(set.components ?? {}).map(([name, c]) =>

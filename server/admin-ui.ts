@@ -51,7 +51,7 @@ export function createAdminApp(opts: { db: Db; token: string; origin: string; la
     c.header('referrer-policy', 'no-referrer');
   });
   app.use('/api/*', async (c, next) => {
-    if (!same(c.req.header('x-admin-token') ?? '', opts.token)) return c.json({ error: 'Jeton absent ou invalide : relance npm run admin:ui.' }, 401);
+    if (!same(c.req.header('x-admin-token') ?? '', opts.token)) return c.json({ error: 'Jeton absent ou invalide : relancer npm run admin:ui.' }, 401);
     if (c.req.method !== 'GET' && c.req.header('origin') !== opts.origin) return c.json({ error: 'Origine refusée.' }, 403);
     await next();
   });

@@ -161,6 +161,7 @@ function systemPrompt(project: Project, name: string, set: TokenSet) {
     'Tu ne modifies jamais rien toi-même. Pour proposer un changement, appelle l’outil propose_changes : il arrive en brouillon et Romain valide par le diff.',
     // Recette du 2026-11-05 : « 3 à 8 phrases » donnait des pavés à chaque tour.
     'Style : la réponse la plus courte qui reste utile. Commence par la réponse, sans préambule ni reformulation de la question, sans titre ni récapitulatif final. 2 à 4 phrases, ou au plus 5 puces d’une ligne. Audit ou liste d’écarts : les 3 plus importants seulement, puis propose de détailler. Développe uniquement si on te le demande (« détaille », « explique tout »). Ne cite que des tokens qui existent.',
+    'Tutoie l’utilisateur, sur un ton chaleureux.',
     project.doctrine && `Doctrine du projet :\n${project.doctrine}`,
     project.ideas && `Premières idées :\n${project.ideas}`,
     `Modes : ${JSON.stringify(set.modes)}`,
@@ -240,7 +241,7 @@ export class Assistant {
     };
     const data = await callRelay(this.options, body, 'assistant');
     const reply = (data.choices?.[0]?.message?.content ?? '').trim();
-    if (!reply) throw new StudioError('Réponse vide de Lenny. Réessaie.', 502);
+    if (!reply) throw new StudioError('Réponse vide de Lenny. Réessayer.', 502);
     return {
       reply,
       findings,
@@ -274,7 +275,7 @@ export class Assistant {
     };
     if (empty(data)) data = await callRelay(this.options, body, 'assistant');
     const choice = data.choices?.[0]?.message;
-    if (!choice) throw new StudioError('Réponse vide de Lenny. Réessaie.', 502);
+    if (!choice) throw new StudioError('Réponse vide de Lenny. Réessayer.', 502);
     const reply: AssistantMessage = {
       role: 'assistant',
       content: (choice.content ?? '').trim(),
@@ -289,8 +290,8 @@ export class Assistant {
       else reply.proposal = proposal;
     }
     if (data.choices?.[0]?.finish_reason === 'length' && !reply.proposal)
-      reply.content = '(Réponse coupée : le modèle a dépassé sa longueur maximale. Demande une correction à la fois.)';
-    if (!reply.content && !reply.proposal) reply.content = '(Pas de réponse du modèle, deux fois de suite : reformule ou renvoie la question.)';
+      reply.content = '(Réponse coupée : le modèle a dépassé sa longueur maximale. Demander une correction à la fois.)';
+    if (!reply.content && !reply.proposal) reply.content = '(Pas de réponse du modèle, deux fois de suite : reformuler ou renvoyer la question.)';
     reply.content = clip(reply.content);
     return reply;
   }

@@ -78,7 +78,7 @@ test('app desktop : ouvre l’atelier, un projet, puis rend le port en quittant'
     expect(JSON.stringify(settings)).not.toMatch(/sk-|ghp_|OPENROUTER|GITHUB_TOKEN/);
     // Premier lancement : la pop-in d'accueil (Onboarding.tsx) couvre l'atelier
     // et intercepte les clics ; on la ferme comme un utilisateur.
-    await expect(page.getByRole('dialog', { name: 'Ton compte DS-Studio' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Compte DS-Studio' })).toBeVisible();
     await page.getByRole('button', { name: 'Fermer la présentation' }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await page.getByRole('button', { name: 'Réglages' }).click();

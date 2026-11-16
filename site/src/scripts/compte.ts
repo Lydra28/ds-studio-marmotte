@@ -1,6 +1,7 @@
 // Compte sur le site (lot 7) : session par le cookie httpOnly `ds_session`
 // posé par l'API à la connexion `client: 'site'`. Le script ne voit jamais
 // le jeton ; chaque appel part avec `credentials: 'include'`.
+import { appCode, carryAppCode, takeOAuthError } from './oauth.ts';
 
 interface Me {
   email: string;
@@ -76,6 +77,13 @@ function start(root: HTMLElement) {
   };
   for (const t of tabs) t.addEventListener('click', () => (quiet(), show(t.dataset.tab!)));
   show(location.hash === '#creer' ? 'signup' : 'login');
+
+  // Retour d'une connexion Google ou GitHub refusée ; connexion de l'app en
+  // cours (`?app=` : une fois connecté, retour à sa page de confirmation).
+  const failure = takeOAuthError();
+  if (failure) say(failure, 'error');
+  const linking = appCode('app');
+  if (linking) carryAppCode(root, linking);
 
   const value = (form: HTMLFormElement, name: string) => (form.elements.namedItem(name) as HTMLInputElement).value.trim();
   const busy = async (form: HTMLFormElement, run: () => Promise<void>) => {
@@ -230,6 +238,7 @@ function start(root: HTMLElement) {
   async function refresh() {
     try {
       render(await call<Me>('/v1/me'));
+      if (linking) return location.assign(`/compte/app/?code=${linking}`);
       out.hidden = true;
       inside.hidden = false;
       await loadPurchases().catch((e) => say((e as Error).message, 'error'));

@@ -63,7 +63,7 @@ test('rétractation : recharge enregistrée, solde non utilisé remboursé, accu
     assert.equal(mails.length, 2);
     assert.equal(mails[0].to, user(1).email);
     assert.match(mails[0].subject, /accusé de réception/);
-    assert.match(mails[0].text, /Bonjour Camille Test,[\s\S]*Nous avons reçu ta rétractation le .*Recharge de crédits de 10,00 €[\s\S]*7,00 €/);
+    assert.match(mails[0].text, /Bonjour Camille Test,[\s\S]*Nous avons reçu votre rétractation le .*Recharge de crédits de 10,00 €[\s\S]*7,00 €/);
     assert.equal(mails[1].to, 'romain@exemple.test');
     assert.match(mails[1].text, /À rembourser : 7,00 € avant le/);
 

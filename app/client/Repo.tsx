@@ -66,8 +66,8 @@ export default function RepoPanel({
     setPhase({ status: 'loading', what: 'Dépôts accessibles…' });
     try {
       const status = await getGithub();
-      if (!status.pro) return setPhase({ status: 'form', repos: null, reason: 'GitHub est réservé à DS-Studio Pro : passe Pro dans Réglages → Compte.' });
-      if (status.status !== 'connected') return setPhase({ status: 'form', repos: null, reason: 'Connecte GitHub dans Réglages → GitHub, puis reviens ici.' });
+      if (!status.pro) return setPhase({ status: 'form', repos: null, reason: 'GitHub est réservé à DS-Studio Pro : passer Pro dans Réglages → Compte.' });
+      if (status.status !== 'connected') return setPhase({ status: 'form', repos: null, reason: 'Connecter GitHub dans Réglages → GitHub, puis revenir ici.' });
       const { repos } = await githubAction('repos');
       setPhase({ status: 'form', repos: repos ?? [], reason: null });
     } catch (e) {
@@ -114,7 +114,7 @@ export default function RepoPanel({
         <div>
           <h2>{attached ? `Dépôt ${attached.repo}` : 'Rattacher un dépôt GitHub'}</h2>
           <p className="hint">
-            Lecture faite sur ton poste : l’archive de la branche est lue en mémoire, rien n’est exécuté ni envoyé ailleurs qu’à
+            Lecture faite sur cet ordinateur : l’archive de la branche est lue en mémoire, rien n’est exécuté ni envoyé ailleurs qu’à
             GitHub. Rien n’est écrit dans le dépôt avant la pull request d’une version acceptée.
           </p>
         </div>
@@ -187,7 +187,7 @@ export default function RepoPanel({
           )}
           <p className="hint">
             Couleurs du dépôt écrites à plat (par exemple <code>--fond: #0B0B0C</code>) : DS-Studio peut proposer une palette de primitives et
-            garder tes noms comme tokens sémantiques qui y renvoient. Second brouillon, relu par diff ; la PR réécrit alors tes
+            garder vos noms comme tokens sémantiques qui y renvoient. Second brouillon, relu par diff ; la PR réécrit alors vos
             variables.
           </p>
           <div className="form-actions">
@@ -251,7 +251,7 @@ function AttachForm({
   if (!repos?.length)
     return (
       <p className="hint">
-        Aucun dépôt accessible : ajoute un dépôt à DS-Studio depuis Réglages → GitHub (« Ajouter un dépôt »).
+        Aucun dépôt accessible : ajouter un dépôt à DS-Studio depuis Réglages → GitHub (« Ajouter un dépôt »).
       </p>
     );
   const chosen = repos.find((r) => r.fullName === repo);
@@ -435,8 +435,8 @@ function Consent({ preview, sending, onSend, onCancel }: { preview: AgentPreview
         </ul>
       </details>
       <p className="hint">
-        Trajet : ton poste → serveur DS-Studio (rien conservé, seuls la consommation et le coût sont comptés) → OpenRouter, routé vers
-        des fournisseurs sans conservation des données (ZDR) seulement → modèle. Débité de tes crédits comme Lenny ; si aucun fournisseur ZDR
+        Trajet : cet ordinateur → serveur DS-Studio (rien conservé, seuls la consommation et le coût sont comptés) → OpenRouter, routé vers
+        des fournisseurs sans conservation des données (ZDR) seulement → modèle. Débité de vos crédits comme Lenny ; si aucun fournisseur ZDR
         n’est disponible pour le modèle, l’envoi échoue. La réponse arrive en brouillon, relue par diff.
       </p>
       <div className="form-actions">

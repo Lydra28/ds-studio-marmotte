@@ -67,7 +67,7 @@ export async function readRepoFiles(auth: GithubAuth, repo: string, ref: string,
 export async function readRepo(auth: GithubAuth, repo: string, ref: string, subdir?: string | null): Promise<RepoRead> {
   const dir = cleanSubdir(subdir);
   const tar: TarResult = await fetchArchive(auth, repo, ref, dir);
-  if (dir && tar.files.length === 0) throw new StudioError(`Aucun fichier de style lu dans ${dir}/ : vérifie le sous-dossier.`, 422);
+  if (dir && tar.files.length === 0) throw new StudioError(`Aucun fichier de style lu dans ${dir}/ : vérifier le sous-dossier.`, 422);
   return {
     repo,
     ref,
@@ -106,7 +106,7 @@ export async function readPlan(dataDir: string): Promise<RepoPlan | null> {
     return plan.version === 2 ? plan : null;
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    throw new StudioError('Plan du dépôt illisible : relis le dépôt.', 500);
+    throw new StudioError('Plan du dépôt illisible : relire le dépôt.', 500);
   }
 }
 

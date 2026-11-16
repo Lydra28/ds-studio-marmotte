@@ -30,7 +30,7 @@ test('assistant : indisponible sans compte, contexte envoyé par le relais, prop
 
   const none = new Assistant(dir, {});
   assert.deepEqual(none.status, { enabled: false, reason: 'account', model: DEFAULT_MODEL });
-  await assert.rejects(() => none.chat('Bonjour', context), /connecte-toi/i);
+  await assert.rejects(() => none.chat('Bonjour', context), /se connecter/i);
 
   const seen: { body?: any; auth?: string; origin?: string }[] = [];
   const valid = new Assistant(dir, {
@@ -174,7 +174,7 @@ test('assistant du plugin Figma : texte seulement, sélection envoyée si coché
   assert.ok(findings.some((f) => /^bouton principal : .*Button/.test(f)));
   assert.equal(askSchema.safeParse({ message: 'x', selection: { file: 'F', nodes: [{ ...nodes[0], script: 'x' }] } }).success, false);
 
-  await assert.rejects(() => new Assistant(dir, {}).ask(askSchema.parse({ message: 'Bonjour' }), context), /connecte-toi/i);
+  await assert.rejects(() => new Assistant(dir, {}).ask(askSchema.parse({ message: 'Bonjour' }), context), /se connecter/i);
   const seen: { body?: any; origin?: string }[] = [];
   const assistant = new Assistant(dir, { account: await fakeAccount(fake({ content: 'Passe le gap à 16 px (space/md).' }, seen), dir) });
   const res = await assistant.ask(

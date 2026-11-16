@@ -40,7 +40,7 @@ export function RampGenerator({
     : !ramp && (!isTokenKey(`${name}/500`) || name === 'color/' || !name.startsWith('color/'))
       ? 'nom de gamme : color/nom'
       : !ramp && Object.keys(set.tokens).some((k) => k.startsWith(`${name}/`))
-        ? 'cette gamme existe déjà : utilise son bouton « Générer »'
+        ? 'cette gamme existe déjà : utiliser son bouton « Générer »'
         : '';
   const result = problem ? [] : generateRamp(color, steps.includes(anchor) ? anchor : steps[0], steps);
   const modes = set.modes.primitives;

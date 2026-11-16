@@ -128,7 +128,7 @@ test('purge : inactif 3 ans, avertissement 30 jours avant puis suppression ; rec
     assert.equal(r.warned, 2, 'le solde de bienvenue (offert) ne protège pas');
     assert.equal(mailer.sent.length, 2);
     assert.match(mailer.sent[0].subject, /supprimé dans 30 jours/);
-    assert.match(mailer.sent[0].text, /projets restent sur ton poste/);
+    assert.match(mailer.sent[0].text, /projets restent sur votre poste/);
     r = await purge(t.db, mailer, now);
     assert.equal(mailer.sent.length, 2, 'un seul avertissement');
 

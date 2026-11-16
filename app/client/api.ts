@@ -38,6 +38,8 @@ export type DesktopAction = 'choose-projects' | 'check-update' | 'install-update
 // Compte DS-Studio (lot 3) : état rendu par le serveur local, jamais le jeton de session.
 export interface AccountStatus {
   status: 'none' | 'connected';
+  // Connexion par le site en attente (code à comparer, page ouverte dans le navigateur).
+  link: { userCode: string; url: string; expiresAt: string } | null;
   // Faux dès qu'un appel au serveur DS-Studio a échoué (réseau), vrai au suivant qui aboutit.
   online: boolean;
   email: string | null;
@@ -62,7 +64,7 @@ export interface AccountStatus {
   } | null;
   message: string | null;
 }
-export type AccountAction = 'signup' | 'login' | 'forgot' | 'reset' | 'logout' | 'refresh' | 'checkout' | 'portal';
+export type AccountAction = 'signup' | 'login' | 'forgot' | 'reset' | 'logout' | 'refresh' | 'checkout' | 'portal' | 'link-start' | 'link-poll' | 'link-cancel';
 export type Pack = '5' | '10' | '20';
 export const getAccount = () => request<AccountStatus>('account');
 // `checkout` et `portal` rendent `url` : page Stripe à ouvrir dans le navigateur.
@@ -139,7 +141,7 @@ export async function request<T>(
     });
   } catch {
     throw new Error(
-      'Serveur local inaccessible. Relancez DS-Studio. Votre dernière validation reste sur disque.',
+      'Serveur local inaccessible. Relancer DS-Studio. Votre dernière validation reste sur disque.',
     );
   }
   const result = await response.json();

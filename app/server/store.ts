@@ -52,7 +52,7 @@ export class Store {
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'ENOENT')
         throw new StudioError(
-          'state.json inaccessible : original préservé. Sauvegardez-le avant toute réparation.',
+          'state.json inaccessible : original préservé. Le sauvegarder avant toute réparation.',
           500,
         );
       this.state = {
@@ -68,7 +68,7 @@ export class Store {
       this.state = parseStoredState(raw);
     } catch {
       throw new StudioError(
-        'state.json invalide : original préservé. Sauvegardez-le avant toute réparation.',
+        'state.json invalide : original préservé. Le sauvegarder avant toute réparation.',
         500,
       );
     }
@@ -100,7 +100,7 @@ export class Store {
   ): Proposal {
     if (revision !== this.state.revision)
       throw new StudioError(
-        'Le Design System a changé. Rechargez et refaites la proposition.',
+        'Le Design System a changé : recharger et refaire la proposition.',
         409,
       );
     const patches = diff(this.state.set, next);
@@ -174,15 +174,15 @@ export class Store {
       const p = this.proposals.get(id);
       if (!p)
         throw new StudioError(
-          'Proposition inconnue ou expirée. Refaites le diff.',
+          'Proposition inconnue ou expirée : refaire le diff.',
           404,
         );
       if (p.revision !== this.state.revision)
-        throw new StudioError('Proposition périmée. Refaites le diff.', 409);
+        throw new StudioError('Proposition périmée : refaire le diff.', 409);
       const raw = await readPrivate(this.file);
       if (this.hash(raw) !== this.digest)
         throw new StudioError(
-          'Données modifiées hors application. Redémarrez pour les relire.',
+          'Données modifiées hors application : redémarrer pour les relire.',
           409,
         );
       const next: State = {
@@ -216,7 +216,7 @@ export class Store {
     const raw = JSON.stringify(state, null, 2) + '\n';
     if (Buffer.byteLength(raw) > 10_000_000)
       throw new StudioError(
-        'Historique trop volumineux : exportez et archivez avant de continuer.',
+        'Historique trop volumineux : exporter et archiver avant de continuer.',
         507,
       );
     await atomicWrite(this.file, raw);

@@ -13,8 +13,8 @@ import { StudioError } from './store.js';
 // au navigateur. Réservé à Pro (cadrage GitHub, décision 8).
 export const GITHUB_CLIENT_ID = 'Iv23liZqDLgcMvMUlhMN';
 export const GITHUB_APP_SLUG = 'ds-studio-app';
-export const PRO_ONLY = 'GitHub est réservé à DS-Studio Pro : passe Pro dans Réglages → Compte.';
-const SESSION_LOST = 'Connexion GitHub expirée ou retirée : reconnecte GitHub dans Réglages.';
+export const PRO_ONLY = 'GitHub est réservé à DS-Studio Pro : passer Pro dans Réglages → Compte.';
+const SESSION_LOST = 'Connexion GitHub expirée ou retirée : reconnecter GitHub dans Réglages.';
 const UNREACHABLE = 'GitHub injoignable (réseau ou délai dépassé).';
 const API_VERSION = '2022-11-28';
 // Jeton renouvelé une minute avant son expiration.
@@ -214,7 +214,7 @@ export class GithubAuth {
     if (!p) return this.status();
     if (this.ms() >= p.expiresAt) {
       this.pending = null;
-      this.message = 'Code expiré : relance la connexion GitHub.';
+      this.message = 'Code expiré : relancer la connexion GitHub.';
       return this.status();
     }
     try {
@@ -237,7 +237,7 @@ export class GithubAuth {
           error === 'access_denied'
             ? 'Connexion GitHub refusée sur github.com.'
             : error === 'expired_token'
-              ? 'Code expiré : relance la connexion GitHub.'
+              ? 'Code expiré : relancer la connexion GitHub.'
               : `Connexion GitHub impossible (${error.slice(0, 60)}).`;
       } else {
         this.pending = null;
@@ -262,7 +262,7 @@ export class GithubAuth {
   async token(): Promise<string> {
     this.requirePro();
     const s = this.stored;
-    if (!s) throw new StudioError('GitHub n’est pas connecté : connecte-le dans Réglages.', 409);
+    if (!s) throw new StudioError('GitHub n’est pas connecté : le connecter dans Réglages.', 409);
     const expires = s.accessExpiresAt ? new Date(s.accessExpiresAt).getTime() : Infinity;
     if (this.ms() < expires - MARGIN_MS) return s.accessToken;
     this.refreshing ??= this.renew(s).finally(() => (this.refreshing = null));

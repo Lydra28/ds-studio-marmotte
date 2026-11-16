@@ -21,9 +21,9 @@ export interface Subscription {
   cancelAtPeriodEnd: boolean;
 }
 
-export const NOT_CONNECTED = 'Assistant indisponible : connecte-toi à ton compte DS-Studio dans Réglages. Tout le reste fonctionne.';
+export const NOT_CONNECTED = 'Assistant indisponible : se connecter à votre compte DS-Studio dans Réglages. Tout le reste fonctionne.';
 export const OFFLINE = 'Serveur DS-Studio injoignable (réseau ou délai dépassé) : l’atelier continue sans l’assistant.';
-const SESSION_LOST = 'Session expirée : reconnecte-toi dans Réglages.';
+const SESSION_LOST = 'Session expirée : se reconnecter dans Réglages.';
 
 // Rafraîchissement de `/v1/me` toutes les 10 min en ligne, nouvel essai toutes
 // les 60 s hors ligne ; licence renouvelée après 6 h ou dès qu'elle n'est plus valide.
@@ -67,8 +67,18 @@ interface Me {
   catalog?: Catalog;
 }
 
+/** Connexion par le site en cours (Google, GitHub ou mail, cadrage OAuth du 2026-11-16). */
+export interface PendingLink {
+  userCode: string;
+  url: string;
+  expiresAt: string;
+}
+export const LINK_EXPIRED = 'Connexion par le navigateur expirée : la relancer.';
+
 export interface AccountStatus {
   status: 'none' | 'connected';
+  /** Connexion par le site en attente d'approbation ; null sinon. */
+  link: PendingLink | null;
   /** Faux dès qu'un appel au serveur a échoué (réseau), vrai au suivant qui aboutit. */
   online: boolean;
   email: string | null;
@@ -105,6 +115,10 @@ export class AccountClient {
   private online = true;
   private message: string | null = null;
   private refreshedAt = 0;
+  /** Lien demandé au serveur : le `deviceCode` ne quitte jamais ce processus. */
+  private pending: (PendingLink & { deviceCode: string }) | null = null;
+  /** Demande de session en cours : deux sondages (deux fenêtres) n'en font qu'un. */
+  private polling: Promise<AccountStatus> | null = null;
   private timer: NodeJS.Timeout | null = null;
   private readonly file: string;
   private readonly apiUrl: string;
@@ -131,6 +145,7 @@ export class AccountClient {
     await atomicWrite(this.file, JSON.stringify(this.stored, null, 2) + '\n');
   }
   private async forget(message: string | null) {
+    this.pending = null;
     this.stored = null;
     this.me = null;
     this.message = message;
@@ -193,6 +208,7 @@ export class AccountClient {
     return r.message ?? 'Compte créé.';
   }
   async login(email: string, password: string) {
+    this.pending = null; // un sondage en vol n'écrase plus cette session
     const r = await this.api<{ token: string; account: Me }>('/v1/auth/login', { json: { email, password, client: 'app' }, auth: false });
     this.stored = { token: r.token, email: r.account.email, license: null, licenseAt: null };
     this.me = r.account;
@@ -200,6 +216,61 @@ export class AccountClient {
     await this.refresh();
     return this.status();
   }
+  // Connexion par le site (cadrage OAuth du 2026-11-16) : le serveur rend un
+  // code court et l'adresse de la page « Connecter l'app », que Réglages
+  // ouvre dans le navigateur ; connecté sur le site (Google, GitHub ou mail),
+  // un clic approuve, et `linkPoll` récupère la session comme `login`.
+  async linkStart() {
+    if (this.stored) throw new StudioError('Déjà connecté : se déconnecter d’abord.', 409);
+    const r = await this.api<Record<string, unknown>>('/v1/auth/app-link', { method: 'POST', auth: false });
+    // Réponse du serveur distant rendue au navigateur (lien ouvert, `href`) :
+    // jamais une adresse `javascript:` ou autre ; http seulement contre un
+    // serveur en http (développement, tests).
+    const url = typeof r.url === 'string' && URL.canParse(r.url) ? new URL(r.url) : null;
+    const schemes = this.apiUrl.startsWith('http://') ? ['https:', 'http:'] : ['https:'];
+    const expires = typeof r.expiresAt === 'string' ? Date.parse(r.expiresAt) : NaN;
+    if (typeof r.deviceCode !== 'string' || typeof r.userCode !== 'string' || !url || !schemes.includes(url.protocol) || Number.isNaN(expires))
+      throw new StudioError('Serveur DS-Studio : réponse de connexion illisible.', 502);
+    this.pending = { deviceCode: r.deviceCode, userCode: r.userCode, url: url.toString(), expiresAt: new Date(expires).toISOString() };
+    return this.status();
+  }
+  linkCancel() {
+    this.pending = null;
+    return this.status();
+  }
+  linkPoll() {
+    this.polling ??= this.pollOnce().finally(() => (this.polling = null));
+    return this.polling;
+  }
+  private async pollOnce() {
+    const p = this.pending;
+    if (!p) return this.status();
+    if (new Date(p.expiresAt).getTime() <= this.now().getTime()) {
+      this.pending = null;
+      throw new StudioError(LINK_EXPIRED, 410);
+    }
+    let r: { pending?: boolean; token?: string; account?: Me };
+    try {
+      r = await this.api('/v1/auth/app-link/token', { json: { deviceCode: p.deviceCode }, auth: false });
+    } catch (e) {
+      // Refus du serveur (expiré, déjà servi) : le lien est perdu. Réseau : on réessaie.
+      if (e instanceof StudioError && e.status === 410 && this.pending === p) this.pending = null;
+      throw e;
+    }
+    if (r.pending || !r.token || !r.account) return this.status();
+    // Annulé, déconnecté ou connecté par mot de passe pendant l'appel : rien n'est écrasé.
+    if (this.pending !== p || this.stored) return this.status();
+    this.pending = null;
+    // shortcut: jeton remis une seule fois ; si `account.json` ne s'écrit pas,
+    // l'erreur remonte et il faut relancer la connexion (rare, disque plein).
+    // Revoir si un retour d'utilisateur le montre.
+    this.stored = { token: r.token, email: r.account.email, license: null, licenseAt: null };
+    this.me = r.account;
+    await this.save();
+    await this.refresh();
+    return this.status();
+  }
+
   async forgot(email: string) {
     const r = await this.api<{ message?: string }>('/v1/auth/forgot', { json: { email }, auth: false });
     return r.message ?? 'Mail envoyé.';
@@ -209,6 +280,7 @@ export class AccountClient {
     return r.message ?? 'Mot de passe changé.';
   }
   async logout() {
+    this.pending = null;
     if (this.stored) await this.api('/v1/auth/logout', { method: 'POST' }).catch(() => {});
     await this.forget(null);
     return this.status();
@@ -276,6 +348,7 @@ export class AccountClient {
     const u = this.me?.usage;
     return {
       status: this.stored ? 'connected' : 'none',
+      link: this.pending && !this.stored ? { userCode: this.pending.userCode, url: this.pending.url, expiresAt: this.pending.expiresAt } : null,
       online: this.online,
       email: this.stored?.email ?? null,
       tier: live && payload ? payload.tier : 'free',

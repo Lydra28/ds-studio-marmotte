@@ -168,7 +168,7 @@ test('plugin : collections écrites avant la marque reconnues seulement avec un 
 test('plugin : sélection résumée en lecture seule, au format attendu par l’assistant', async () => {
   const f = await load();
   f.figma.currentPage.selection = [];
-  assert.match((await f.send({ type: 'read-selection' })).message, /Sélectionne au moins un calque/);
+  assert.match((await f.send({ type: 'read-selection' })).message, /Sélectionner au moins un calque/);
   const col = f.collection('Tokens');
   const space = f.figma.variables.createVariable('space/md', col, 'FLOAT');
   const text = {

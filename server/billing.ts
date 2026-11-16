@@ -7,7 +7,7 @@
 import { Hono } from 'hono';
 import Stripe from 'stripe';
 import { z } from 'zod';
-import { body, htmlPage, requireAccount, type Account } from './auth.js';
+import { body, htmlPage, requireAccount, sessionClient as clientOf, type Account } from './auth.js';
 import { ApiError, clock, type Deps } from './core.js';
 import { addCredits, PRO_INCLUDED_CENTS, WELCOME_CENTS } from './credits.js';
 import type { Db, Tx } from './db.js';
@@ -296,6 +296,7 @@ const checkoutSchema = z.object({ kind: z.enum(['pro', 'credits']), pack: z.enum
 export function billingRoutes(deps: Deps) {
   const app = new Hono();
   const account = requireAccount(deps);
+  const sessionClient = clientOf(deps);
   const now = clock(deps);
   const billing = () => {
     if (!deps.billing) throw new ApiError('Paiement indisponible sur ce serveur.', 503);
@@ -336,7 +337,7 @@ export function billingRoutes(deps: Deps) {
     const { client, termsConsent } = billing();
     const input = await body(c, checkoutSchema);
     if (input.kind === 'pro' && me.gifted) throw new ApiError('Compte offert : Pro est déjà inclus.', 409);
-    if (input.kind === 'pro' && me.plan === 'pro') throw new ApiError('Déjà abonné à Pro : gère ton abonnement depuis le portail.', 409);
+    if (input.kind === 'pro' && me.plan === 'pro') throw new ApiError('Déjà abonné à Pro : gérer l’abonnement depuis le portail.', 409);
     const key = input.kind === 'pro' ? 'pro_monthly' : PACKS[input.pack ?? '5'];
     const customer = await customerId(client, me);
     const session = await client.checkout.sessions.create({
@@ -371,8 +372,12 @@ export function billingRoutes(deps: Deps) {
     return c.json({ url: session.url });
   });
 
+  // Portail Stripe (résilier, factures, carte) ouvert seulement par le site :
+  // une session de l'app reçoit la page Compte du site, où le portail
+  // redemande le cookie. Une app connectée par un lien piégé n'y touche pas.
   app.post('/portal', async (c) => {
     const me = await account(c);
+    if (await sessionClient(c) !== 'site') return c.json({ url: back.portal, site: true });
     const { client } = billing();
     if (!me.stripeCustomerId) throw new ApiError('Aucun achat encore : rien à gérer.', 409);
     const session = await client.billingPortal.sessions.create({ customer: me.stripeCustomerId, return_url: back.portal });
@@ -388,9 +393,9 @@ export function billingRoutes(deps: Deps) {
   // Pages de retour minimales (le site du lot 7 les remplacera).
   app.get('/done', (c) => {
     const s = c.req.query('s');
-    if (s === 'ok') return c.html(htmlPage('Paiement enregistré', 'Merci. Si tu as payé depuis l’app DS-Studio, ton solde ou ton palier Pro s’y met à jour tout seul en quelques secondes ; sinon, clique « Actualiser » dans Réglages → Compte.'));
-    if (s === 'cancel') return c.html(htmlPage('Paiement annulé', 'Rien n’a été débité. Tu peux fermer cette page et retourner dans DS-Studio.'));
-    return c.html(htmlPage('Retour du portail', 'Tes changements sont pris en compte. Si l’app DS-Studio est ouverte, ton compte s’y met à jour tout seul ; sinon, clique « Actualiser » dans Réglages → Compte.'));
+    if (s === 'ok') return c.html(htmlPage('Paiement enregistré', 'Merci. Après un paiement depuis l’app DS-Studio, le solde ou le palier Pro s’y met à jour tout seul en quelques secondes ; sinon, cliquer « Actualiser » dans Réglages → Compte.'));
+    if (s === 'cancel') return c.html(htmlPage('Paiement annulé', 'Rien n’a été débité. Fermer cette page et retourner dans DS-Studio.'));
+    return c.html(htmlPage('Retour du portail', 'Changements pris en compte. Si l’app DS-Studio est ouverte, le compte s’y met à jour tout seul ; sinon, cliquer « Actualiser » dans Réglages → Compte.'));
   });
 
   // Webhook : corps brut (jamais parsé avant la signature), 400 si la

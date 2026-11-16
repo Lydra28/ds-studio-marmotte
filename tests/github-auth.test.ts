@@ -182,7 +182,7 @@ test('github : jeton renouvelé sans secret à son expiration ; renouvellement r
     s.gh.setRefreshError('bad_refresh_token');
     await assert.rejects(s.auth.token(), (e: Error & { status?: number }) => e.status === 401);
     assert.equal(s.auth.status().status, 'none');
-    assert.match(String(s.auth.status().message), /reconnecte GitHub/);
+    assert.match(String(s.auth.status().message), /reconnecter GitHub/);
   } finally {
     await s.close();
   }

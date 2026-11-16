@@ -155,17 +155,17 @@ export async function handlePlugin(
   const given = Buffer.from(String(req.headers['x-ds-plugin'] ?? ''));
   const expected = Buffer.from(ctx.code);
   if (given.length !== expected.length || !timingSafeEqual(given, expected))
-    throw new StudioError('Code d’appairage invalide : recopie celui affiché dans l’atelier (bouton Figma).', 401);
+    throw new StudioError('Code d’appairage invalide : recopier celui affiché dans l’atelier (bouton Figma).', 401);
   // Contrat : vérifié après le code (rien n'est dit à qui n'est pas appairé).
   const contract = Number(req.headers['x-ds-plugin-contract'] ?? 1);
   if (!Number.isInteger(contract) || contract < PLUGIN_CONTRACT)
     throw new StudioError(
-      `Plugin DS-Studio trop ancien (contrat v${contract}, l’atelier attend v${PLUGIN_CONTRACT}) : mets-le à jour depuis la Community (Figma → Plugins → DS-Studio), ou réimporte figma-plugin/manifest.json en développement. Rien n’a été modifié.`,
+      `Plugin DS-Studio trop ancien (contrat v${contract}, l’atelier attend v${PLUGIN_CONTRACT}) : le mettre à jour depuis la Community (Figma → Plugins → DS-Studio), ou réimporter figma-plugin/manifest.json en développement. Rien n’a été modifié.`,
       426,
     );
   if (contract > PLUGIN_CONTRACT)
     throw new StudioError(
-      `Atelier DS-Studio trop ancien pour ce plugin (contrat v${contract}, l’atelier connaît v${PLUGIN_CONTRACT}) : mets à jour DS-Studio (Réglages → Rechercher une mise à jour). Rien n’a été modifié.`,
+      `Atelier DS-Studio trop ancien pour ce plugin (contrat v${contract}, l’atelier connaît v${PLUGIN_CONTRACT}) : mettre à jour DS-Studio (Réglages → Rechercher une mise à jour). Rien n’a été modifié.`,
       426,
     );
 
@@ -175,7 +175,7 @@ export async function handlePlugin(
   // Une cible qui change après acceptation reste refusée plus bas.
   const latest = async (dir: string, config: Config) => {
     const [last] = await listVersions(dir);
-    if (!last) throw new StudioError('Aucune version acceptée : accepte une version dans l’atelier.', 409);
+    if (!last) throw new StudioError('Aucune version acceptée : accepter une version dans l’atelier.', 409);
     const raw = JSON.parse(await readPrivate(path.join(dir, 'versions', last.file)));
     return { last, raw: raw.target == null && config.figma ? { ...raw, target: config.figma } : raw };
   };

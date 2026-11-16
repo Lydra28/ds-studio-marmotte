@@ -68,7 +68,7 @@ function Planche({
         <h3>
           {index + 1} · {direction.name}
         </h3>
-        <p className="add-error">Le jeu a changé depuis la génération : cette DA ne s’applique plus. Relance.</p>
+        <p className="add-error">Le jeu a changé depuis la génération : cette DA ne s’applique plus. Relancer.</p>
       </article>
     );
   const findings = runRules(candidate);
@@ -156,7 +156,7 @@ export default function Wall({
         <div>
           <h2>Mur des DA</h2>
           <p className="hint">
-            Dépose tes inspirations, l’assistant propose 1 à 3 directions. Tu en choisis une : elle devient un brouillon,
+            Déposer des inspirations, l’assistant propose 1 à 3 directions. En choisir une : elle devient un brouillon,
             validé par le diff.
           </p>
         </div>
@@ -230,7 +230,7 @@ export default function Wall({
           rows={2}
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="Précisions : ambiance, ce que tu veux éviter… (la doctrine du projet est déjà envoyée)"
+          placeholder="Précisions : ambiance, ce qu’il faut éviter… (la doctrine du projet est déjà envoyée)"
         />
         <label>
           DA
@@ -243,7 +243,7 @@ export default function Wall({
         <button
           className="primary"
           disabled={!!busy || !wall?.enabled}
-          title={wall?.enabled ? '' : wall?.reason === 'offline' ? 'Serveur DS-Studio injoignable' : 'Connecte-toi à ton compte DS-Studio dans Réglages'}
+          title={wall?.enabled ? '' : wall?.reason === 'offline' ? 'Serveur DS-Studio injoignable' : 'Se connecter à votre compte DS-Studio dans Réglages'}
           onClick={() => run('directions', async () => setWall({ ...wall!, result: await proposeDirections(note, count) }))}
         >
           {busy === 'directions' ? 'L’assistant compose…' : `Proposer ${count} DA`}

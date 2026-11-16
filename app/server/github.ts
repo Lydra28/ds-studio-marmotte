@@ -42,7 +42,7 @@ function client(options: GithubOptions, repo: string) {
         signal: AbortSignal.timeout(30_000),
       });
     } catch {
-      throw new StudioError('GitHub injoignable : vérifie la connexion puis « Réessayer ».', 502);
+      throw new StudioError('GitHub injoignable : vérifier la connexion puis « Réessayer ».', 502);
     }
     const data = (await res.json().catch(() => ({}))) as Record<string, any>;
     return { status: res.status, data };
@@ -50,7 +50,7 @@ function client(options: GithubOptions, repo: string) {
   const fail = (what: string, r: { status: number; data: Record<string, any> }): never => {
     const hint =
       r.status === 401
-        ? 'jeton refusé ou expiré (reconnecte GitHub dans Réglages)'
+        ? 'jeton refusé ou expiré (reconnecter GitHub dans Réglages)'
         : r.status === 403 || r.status === 404
           ? `DS-Studio n’a pas accès en écriture à ${repo} (Contents et Pull requests)`
           : String(r.data.message ?? r.status);
@@ -92,7 +92,7 @@ export async function publishVersion(
   if (!options.token) throw new StudioError(githubOff(), 503);
   const { call, fail } = client(options, target.repo);
 
-  const header = `Généré par DS-Studio · ${version.project} v${version.revision} (${version.hash.slice(0, 8)}). Ne pas modifier à la main : change le DS dans l’atelier.`;
+  const header = `Généré par DS-Studio · ${version.project} v${version.revision} (${version.hash.slice(0, 8)}). Ne pas modifier à la main : changer le DS dans l’atelier.`;
   const files = [
     { path: `${target.dir}/ds-studio.tokens.css`, content: exportCss(version.set, target, header) },
     { path: `${target.dir}/ds-studio.tokens.json`, content: exportJson(version.set, target, header) },
@@ -241,7 +241,7 @@ export async function publishRepoVersion(
   // PR mergée depuis la lecture : le code a changé sous le plan, relecture d'abord.
   const closed = await call('GET', `/pulls?state=closed&head=${encodeURIComponent(head)}&per_page=20`);
   if (closed.status === 200 && Array.isArray(closed.data) && closed.data.some((p) => p.merged_at && String(p.merged_at) > plan.date))
-    throw new StudioError('La PR DS-Studio a été mergée depuis la dernière lecture du dépôt : relis-le (bouton Dépôt) avant de publier.', 409);
+    throw new StudioError('La PR DS-Studio a été mergée depuis la dernière lecture du dépôt : le relire (bouton Dépôt) avant de publier.', 409);
 
   const base = await call('GET', `/git/ref/heads/${target.base}`);
   if (base.status !== 200) fail(`branche ${target.base}`, base);
@@ -253,7 +253,7 @@ export async function publishRepoVersion(
       `Token(s) retiré(s) dans l’atelier mais encore utilisé(s) dans le code : ${result.blocked
         .slice(0, 10)
         .map((b) => `${b.code} (${b.uses} usage(s))`)
-        .join(', ')}. Remets-les ou remplace leurs usages, puis « Réessayer ».`,
+        .join(', ')}. Les remettre ou remplacer leurs usages, puis « Réessayer ».`,
       409,
     );
   const summary: RepoPrSummary = {

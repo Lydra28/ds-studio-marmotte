@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import test from 'node:test';
 import { CATALOG, handleEvent, isLiveKey, setupCatalog, stripeWebhooks, WEBHOOK_EVENTS, type BillingClient } from '../../server/billing.js';
 import { PRO_INCLUDED_CENTS } from '../../server/credits.js';
-import { connect, testApp, type TestApp } from './helpers.js';
+import { connect, connectSite, testApp, type TestApp } from './helpers.js';
 
 const SECRET = 'whsec_test_secret';
 const user = { email: 'client@example.com', password: 'un-mot-de-passe-solide' };
@@ -61,6 +61,14 @@ async function billingApp(extra: { siteUrl?: string; termsConsent?: boolean } = 
   return { t, stripe };
 }
 
+// Session du site sans site configuré (le cookie y serait refusé) : session
+// ouverte comme l'app puis marquée `site` en base, jeton passé en Bearer.
+async function siteSession(t: TestApp, u: { email: string; password: string }) {
+  const token = await connect(t, u);
+  await t.db.query("UPDATE sessions SET client = 'site' WHERE token_hash = $1", [createHash('sha256').update(token).digest('hex')]);
+  return token;
+}
+
 let seq = 0;
 const event = (type: string, object: Record<string, unknown>) => ({ id: `evt_${++seq}`, type, data: { object } });
 
@@ -69,7 +77,7 @@ test('facturation : sans Stripe configuré, checkout, portail et webhook répond
   try {
     const token = await connect(t, user);
     assert.equal((await t.api('/v1/billing/checkout', { json: { kind: 'pro' }, token })).status, 503);
-    assert.equal((await t.api('/v1/billing/portal', { json: {}, token })).status, 503);
+    assert.equal((await t.api('/v1/billing/portal', { json: {}, token: await siteSession(t, user) })).status, 503);
     assert.equal((await webhook(t, event('ping', {}))).status, 503);
     assert.equal((await t.api('/v1/billing/checkout', { json: { kind: 'pro' } })).status, 401, 'connexion requise avant tout');
   } finally {
@@ -81,7 +89,8 @@ test('facturation : Checkout recharge puis Pro, client Stripe créé une fois ; 
   const { t, stripe } = await billingApp();
   try {
     const token = await connect(t, user);
-    assert.equal((await t.api('/v1/billing/portal', { json: {}, token })).status, 409, 'rien à gérer avant un achat');
+    const site = await siteSession(t, user);
+    assert.equal((await t.api('/v1/billing/portal', { json: {}, token: site })).status, 409, 'rien à gérer avant un achat');
 
     const topup = await t.api('/v1/billing/checkout', { json: { kind: 'credits', pack: '10' }, token });
     assert.equal(topup.status, 200, JSON.stringify(topup.body));
@@ -110,7 +119,12 @@ test('facturation : Checkout recharge puis Pro, client Stripe créé une fois ; 
     assert.deepEqual(proSession.params.subscription_data, { metadata: { account_id: accountId } });
     assert.equal((proSession.params.line_items as { price: string }[])[0].price, [...stripe.prices.values()].find((p) => p.lookup_key === 'pro_monthly')!.id);
 
-    const portal = await t.api('/v1/billing/portal', { json: {}, token });
+    // Portail Stripe : session du site seulement ; l'app reçoit la page Compte, sans session Stripe.
+    const fromApp = await t.api('/v1/billing/portal', { json: {}, token });
+    assert.equal(fromApp.status, 200);
+    assert.deepEqual(fromApp.body, { url: 'http://server.test/v1/billing/done?s=portal', site: true });
+    assert.equal(stripe.only('billingPortal.sessions.create').length, 0, 'aucun portail ouvert par une session de l’app');
+    const portal = await t.api('/v1/billing/portal', { json: {}, token: site });
     assert.equal(portal.status, 200);
     assert.equal(portal.body.url, 'https://portal.stripe.test/');
     assert.equal(stripe.only('billingPortal.sessions.create')[0].params.return_url, 'http://server.test/v1/billing/done?s=portal');
@@ -378,7 +392,9 @@ test('site (lot 7) : retours Stripe vers les pages du site ; case des CGV seulem
     assert.equal(session.params.success_url, 'https://site.test/merci/');
     assert.equal(session.params.cancel_url, 'https://site.test/paiement-annule/');
     assert.equal('consent_collection' in session.params, false, 'sans URL des CGV chez Stripe, la session serait refusée');
-    assert.equal((await t.api('/v1/billing/portal', { json: {}, token })).status, 200);
+    assert.deepEqual((await t.api('/v1/billing/portal', { json: {}, token })).body, { url: 'https://site.test/compte/', site: true });
+    const cookie = await connectSite(t, user, { origin: 'https://site.test' });
+    assert.equal((await t.api('/v1/billing/portal', { json: {}, headers: { cookie, origin: 'https://site.test' } })).status, 200);
     assert.equal(stripe.only('billingPortal.sessions.create')[0].params.return_url, 'https://site.test/compte/');
   } finally {
     await t.close();

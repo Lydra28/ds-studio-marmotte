@@ -124,7 +124,7 @@ export default function CompareView({
   };
   const beforeLabel =
     at === SITE ? 'Site actuel, sans DS-Studio' : at === 0 ? 'Départ du projet' : `${name(at)} · ${when(at)}`;
-  const afterLabel = draft ? 'Tes modifications en cours' : `Enregistré · ${name(state.revision)}`;
+  const afterLabel = draft ? 'Modifications en cours' : `Enregistré · ${name(state.revision)}`;
   const before = at === SITE ? state.set : sets[at];
   const after = draft ? draftSet : state.set;
   const same = at === state.revision && !draft;
@@ -233,7 +233,7 @@ export default function CompareView({
       </div>
       {same && (
         <p className="hint compare__same" role="status">
-          Avant et après sont identiques : fais glisser le curseur vers une version plus ancienne.
+          Avant et après sont identiques : faire glisser le curseur vers une version plus ancienne.
         </p>
       )}
       <div className="compare__tools">

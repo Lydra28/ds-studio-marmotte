@@ -194,7 +194,7 @@ export function DiffDialog({
   return (
     <ChangesDialog
       title={`Diff · ${sourceLabel[proposal.source]} · ${proposal.patches.length} changement(s)`}
-      hint="Rien n’est écrit tant que tu n’as pas validé."
+      hint="Rien n’est écrit avant la validation."
       patches={proposal.patches}
       busy={busy}
       onCancel={onCancel}
@@ -293,7 +293,7 @@ export function FigmaDialog({
           Desktop → Plugins → Développement → Importer un plugin depuis un manifeste… →{' '}
           <code>studio/figma-plugin/manifest.json</code>.
         </li>
-        <li>Ouvre le fichier cible, lance DS-Studio, colle le code. Fichier non identifié : colle son lien (Partager → Copier le lien).</li>
+        <li>Ouvrir le fichier cible, lancer DS-Studio, coller le code. Fichier non identifié : coller son lien (Partager → Copier le lien).</li>
         <li>
           « Transférer » écrit la dernière version acceptée ; « Envoyer les composants » les renvoie ici, à relire par
           diff.
