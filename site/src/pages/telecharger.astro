@@ -26,6 +26,7 @@ import { DOWNLOADS, INSTALLERS } from '../lib/site';
           </a>
           <h3>Premier lancement</h3>
           <p class="os-note">{i.note}</p>
+          {'command' in i && <pre class="os-cmd"><code>{i.command}</code></pre>}
         </section>
       ))
     }

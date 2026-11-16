@@ -40,7 +40,8 @@ export const euros = (cents: number) =>
     : `${(cents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 
 // Fichiers à nom fixe poussés par release.yml à chaque version (lot 7) ;
-// `icon` : logo pixel du système (components/PixelIcon.astro).
+// `icon` : logo pixel du système (components/PixelIcon.astro) ; `command` :
+// commande à lancer au premier lancement, affichée sous la note.
 export const INSTALLERS = [
   {
     os: 'Windows',
@@ -54,7 +55,12 @@ export const INSTALLERS = [
     icon: 'apple',
     file: 'DS-Studio.dmg',
     detail: 'Mac à puce Apple (M1 et suivants).',
-    note: 'L’app n’est pas encore signée par Apple : après l’avoir glissée dans Applications, faire clic droit sur DS-Studio puis « Ouvrir », et confirmer. Les mises à jour automatiques arriveront avec la signature.',
+    // App non signée téléchargée : macOS la dit « endommagée », sans bouton
+    // pour l'ouvrir quand même ; le clic droit → Ouvrir ne marche plus depuis
+    // macOS 15. Retirer la quarantaine (2026-11-16, pas encore essayé sur un
+    // vrai Mac : references/pieges.md du projet).
+    note: 'L’app n’est pas encore signée par Apple : sans cette étape, macOS indique que « DS-Studio est endommagé » ou qu’il ne peut pas le vérifier. Après l’avoir glissée dans le dossier Applications, lancer la commande ci-dessous dans le Terminal, puis ouvrir DS-Studio. Les mises à jour automatiques arriveront avec la signature.',
+    command: 'xattr -cr /Applications/DS-Studio.app',
   },
   {
     os: 'Linux',

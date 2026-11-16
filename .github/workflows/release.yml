@@ -7,7 +7,9 @@
 # `stable-linux.yml`) ; electron-builder produit aussi `latest*.yml`, publiés
 # avec. Signature Mac quand ils existent :
 # CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID.
-# Sans eux : Mac non signé (ouverture par clic droit), mises à jour Mac désactivées.
+# Sans eux : Mac non signé, mises à jour Mac désactivées ; téléchargé, macOS le
+# dit « endommagé » : `xattr -cr /Applications/DS-Studio.app` (pas de clic droit
+# → Ouvrir depuis macOS 15 ; non essayé sur un vrai Mac, voir le site).
 name: Publier les installateurs
 on:
   push:

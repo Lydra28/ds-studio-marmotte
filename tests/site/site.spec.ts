@@ -114,6 +114,10 @@ test('prix et téléchargements : montants du catalogue, fichiers à nom fixe', 
       'href',
       `https://downloads.example/stable/${file}`,
     );
+  // Mac non signé : quarantaine retirée au Terminal (le clic droit → Ouvrir
+  // ne suffit plus depuis macOS 15).
+  // Texte exact (toHaveText normalise les espaces) : copiée telle quelle.
+  expect(await page.locator('.os-cmd').textContent()).toBe('xattr -cr /Applications/DS-Studio.app');
   await page.goto('/plugin-figma/');
   await expect(page.getByText('en cours de validation par Figma')).toBeVisible();
 });

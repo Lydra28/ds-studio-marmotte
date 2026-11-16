@@ -618,6 +618,19 @@ section {
   color: var(--c-soft);
   text-wrap: pretty;
 }
+/* Commande à copier (Mac non signé) : sélectionnée d'un clic. */
+.os-cmd {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  font-family: var(--c-mono);
+  font-size: 13px;
+  color: var(--c-text);
+  background: var(--c-raised);
+  border: 1px solid var(--c-line);
+  border-radius: 8px;
+  user-select: all;
+}
 
 /* Page Prix (lot 4) : texte et carte Pro en verre (GlassCard.astro), puis
    trois colonnes à filets, Pro marqué en lime. */
