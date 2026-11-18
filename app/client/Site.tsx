@@ -41,6 +41,9 @@ export function SiteFrame({
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const origin = siteOrigin(slug, relay, raw);
+  // Erreur du relais (redirection hors du site, site injoignable…) : sa page,
+  // minuscule une fois le cadre mis à l'échelle, est redite ici en grand.
+  const [error, setError] = useState<string | null>(null);
   const css = useMemo(
     () =>
       exportCss(
@@ -58,7 +61,11 @@ export function SiteFrame({
     // Chaque page chargée dans le cadre (navigation comprise) redemande le CSS.
     const onMessage = (e: MessageEvent) => {
       if (e.origin !== origin || e.source !== frame.current?.contentWindow) return;
-      if (e.data?.type === 'ds-site-ready') push();
+      if (e.data?.type === 'ds-site-ready') {
+        setError(null);
+        push();
+      }
+      if (e.data?.type === 'ds-site-error' && typeof e.data.message === 'string') setError(e.data.message.slice(0, 300));
       if (e.data?.type === 'ds-scroll' && typeof e.data.y === 'number') onScroll?.(e.data.y);
     };
     window.addEventListener('message', onMessage);
@@ -75,6 +82,12 @@ export function SiteFrame({
         src={origin + page}
         style={{ width, height, transform: `scale(${scale})` }}
       />
+      {error && (
+        <div className="site-frame__error" role="alert">
+          <strong>Site indisponible dans l’atelier</strong>
+          <p>{error}</p>
+        </div>
+      )}
     </div>
   );
 }

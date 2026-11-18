@@ -103,6 +103,12 @@ export interface RepoProposal {
   report: RepoReport;
   tokens: PlanToken[];
   entries: PlanEntry[];
+  /**
+   * Clés du jeu proposé absentes du jeu enregistré à la lecture : seulement
+   * proposées. Absentes à la publication, elles n'ont jamais été reprises
+   * (brouillon pas mis ou pas validé), elles n'ont pas été retirées.
+   */
+  proposed: string[];
   truncated: boolean;
 }
 
@@ -448,6 +454,15 @@ export function proposeFromRepo(scan: RepoScan, set: TokenSet, options: { mode: 
       }
       const target = modeValues(token.$collection, v);
       for (const [mode, value] of Object.entries(target)) {
+        // Dépôt peu structuré : le regroupement des valeurs en dur a pu viser
+        // ce token du gabarit. La valeur déclarée dans le code l'emporte (la
+        // PR la laisse alors telle quelle) ; jamais deux changements clé@mode,
+        // que le client refuse en bloc (recette du 2026-11-17).
+        if (options.mode === 'create')
+          for (let i = wanted.length - 1; i >= 0; i--) {
+            const w = wanted[i];
+            if (!('op' in w) && w.key === d.existing && w.mode === mode) wanted.splice(i, 1);
+          }
         const current = token.$values[mode];
         if (current === value) continue;
         if (options.mode === 'attach') {
@@ -499,6 +514,13 @@ export function proposeFromRepo(scan: RepoScan, set: TokenSet, options: { mode: 
     if (removed) notes.push(`Gabarit remplacé : ${removed} token(s) de départ retiré(s) au profit de ceux du dépôt.`);
   }
   const final = finalizeChanges(set, wanted);
+  // Filet : `normalize` peut encore produire deux valeurs clé@mode (ajout d'un
+  // token déjà ajouté). Appliqués dans l'ordre, le dernier gagne : seul gardé.
+  const lastAt = new Map<string, number>();
+  final.changes.forEach((c, i) => {
+    if (!('op' in c)) lastAt.set(`${c.key}@${c.mode}`, i);
+  });
+  final.changes = final.changes.filter((c, i) => 'op' in c || lastAt.get(`${c.key}@${c.mode}`) === i);
   if (final.rejected.length) notes.push(`${final.rejected.length} changement(s) refusé(s) à l'essai à blanc.`);
   const next = final.set;
 
@@ -642,6 +664,7 @@ export function proposeFromRepo(scan: RepoScan, set: TokenSet, options: { mode: 
     rejected: final.rejected,
     tokens,
     entries,
+    proposed: [...finalKeys].filter((k) => !set.tokens[k]),
     truncated,
     report: {
       strategy,

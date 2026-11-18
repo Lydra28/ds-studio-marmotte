@@ -413,6 +413,8 @@ function NewProject({
       } catch {
         /* Message ci-dessous. */
       }
+      // http accepté : styles lus quand même ; le serveur l'écarte du Site en
+      // direct et le dit (`notice`, affiché à l'ouverture du projet).
       if (!parsed || !/^https?:$/.test(parsed.protocol))
         return setError('Adresse du site attendue : https://… (page publique).');
     }
@@ -420,7 +422,7 @@ function NewProject({
     setError('');
     try {
       const chosen = repos.find((r) => r.fullName === repo);
-      const { slug } = await createProject({
+      const { slug, notice } = await createProject({
         name,
         doctrine,
         ideas,
@@ -431,7 +433,7 @@ function NewProject({
       // Projet neuf : il s'ouvre sur le Mur des DA, première étape du parcours ;
       // depuis un site (lot 5) ou un dépôt (G3), sur la planche avec la lecture
       // lancée (le dépôt prime : ses tokens sont déclarés, ceux du site devinés).
-      rememberStart(slug, { repo: !!chosen, site });
+      rememberStart(slug, { repo: !!chosen, site, notice });
       onCreated(slug);
     } catch (err) {
       setError((err as Error).message);

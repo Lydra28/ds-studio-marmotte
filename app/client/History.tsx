@@ -32,6 +32,15 @@ export function changeSummary(patches: Patch[]) {
   return parts.join(', ') || 'Aucun changement';
 }
 
+// Pourquoi « Revenir à cette version » est grisé, dit en clair sous le bouton
+// (null : le bouton est actif). Seule la version égale à l'état enregistré l'est.
+export function restoreBlocked(revision: number, saved: number, draft: boolean) {
+  if (revision !== saved) return null;
+  return draft
+    ? 'Version enregistrée en cours : le brouillon se défait par « Abandonner ».'
+    : 'Version enregistrée en cours : rien à rétablir.';
+}
+
 const date = (iso: string) => new Date(iso).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' });
 
 export default function History({
@@ -108,7 +117,8 @@ export default function History({
           const current = v.revision === state.revision && !draft;
           // Brouillon sur la version actuelle : rien à « revenir » côté
           // enregistré, c'est « Abandonner » qui défait le brouillon.
-          const restorable = v.revision !== state.revision;
+          const blocked = restoreBlocked(v.revision, state.revision, draft);
+          const why = `hist-why-${v.revision}`;
           return (
             <li key={v.file} className="hist__item">
               <div className="hist__head">
@@ -130,12 +140,18 @@ export default function History({
                 </button>
                 <button
                   onClick={() => onRestore(v.revision)}
-                  disabled={!restorable}
+                  disabled={!!blocked}
                   aria-label={`Revenir à cette version (v${v.revision})`}
+                  aria-describedby={blocked ? why : undefined}
                 >
                   Revenir à cette version
                 </button>
               </div>
+              {blocked && (
+                <p className="hist__why" id={why}>
+                  {blocked}
+                </p>
+              )}
               {revisions(between(previous ?? 0, v.revision))}
             </li>
           );

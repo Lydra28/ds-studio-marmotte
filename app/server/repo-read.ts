@@ -95,6 +95,12 @@ export interface RepoPlan {
   report: RepoReport;
   tokens: PlanToken[];
   entries: PlanEntry[];
+  /**
+   * Clés seulement proposées à cette lecture (absentes du jeu enregistré) :
+   * absentes à la publication, « jamais reprises », jamais « retirées ».
+   * Plan écrit avant le 2026-11-17 : absent, tout token absent est « retiré ».
+   */
+  proposed?: string[];
   truncated: boolean;
 }
 
@@ -131,6 +137,7 @@ export async function readProjectRepo(
     report: proposal.report,
     tokens: proposal.tokens,
     entries: proposal.entries,
+    proposed: proposal.proposed,
     truncated: proposal.truncated || read.scan.truncated || read.filesTruncated,
   };
   await fs.mkdir(path.dirname(planFile(dataDir)), { recursive: true, mode: 0o700 });

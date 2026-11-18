@@ -165,7 +165,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     }
     const url = process.env.DATABASE_URL;
     if (!url || url === 'memory') {
-      console.error('DATABASE_URL manquante : pose l’URL externe de la base Render dans ce terminal, ou lance npm run admin:ui -- --demo.');
+      console.error('DATABASE_URL manquante : poser l’URL externe de la base Render dans ce terminal, ou lancer npm run admin:ui -- --demo.');
       process.exit(1);
     }
     db = await pgDb(url);

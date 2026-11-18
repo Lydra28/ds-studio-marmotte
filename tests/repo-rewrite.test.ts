@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { applyChanges, tokenSetSchema, type TokenSet } from '../app/shared/model.js';
 import { proposeFromRepo } from '../app/shared/repo-propose.js';
-import { locate, rewriteRepo } from '../app/shared/repo-rewrite.js';
+import { locate, rewriteRepo, stillProposed } from '../app/shared/repo-rewrite.js';
 import { scanRepo } from '../app/shared/repo-scan.js';
 
 // PR qui modifie le code (plan GitHub, G5) : réécriture pure sur un dépôt fictif.
@@ -105,7 +105,8 @@ test('réécriture : token retiré encore utilisé → bloqué ; code changé de
   const { plan, set } = setup();
   delete set.tokens['bg/brand'];
   const blocked = rewriteRepo({ tokens: plan.tokens, entries: plan.entries, set, rename: {}, files: files() });
-  assert.deepEqual(blocked.blocked, [{ code: '--bg-brand', uses: 1 }]);
+  // Plan d'avant la recette du 2026-11-17 (sans `proposed`) : même blocage qu'avant.
+  assert.deepEqual(blocked.blocked, [{ code: '--bg-brand', key: 'bg/brand', file: 'src/styles/tokens.css', line: 8, uses: 1 }]);
 
   const fresh = setup();
   fresh.set.tokens['color/paper'].$values.default = '#FFFFFF';
@@ -131,4 +132,72 @@ test('réécriture : fins de ligne Windows gardées', () => {
   const css = r.files[0].text;
   assert.match(css, /--font-body: "Satoshi", sans-serif;\r\n {2}--space-xl: 32px;/);
   assert.doesNotMatch(css.replace(/\r\n/g, ''), /\n/);
+});
+
+// Recette du 2026-11-17 : projet créé depuis un dépôt, panneau fermé sans
+// « Mettre en brouillon », puis « Accepter ». Les tokens du dépôt n'ont été que
+// proposés : ni « retirés » (blocage), ni déclarations supprimées.
+const FEW = [
+  ':root {',
+  '  --brand-main: #2563eb;',
+  '  --ink-strong: #111827;',
+  '  --gap-base: 16px;',
+  '}',
+  '.a { color: var(--brand-main); padding: 16px; }',
+  '',
+].join('\n');
+
+test('réécriture : token seulement proposé et encore utilisé → signalé « jamais repris », jamais bloqué', () => {
+  const set0 = template();
+  const plan = proposeFromRepo(scanRepo([{ path: 'src/a.css', text: FEW }]), set0, { mode: 'create' });
+  assert.ok(plan.proposed.includes('brand/main'), 'tokens absents du jeu à la lecture marqués comme proposés');
+  const r = rewriteRepo({ tokens: plan.tokens, entries: plan.entries, set: set0, rename: {}, files: new Map([['src/a.css', FEW]]), proposed: plan.proposed });
+  assert.deepEqual(r.blocked, []);
+  const main = r.untaken.find((u) => u.code === '--brand-main');
+  assert.deepEqual(main, { code: '--brand-main', key: 'brand/main', file: 'src/a.css', line: 2, uses: 1 });
+});
+
+test('réécriture : token seulement proposé sans usage → déclaration gardée, jamais comptée retirée', () => {
+  const set0 = template();
+  const quiet = FEW.replace('var(--brand-main)', '#2563eb');
+  const plan = proposeFromRepo(scanRepo([{ path: 'src/a.css', text: quiet }]), set0, { mode: 'create' });
+  const r = rewriteRepo({ tokens: plan.tokens, entries: plan.entries, set: set0, rename: {}, files: new Map([['src/a.css', quiet]]), proposed: plan.proposed });
+  assert.deepEqual(r.removed, []);
+  assert.deepEqual(r.untaken.map((u) => u.code).sort(), ['--brand-main', '--gap-base', '--ink-strong']);
+  const out = r.files.find((f) => f.path === 'src/a.css')?.text ?? quiet;
+  assert.ok(out.startsWith(':root {\n  --brand-main: #2563eb;\n  --ink-strong: #111827;\n  --gap-base: 16px;\n}'), 'les trois déclarations restent');
+  // Valeur en dur rattachée à un token jamais repris : laissée, avec la bonne raison.
+  assert.ok(r.skipped.every((s) => !/retiré/.test(s.reason)));
+});
+
+test('réécriture : token présent à la lecture puis retiré → toujours bloqué, avec clé, fichier et ligne', () => {
+  const { plan, set } = setup();
+  delete set.tokens['bg/brand'];
+  const r = rewriteRepo({ tokens: plan.tokens, entries: plan.entries, set, rename: {}, files: files(), proposed: [] });
+  assert.deepEqual(r.blocked, [{ code: '--bg-brand', key: 'bg/brand', file: 'src/styles/tokens.css', line: 8, uses: 1 }]);
+  assert.deepEqual(r.untaken, []);
+});
+
+// Relecture du 2026-11-18 : un token proposé à la lecture, repris dans une
+// version, puis retiré, est un vrai retrait (le plan n'est pas recalculé).
+test('réécriture : token proposé, accepté puis retiré, encore utilisé → bloqué', () => {
+  const set0 = template();
+  const plan = proposeFromRepo(scanRepo([{ path: 'src/a.css', text: FEW }]), set0, { mode: 'create' });
+  const readAt = '2026-11-18T10:00:00.000Z';
+  const taken = applyChanges(set0, plan.changes);
+  assert.ok(taken.tokens['brand/main'], 'repris dans la version 1');
+  const accepted = [
+    { acceptedAt: '2026-11-18T09:00:00.000Z', set: taken }, // avant la lecture : ignorée
+    { acceptedAt: '2026-11-18T11:00:00.000Z', set: taken },
+  ];
+  const left = stillProposed(plan.proposed, readAt, accepted);
+  assert.ok(!left.includes('brand/main'));
+  assert.deepEqual(stillProposed(plan.proposed, readAt, accepted.slice(0, 1)), plan.proposed, 'version d’avant la lecture : rien de repris');
+  assert.deepEqual(stillProposed(undefined, readAt, accepted), []);
+
+  const removed = structuredClone(taken);
+  delete removed.tokens['brand/main'];
+  const r = rewriteRepo({ tokens: plan.tokens, entries: plan.entries, set: removed, rename: {}, files: new Map([['src/a.css', FEW]]), proposed: left });
+  assert.deepEqual(r.blocked.map((b) => b.code), ['--brand-main']);
+  assert.ok(!r.untaken.some((u) => u.code === '--brand-main'));
 });

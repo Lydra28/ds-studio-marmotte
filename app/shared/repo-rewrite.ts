@@ -9,11 +9,34 @@ import { parseColor, parseLength } from './repo-scan.js';
 // ligne, sinon signalée), rien n'est deviné. Aucun fichier n'est créé ; seuls
 // les fichiers lus du dépôt changent.
 
+/**
+ * Clés encore « seulement proposées » au moment de publier : celles du plan
+ * qu'aucune version acceptée depuis la lecture du dépôt n'a contenues. Une clé
+ * reprise dans une version puis retirée est un vrai retrait (bloquant s'il
+ * reste des usages), jamais un « jamais repris » (relecture du 2026-11-18).
+ */
+export function stillProposed(proposed: string[] | undefined, readAt: string, accepted: { acceptedAt: string; set: TokenSet }[]) {
+  const taken = new Set(accepted.filter((v) => v.acceptedAt >= readAt).flatMap((v) => Object.keys(v.set.tokens)));
+  return (proposed ?? []).filter((k) => !taken.has(k));
+}
+
+// Chemin pour reprendre un token jamais repris : PR (github.ts) et app (App.tsx).
+export const RETAKE_PATH = '« GitHub » → « Relire le dépôt » → « Mettre en brouillon » → « Voir le diff et valider », puis accepter une nouvelle version';
+
 export interface Skipped {
   file: string;
   line: number;
   value: string;
   reason: string;
+}
+
+/** Variable du dépôt et sa déclaration lue (`uses` : null si non mesuré). */
+export interface Declared {
+  code: string;
+  key: string;
+  file: string;
+  line: number;
+  uses: number | null;
 }
 
 export interface RewriteResult {
@@ -25,7 +48,12 @@ export interface RewriteResult {
   /** Déclarations retirées (aucun usage mesuré). */
   removed: string[];
   /** Tokens retirés dans l'atelier mais encore utilisés : la PR est refusée. */
-  blocked: { code: string; uses: number }[];
+  blocked: Declared[];
+  /**
+   * Tokens du dépôt seulement proposés à la lecture, absents de la version :
+   * jamais repris (pas « retirés »). Déclaration laissée telle quelle, PR non bloquée.
+   */
+  untaken: Declared[];
   /** Valeurs en dur remplacées par un token. */
   written: number;
   /** Remplacements par un token proche, pas identique (écart de rendu). */
@@ -70,10 +98,13 @@ export function rewriteRepo(input: {
   set: TokenSet;
   rename: Record<string, string>;
   files: Map<string, string>;
+  /** Clés seulement proposées à la lecture du dépôt (`RepoProposal.proposed`). */
+  proposed?: string[];
   truncated?: boolean;
 }): RewriteResult {
   const { set, rename, files } = input;
-  const out: RewriteResult = { files: [], changed: [], added: [], removed: [], blocked: [], written: 0, gaps: [], skipped: [], unmapped: 0, notes: [] };
+  const proposed = new Set(input.proposed ?? []);
+  const out: RewriteResult = { files: [], changed: [], added: [], removed: [], blocked: [], untaken: [], written: 0, gaps: [], skipped: [], unmapped: 0, notes: [] };
   type Edit = { at: number; end: number; text: string; line: number; value: string; entry?: PlanEntry };
   const edits = new Map<string, Edit[]>();
   const edit = (file: string, e: Edit) => {
@@ -111,12 +142,19 @@ export function rewriteRepo(input: {
   };
 
   // 1. Variables déclarées : nouvelle valeur sur place, ou déclaration retirée.
+  // Token absent de la version : retiré s'il était dans le jeu à la lecture ;
+  // seulement proposé sinon (jamais repris), et rien n'est touché.
   for (const t of input.tokens) {
     const token = set.tokens[t.key];
     const text = files.get(t.file);
     if (!token) {
+      const declared: Declared = { code: t.code, key: t.key, file: t.file, line: t.line, uses: t.uses };
+      if (proposed.has(t.key)) {
+        out.untaken.push(declared);
+        continue;
+      }
       if (t.uses) {
-        out.blocked.push({ code: t.code, uses: t.uses });
+        out.blocked.push(declared);
         continue;
       }
       const at = text === undefined ? null : locate(text, t.offset, t.value, t.line);
@@ -189,7 +227,7 @@ export function rewriteRepo(input: {
       continue;
     }
     if (!set.tokens[e.token]) {
-      skip(e.file, e.line, e.value, 'token retiré dans l’atelier');
+      skip(e.file, e.line, e.value, proposed.has(e.token) ? `token ${e.token} jamais repris dans l’atelier` : 'token retiré dans l’atelier');
       continue;
     }
     if (JS_VIA.has(e.via) || /^['"`]/.test(e.value)) {

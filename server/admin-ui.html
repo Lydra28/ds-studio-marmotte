@@ -146,7 +146,7 @@
       <h3>Supprimer le compte (demande de la personne)</h3>
       <p class="muted">Irréversible. Sans achat, tout est effacé ; après un achat, le compte est anonymisé et le grand livre gardé 10 ans. Refusé tant qu’un abonnement est en cours.</p>
       <form class="row" id="f-delete">
-        <input id="delete-email" class="wide" type="email" required autocomplete="off" placeholder="Retape l’adresse du compte" aria-label="Adresse du compte, en confirmation">
+        <input id="delete-email" class="wide" type="email" required autocomplete="off" placeholder="Saisir à nouveau l’adresse du compte" aria-label="Adresse du compte, en confirmation">
         <button type="submit" class="danger">Supprimer</button>
       </form>
     </section>
@@ -296,7 +296,7 @@ async function showDetail() {
   fact('Coût du mois', usd(a.monthCents));
   fact('Inscription', date(a.createdAt));
   $('d-gift-text').textContent = a.gifted
-    ? 'Ce compte n’est jamais débité : tout son usage est un coût pour l’éditeur. Retirer l’accès gratuit le rend classique (plafond 200 c$).'
+    ? 'Ce compte n’est jamais débité : tout son usage est un coût pour l’éditeur. Retirer l’accès gratuit le rend classique (plafond 50 c$ par jour).'
     : 'Passer en offert : palier Pro, jamais débité, plafond ramené à 10 c$ par jour.';
   const gift = $('d-gift');
   gift.textContent = a.gifted ? 'Retirer l’accès gratuit' : 'Passer en compte offert';

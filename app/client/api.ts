@@ -177,7 +177,10 @@ export const createProject = (p: {
   repo?: string;
   base?: string;
   subdir?: string;
-}) => request<{ slug: string }>('projects', p);
+  // `notice` : adresse du site écartée du Site en direct (http://), à montrer.
+}) => request<{ slug: string; notice: string | null }>('projects', p);
+// Adresse du Site en direct d'un projet existant (https, origine seule).
+export const setSiteUrl = (url: string) => request<Config>('site', { url });
 // Plan GitHub, G3 : dépôt lu en mémoire sur le poste, proposition sur le jeu
 // enregistré, plan de remplacement gardé dans le projet.
 export interface RepoResult {
@@ -247,6 +250,8 @@ export interface RepoPrSummary {
   removed: number;
   skipped: number;
   unmapped: number;
+  // Variables du dépôt jamais reprises dans l'atelier (recette du 2026-11-17).
+  untaken?: number;
 }
 export type GithubResult =
   | { status: 'opened' | 'updated'; branch: string; url: string; summary?: RepoPrSummary }

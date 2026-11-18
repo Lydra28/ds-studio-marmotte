@@ -95,8 +95,9 @@ export const openSettings = () => {
   location.hash = SETTINGS_HASH.slice(1);
 };
 // Projet neuf : où il s'ouvre et quelle lecture se lance (dépôt G3, site lot 5).
-export function rememberStart(slug: string, from: { repo?: boolean; site?: string }) {
+export function rememberStart(slug: string, from: { repo?: boolean; site?: string; notice?: string | null }) {
   try {
+    if (from.notice) sessionStorage.setItem(`ds-notice:${slug}`, from.notice);
     sessionStorage.setItem(`ds-start:${slug}`, from.site || from.repo ? 'board' : 'wall');
     if (from.repo) sessionStorage.setItem(`ds-repo:${slug}`, 'create');
     else if (from.site) sessionStorage.setItem(`ds-extract:${slug}`, from.site);

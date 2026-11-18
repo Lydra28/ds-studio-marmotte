@@ -174,7 +174,9 @@ export default function Wall({
               <button
                 className="remove"
                 aria-label={`Retirer ${i.name}`}
-                onClick={() => run('remove', async () => setWall(await removeInspiration(i.id)))}
+                // La réponse de remove n'a ni enabled ni reason : les garder (recette du 2026-11-17,
+                // « Proposer » grisé après un retrait alors que le compte est connecté).
+                onClick={() => run('remove', async () => setWall({ ...wall!, ...(await removeInspiration(i.id)) }))}
               >
                 ×
               </button>

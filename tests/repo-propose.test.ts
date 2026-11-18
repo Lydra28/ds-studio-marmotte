@@ -220,3 +220,27 @@ test('repo-propose (recette 2026-11-09) : fichier de tokens prioritaire, écarts
   assert.equal(p.entries.find((e) => e.value === '#7C3AED' && e.property === '--brand-gradient')?.token, 'brand');
   assert.equal(p.entries.some((e) => e.property === '--label'), false); // couleur dans une chaîne : jamais lue
 });
+
+// Recette du 2026-11-17 : dépôt de moins de 10 variables (regroupement des
+// valeurs en dur sur le gabarit) dont une porte un nom du gabarit. Deux
+// changements sur le même token et le même mode faisaient refuser tout le
+// brouillon par le client. La valeur déclarée dans le code l'emporte.
+test('repo-propose : variable au nom du gabarit dans un dépôt peu structuré → un seul changement, valeur du code', () => {
+  const cases: [string, string, string, string | number][] = [
+    ['--space-md: 20px', '.a { padding: 18px; margin: 18px; gap: 18px; }\n.b { padding: 18px 6px; }', 'space/md@default', 20],
+    ['--text-primary: #111827', 'body { color: #222222; background: #ffffff; }\n.b { color: #fff; }', 'text/primary@light', '#111827'],
+    ['--font-family-sans: "Inter", sans-serif', 'body { font-family: Georgia, serif; }', 'font/family/sans@default', 'Inter'],
+    ['--radius-md: 10px', '.a { border-radius: 6px; } .b { border-radius: 6px; } .c { border-radius: 14px; }', 'radius/md@default', 10],
+  ];
+  for (const [decl, rest, id, expected] of cases) {
+    const css = `:root {\n  --brand-main: #2563eb;\n  ${decl};\n}\n${rest}\n`;
+    const set = template();
+    const p = proposeFromRepo(scanRepo([{ path: 'src/a.css', text: css }]), set, { mode: 'create' });
+    assert.equal(p.report.strategy, 'inventory', decl);
+    const ids = p.changes.map((c) => ('op' in c ? `${c.op}:${'key' in c ? c.key : c.name}` : `${c.key}@${c.mode}`));
+    assert.deepEqual(ids.filter((x, i) => ids.indexOf(x) !== i), [], `${decl} : aucun doublon clé@mode`);
+    const next = applyChanges(set, p.changes);
+    const [key, mode] = id.split('@');
+    assert.equal(next.tokens[key].$values[mode], expected, `${decl} : valeur déclarée dans le code gardée`);
+  }
+});

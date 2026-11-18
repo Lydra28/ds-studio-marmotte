@@ -251,7 +251,17 @@ test('GitHub G5 : la version réécrit le code du dépôt, une seule branche et 
   const removed = { ...v, set: structuredClone(set) };
   delete removed.set.tokens['text/primary'];
   const refused = fakeGitData();
-  await assert.rejects(() => publishRepoVersion({ ...access, fetch: refused.fetch }, repoTarget, removed, plan, read), /--text-primary \(1 usage\(s\)\)/);
+  // Message de refus : nom du code, clé de l'atelier, fichier et ligne, quoi faire (retour de Romain du 2026-11-17).
+  await assert.rejects(
+    () => publishRepoVersion({ ...access, fetch: refused.fetch }, repoTarget, removed, plan, read),
+    (e: Error) => {
+      assert.match(e.message, /--text-primary \(token text\/primary de l’atelier, déclaré dans src\/styles\/tokens\.css ligne 5, 1 usage\(s\)\)/);
+      assert.match(e.message, /remettre ce token dans le design system sous le même nom \(text\/primary\) puis accepter une nouvelle version/);
+      assert.match(e.message, /« Réessayer »/);
+      assert.doesNotMatch(e.message, /\btu\b|redemande/);
+      return true;
+    },
+  );
   assert.equal(refused.trees.length, 0);
 
   // Code déjà à jour : aucune branche.
@@ -264,4 +274,40 @@ test('GitHub G5 : la version réécrit le code du dépôt, une seule branche et 
   const unchanged = await publishRepoVersion({ ...access, fetch: done.fetch }, repoTarget, v, { ...plan, entries: [] }, clean);
   assert.equal(unchanged.status, 'unchanged');
   assert.ok(!done.calls.some((c) => c.startsWith('POST')));
+});
+
+// Recette du 2026-11-17 : projet créé depuis un dépôt, proposition jamais mise
+// en brouillon, version acceptée. Rien n'est « retiré » : PR non bloquée, les
+// variables du dépôt restent et la PR dit comment les reprendre.
+test('GitHub G5 : tokens du dépôt jamais repris → PR ouverte, déclarations gardées, chemin pour les reprendre', async () => {
+  const blank = tokenSetSchema.parse(JSON.parse(await readFile(path.join(root, 'templates/blank/design-system.tokens.json'), 'utf8')));
+  const css = ':root {\n  --brand-main: #2563eb;\n  --ink-strong: #111827;\n}\n.a { color: var(--brand-main); padding: 16px; }\n';
+  const p = proposeFromRepo(scanRepo([{ path: 'src/a.css', text: css }]), blank, { mode: 'create' });
+  const plan = {
+    version: 2 as const,
+    date: '2026-11-17T10:00:00.000Z',
+    repo: 'dev/site',
+    ref: 'main',
+    subdir: null,
+    commit: 'abc1234',
+    mode: 'create' as const,
+    report: p.report,
+    tokens: p.tokens,
+    entries: p.entries,
+    proposed: p.proposed,
+    truncated: false,
+  };
+  const repoTarget = configSchema.parse({ name: 'S', github: { repo: 'dev/site', dir: '.', source: 'repo' } }).github!;
+  const v = { project: 'Site', revision: 1, hash: 'c'.repeat(64), set: blank };
+  const gh = fakeGitData();
+  const r = await publishRepoVersion({ token: 'jeton-app', apiUrl: 'http://faux-github.test', fetch: gh.fetch }, repoTarget, v, plan, async () => new Map([['src/a.css', css]]));
+  assert.notEqual(r.status, 'error');
+  assert.equal(r.summary.untaken, 2);
+  assert.equal(r.summary.removed, 0);
+  const written = gh.trees[0]?.files.find((f) => f.path === 'src/a.css')?.content ?? css;
+  assert.match(written, /--brand-main: #2563eb;\n {2}--ink-strong: #111827;/, 'déclarations intactes');
+  assert.match(
+    gh.pulls[0]?.body ?? '',
+    /2 variable\(s\) du dépôt jamais reprise\(s\)[^\n]*« GitHub » → « Relire le dépôt » → « Mettre en brouillon » → « Voir le diff et valider »/,
+  );
 });

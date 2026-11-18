@@ -114,4 +114,9 @@ test('mur : inspirations privées, génération avec images, résultat gardé po
   await wall.remove(image.id);
   await assert.rejects(() => wall.file(image.id), /introuvable/);
   assert.equal((await wall.read()).inspirations.length, 1);
+  // Relance de l'app (défaut 10 de la recette rc.18) : une nouvelle instance
+  // relit la dernière génération sur le disque, retrait d'inspiration compris.
+  const relaunched = await new Wall(dir, {}).read();
+  assert.equal(relaunched.inspirations.length, 1);
+  assert.equal(relaunched.result?.directions[0].name, 'Terrier calme');
 });

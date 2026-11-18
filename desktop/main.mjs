@@ -92,6 +92,53 @@ async function chooseProjects(cancelLabel) {
 let server;
 let window;
 let quitting = false;
+// Brouillon non validé (sessionStorage, perdu à la fermeture ; choix de Romain
+// du 2026-11-18) : question posée par `mayLeave` avant de fermer la fenêtre,
+// de quitter, d'installer une mise à jour ou de changer de dossier, donc
+// toujours avant d'arrêter le serveur. `leaving` = départ accepté (réponse
+// « Continuer » ou aucun brouillon) : plus de question pour ce départ.
+let leaving = false;
+let asking = null;
+const DRAFT_READ_MS = 1500;
+const live = () => !!window && !window.isDestroyed();
+function askLeave() {
+  const options = {
+    type: 'warning',
+    title: appName,
+    message: 'Brouillon non validé : il sera perdu.',
+    detail: 'Pour le garder : rester, puis « Voir le diff et valider ».',
+    buttons: ['Continuer sans valider', 'Rester'],
+    defaultId: 1,
+    cancelId: 1,
+    noLink: true,
+  };
+  return (live() ? dialog.showMessageBoxSync(window, options) : dialog.showMessageBoxSync(options)) === 0;
+}
+// Page figée ou absente : pas de réponse dans le délai = pas de brouillon lisible.
+async function pageHasDraft() {
+  if (!live()) return false;
+  try {
+    const read = window.webContents.executeJavaScript('window.__dsHasDraft?.() === true');
+    const late = new Promise((resolve) => setTimeout(() => resolve(false), DRAFT_READ_MS));
+    return (await Promise.race([read, late])) === true;
+  } catch {
+    return false;
+  }
+}
+// Une seule question à la fois ; ne rejette jamais (une erreur n'empêche pas de partir).
+function mayLeave() {
+  if (leaving) return Promise.resolve(true);
+  asking ??= (async () => {
+    try {
+      if ((await pageHasDraft()) && live() && !askLeave()) return false;
+    } catch {
+      /* Question impossible : départ laissé libre. */
+    }
+    leaving = true;
+    return true;
+  })().finally(() => (asking = null));
+  return asking;
+}
 
 // Mises à jour automatiques (electron-updater) : flux décrit par
 // desktop/build/update.json (écrit au build), vérification au lancement puis
@@ -142,10 +189,16 @@ async function checkUpdates() {
   }
 }
 async function installUpdate() {
-  if (updateState.status !== 'ready') return;
+  if (updateState.status !== 'ready' || quitting) return;
+  if (!(await mayLeave()) || quitting) return;
   quitting = true;
-  await stopServer();
-  autoUpdater.quitAndInstall();
+  try {
+    await stopServer();
+    autoUpdater.quitAndInstall();
+  } catch (e) {
+    quitting = leaving = false;
+    setUpdate({ status: 'error', message: e?.message || 'Mise à jour impossible.' });
+  }
 }
 
 // Fenêtres cachées (captures du Mur, lecture des styles) : un site tiers s'y
@@ -326,15 +379,34 @@ function openWindow() {
     event.preventDefault();
     window.setTitle(appName);
   });
+  // Croix : fermeture retenue le temps de la question (indépendante d'un clic
+  // préalable dans la page, que le beforeunload de Chromium exigerait).
+  window.on('close', (event) => {
+    if (leaving) return;
+    event.preventDefault();
+    void mayLeave().then((ok) => ok && window?.close());
+  });
+  // Le refus de la page (`draft-guard.ts`, utile dans un navigateur) est
+  // ignoré ici : la question a déjà été posée par `mayLeave`, et un
+  // rechargement garde le brouillon de la session.
+  window.webContents.on('will-prevent-unload', (event) => event.preventDefault());
   window.on('closed', () => (window = undefined));
   void window.loadURL(`${atelier}/`);
 }
 
 async function changeProjects() {
+  if (quitting) return;
   const folder = await chooseProjects('Annuler');
-  if (!folder) return;
-  await stopServer();
-  if (await run(folder)) window?.loadURL(`${atelier}/`);
+  if (!folder || quitting) return;
+  if (!(await mayLeave()) || quitting) return;
+  try {
+    await stopServer();
+    if (await run(folder)) await window?.loadURL(`${atelier}/`);
+  } catch {
+    /* Chargement interrompu : la fenêtre reste, rien d'autre à faire. */
+  } finally {
+    if (!quitting) leaving = false;
+  }
 }
 
 function menu() {
@@ -397,7 +469,16 @@ else {
   app.on('before-quit', (event) => {
     if (quitting || !server) return;
     event.preventDefault();
-    quitting = true;
-    void stopServer().then(() => app.quit());
+    void mayLeave()
+      .then(async (ok) => {
+        if (!ok || quitting) return;
+        quitting = true;
+        try {
+          await stopServer();
+        } finally {
+          app.quit();
+        }
+      })
+      .catch(() => {});
   });
 }

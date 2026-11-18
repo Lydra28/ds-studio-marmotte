@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Registry } from '../app/server/registry.js';
-import { applyPlan, createSiteRelay, injectLive, liveScript, planLookup, scrollbarCss } from '../app/server/site-relay.js';
+import { applyPlan, createSiteRelay, errorPage, injectLive, liveScript, planLookup, scrollbarCss } from '../app/server/site-relay.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -196,4 +196,59 @@ test('site en direct (G4) : choix du token par propriété puis par valeur', () 
   assert.equal(lookup('length', 'gap', '16px'), null);
   assert.equal(planLookup(plan, { 'space/': 'spacing/' })('length', 'padding', '16px'), '--spacing-4');
   assert.equal(applyPlan('a{color:#fff}', 'css', lookup).count, 0);
+});
+
+test('site en direct : erreurs du relais lisibles dans l’atelier pour le cadre, texte brut pour les ressources', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ds-relay-error-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  await cp(path.join(root, 'projects/marmotte/design-system.tokens.json'), path.join(dir, 'vitrine', 'design-system.tokens.json'));
+  await writeFile(
+    path.join(dir, 'vitrine', 'project.config.json'),
+    JSON.stringify({ name: 'Vitrine', figma: null, github: null, site: { url: 'https://vitrine.example/', pages: ['/'] } }),
+  );
+  const registry = Registry.folder(dir, path.join(root, 'templates/blank/design-system.tokens.json'));
+  const fakeFetch = (async (input: URL) => {
+    if (input.pathname === '/dehors') return new Response('', { status: 302, headers: { location: 'https://ailleurs.example/' } });
+    throw new Error('getaddrinfo ENOTFOUND vitrine.example');
+  }) as unknown as typeof fetch;
+  const atelier = 'http://127.0.0.1:4310';
+  const relay = createSiteRelay(registry, { atelier, fetch: fakeFetch });
+  await new Promise<void>((r) => relay.listen(0, '127.0.0.1', r));
+  t.after(() => relay.close());
+  const port = (relay.address() as { port: number }).port;
+  const get = (route: string, headers: Record<string, string>) =>
+    new Promise<{ status: number; headers: http.IncomingHttpHeaders; body: string }>((resolve, reject) =>
+      http
+        .request({ host: '127.0.0.1', port, path: route, headers: { Host: `vitrine.localhost:${port}`, ...headers } }, (res) => {
+          let body = '';
+          res.on('data', (c) => (body += c));
+          res.on('end', () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body }));
+        })
+        .on('error', reject)
+        .end(),
+    );
+  // Cadre de l'atelier : page HTML qui prévient l'atelier (message repris en grand).
+  for (const [route, message] of [
+    ['/dehors', 'Redirection hors du site refusée.'],
+    ['/', 'Site injoignable : getaddrinfo ENOTFOUND vitrine.example'],
+  ]) {
+    const page = await get(route, { 'Sec-Fetch-Dest': 'iframe', Accept: 'text/html' });
+    assert.equal(page.status, 502);
+    assert.match(String(page.headers['content-type']), /^text\/html/);
+    assert.equal(page.headers['content-security-policy'], `frame-ancestors ${atelier}`);
+    assert.ok(page.body.includes(`parent.postMessage(${JSON.stringify({ type: 'ds-site-error', message })}, "${atelier}")`));
+    assert.ok(page.body.includes(`<p style="max-width:40ch">${message}</p>`));
+  }
+  // Sans Sec-Fetch-Dest, l'en-tête Accept décide.
+  assert.match(String((await get('/', { Accept: 'text/html,*/*' })).headers['content-type']), /^text\/html/);
+  // Ressource de la page (feuille, image) : texte brut, comme avant.
+  const sheet = await get('/style.css', { 'Sec-Fetch-Dest': 'style', Accept: 'text/css' });
+  assert.equal(sheet.status, 502);
+  assert.match(String(sheet.headers['content-type']), /^text\/plain/);
+  assert.equal(sheet.body, 'Site injoignable : getaddrinfo ENOTFOUND vitrine.example');
+  // Message échappé : ni balise ni fin de script injectables par le texte d'une erreur.
+  const hostile = errorPage(atelier, '</script><img src=x onerror=alert(1)>');
+  assert.ok(!hostile.includes('</script><img'));
+  assert.ok(hostile.includes('&lt;/script&gt;&lt;img'));
+  assert.ok(hostile.includes('\u003c/script>'));
 });

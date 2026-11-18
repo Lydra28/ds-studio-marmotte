@@ -2075,3 +2075,53 @@ dialog.onboarding[open] {
   font-size: 12px;
   color: var(--c-muted);
 }
+
+/* Historique : pourquoi « Revenir à cette version » est grisé. */
+.hist__why {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--c-muted);
+}
+
+/* Site en direct : erreur du relais redite en grand sur le cadre. */
+.site-frame {
+  position: relative;
+}
+.site-frame__error {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  padding: 24px;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-size: 16px;
+  text-align: center;
+}
+.site-frame__error strong {
+  font-family: var(--f-title);
+  font-weight: 400;
+  font-size: 20px;
+  color: var(--c-error);
+}
+.site-frame__error p {
+  margin: 0;
+}
+
+/* Comparer : adresse du site d'un projet existant. */
+.site-address {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.site-address input {
+  min-width: 260px;
+}
+.site-address__error {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 13px;
+  color: var(--c-error);
+}

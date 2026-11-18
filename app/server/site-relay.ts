@@ -62,6 +62,25 @@ export const liveScript = (atelier: string) => `(() => {
 })();
 `;
 
+// Erreur du relais dans le cadre de l'atelier : page lisible qui prévient
+// aussi l'atelier (`ds-site-error`), qui affiche le message en grand au-dessus
+// du cadre (Site.tsx). Les ressources (feuilles, images) gardent un texte brut.
+const escapeHtml = (text: string) =>
+  text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+export function errorPage(atelier: string, message: string) {
+  const data = JSON.stringify({ type: 'ds-site-error', message }).replace(/</g, '\\u003c');
+  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Site en direct</title></head>
+<body style="margin:0;padding:48px;background:#0b0b0c;color:#e8e6df;font:28px/1.4 system-ui,sans-serif">
+<p style="max-width:40ch">${escapeHtml(message)}</p>
+<script>parent.postMessage(${data}, ${JSON.stringify(atelier)});</script>
+</body></html>`;
+}
+// Navigation du cadre (document) plutôt que ressource de la page.
+export const wantsPage = (headers: http.IncomingHttpHeaders) => {
+  const dest = headers['sec-fetch-dest'];
+  return dest ? dest === 'iframe' || dest === 'document' : /text\/html/.test(String(headers.accept ?? ''));
+};
+
 export function injectLive(html: string) {
   const tag = '<script src="/__ds-studio/live.js"></script>';
   return /<\/head>/i.test(html) ? html.replace(/<\/head>/i, `${tag}</head>`) : tag + html;
@@ -139,6 +158,16 @@ export function createSiteRelay(registry: Registry, options: { atelier: string; 
   };
   const server = http.createServer(async (req, res) => {
     const fail = (status: number, message: string) => {
+      if (res.headersSent) return res.destroy();
+      if (wantsPage(req.headers)) {
+        res.writeHead(status, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store',
+          'X-Content-Type-Options': 'nosniff',
+          'Content-Security-Policy': `frame-ancestors ${options.atelier}`,
+        });
+        return res.end(errorPage(options.atelier, message));
+      }
       res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(message);
     };

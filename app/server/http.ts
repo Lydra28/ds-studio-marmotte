@@ -7,8 +7,9 @@ import { proposeSchema } from '../shared/model.js';
 import { Store, StudioError } from './store.js';
 import { ProjectStore } from './project.js';
 import { projectSchema, type Config } from '../shared/project.js';
-import { Registry, newProjectSchema, withRepo } from './registry.js';
+import { Registry, newProjectSchema, siteNotice, siteOrigin, withRepo, withSite } from './registry.js';
 import { cleanSubdir, readPlan, readProjectRepo, readRepoFiles } from './repo-read.js';
+import { stillProposed } from '../shared/repo-rewrite.js';
 import { Assistant, chatSchema } from './assistant.js';
 import { createRepoAgent } from './repo-agent.js';
 import { Wall, directionsRequestSchema, imageSchema, linkSchema } from './wall.js';
@@ -135,9 +136,15 @@ export async function createStudioServer(
       let result;
       if (config.github.source === 'repo') {
         const plan = await readPlan(dataDir);
-        if (!plan) throw new StudioError('Lire le dépôt (bouton Dépôt) avant de publier : aucun plan de remplacement à jour.', 409);
+        if (!plan) throw new StudioError('Lire le dépôt (bouton GitHub) avant de publier : aucun plan de remplacement à jour.', 409);
         const auth = options.githubAuth;
         const target = config.github;
+        // Versions acceptées depuis la lecture (celle-ci comprise) : une clé
+        // proposée qui y est passée puis a été retirée bloque comme un retrait.
+        const since = [];
+        for (const s of await listVersions(projectDir))
+          if (s.acceptedAt >= plan.date) since.push({ acceptedAt: s.acceptedAt, set: (await readVersion(projectDir, s.revision)).set });
+        plan.proposed = stillProposed(plan.proposed, plan.date, since);
         result = await publishRepoVersion(access, target, version, plan, async (sha) => {
           if (!auth) throw new StudioError('GitHub indisponible dans cette instance.', 409);
           return new Map((await readRepoFiles(auth, target.repo, sha, target.subdir)).map((f) => [f.path, f.text]));
@@ -316,8 +323,11 @@ export async function createStudioServer(
         } catch {
           throw new StudioError('JSON invalide.');
         }
-        if (url.pathname === '/api/projects')
-          return send(200, { slug: await registry.create(newProjectSchema.parse(body)) });
+        if (url.pathname === '/api/projects') {
+          const p = newProjectSchema.parse(body);
+          // `notice` : adresse du site donnée mais écartée du Site en direct (http://).
+          return send(200, { slug: await registry.create(p), notice: siteNotice(p.siteUrl) });
+        }
         if (url.pathname === '/api/desktop') {
           // Réglages : l'app Electron exécute (dialogue de dossier, mise à jour) ; hors de l'app, rien.
           if (!inDesktop) throw new StudioError('Disponible dans l’app DS-Studio installée seulement.', 409);
@@ -398,6 +408,11 @@ export async function createStudioServer(
           // enregistré ; rien n'est écrit, le client met en brouillon.
           const inventory = await readSite(linkSchema.parse(body).url, options.extract);
           return send(200, { inventory, ...proposeFromInventory(inventory, store.snapshot().set) });
+        }
+        if (url.pathname === '/api/site') {
+          // Adresse du Site en direct d'un projet existant : même règle qu'à la création.
+          const site = siteOrigin(z.object({ url: z.string().max(500) }).strict().parse(body).url);
+          return send(200, await registry.updateConfig(typeof header === 'string' ? header : undefined, (c) => withSite(c, site)));
         }
         if (url.pathname === '/api/repo') {
           // G3 : archive lue en mémoire, proposition sur le jeu enregistré et

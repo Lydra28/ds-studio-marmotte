@@ -13,6 +13,7 @@ import {
   type TokenValue,
 } from '../shared/model.js';
 import { runRules } from '../shared/rules.js';
+import { RETAKE_PATH } from '../shared/repo-rewrite.js';
 import type { ComponentDoc } from '../shared/components.js';
 import {
   accept,
@@ -27,6 +28,7 @@ import {
   getInbox,
   publishGithub,
   type GithubResult,
+  type RepoPrSummary,
   clearInbox,
   type Inbox,
   propose,
@@ -105,6 +107,10 @@ function announce(slug: string) {
 export default function App() {
   const [boot, setBoot] = useState<Bootstrap>();
   const [bootError, setBootError] = useState('');
+  // Dernière publication GitHub par projet, gardée au-dessus de Workspace :
+  // le message d'erreur renvoie vers Réglages (qui démonte Workspace), le
+  // « Réessayer » doit encore être là au retour (recette du 2026-11-17).
+  const [published, setPublished] = useState<Record<string, Published>>({});
   const [route, go, page] = useRoute();
   useEffect(() => {
     bootstrap().then(setBoot).catch((e) => setBootError(e.message));
@@ -127,9 +133,20 @@ export default function App() {
       relay={boot.relay}
       desktop={boot.desktop}
       onOpen={go}
+      published={published[slug]}
+      onPublished={(p) => setPublished((all) => ({ ...all, [slug]: p }))}
     />
   );
 }
+
+type Published = { revision: number; result: GithubResult };
+// `untaken` (variables du dépôt jamais reprises, recette du 2026-11-17).
+const untakenText = (summary?: RepoPrSummary) => {
+  const n = summary?.untaken ?? 0;
+  return n
+    ? ` ${n} variable(s) du dépôt jamais reprise(s) dans l’atelier, laissée(s) telle(s) quelle(s) dans le code. Pour les reprendre : ${RETAKE_PATH}.`
+    : '';
+};
 
 function Workspace({
   slug,
@@ -139,6 +156,8 @@ function Workspace({
   relay,
   desktop,
   onOpen,
+  published,
+  onPublished,
 }: {
   slug: string;
   multi: boolean;
@@ -147,6 +166,8 @@ function Workspace({
   relay: number | null;
   desktop: boolean;
   onOpen: (slug?: string) => void;
+  published: Published | undefined;
+  onPublished: (p: Published) => void;
 }) {
   const { state, setState, error: stateError } = useCommittedState(slug);
   // GitHub relu en direct (connexion faite dans Réglages puis retour) ; l'état du démarrage en attendant.
@@ -167,8 +188,8 @@ function Workspace({
   const [versions, setVersions] = useState<VersionSummary[]>([]);
   const [figmaOpen, setFigmaOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
-  // Dernière publication GitHub (lien de la PR, ou erreur à réessayer).
-  const [published, setPublished] = useState<{ revision: number; result: GithubResult }>();
+  // Dernière publication GitHub (lien de la PR, ou erreur à réessayer) : état de App.
+  const setPublished = onPublished;
   // Fiches envoyées par le plugin Figma : relues au retour sur l'atelier.
   const [inbox, setInbox] = useState<Inbox | null>(null);
   const [fromInbox, setFromInbox] = useState(false);
@@ -213,6 +234,7 @@ function Workspace({
       sessionStorage.removeItem(k('ds-start'));
       sessionStorage.removeItem(k('ds-extract'));
       sessionStorage.removeItem(k('ds-repo'));
+      sessionStorage.removeItem(k('ds-notice'));
     } catch {
       /* Facultatif. */
     }
@@ -291,7 +313,14 @@ function Workspace({
   const [sitePage, setSitePage] = useState<string>();
   const siteReady = !!(relay && config?.site);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  // Message de la création (adresse http écartée du Site en direct), lu une fois.
+  const [notice, setNotice] = useState(() => {
+    try {
+      return sessionStorage.getItem(k('ds-notice')) ?? '';
+    } catch {
+      return '';
+    }
+  });
   const [busy, setBusy] = useState(false);
   // Les messages de réussite couvrent le haut de la preview : ils s'effacent seuls.
   useEffect(() => {
@@ -441,7 +470,7 @@ function Workspace({
   };
   // Proposition de l'assistant : chaque changement rejoint le brouillon.
   // Le lot est d'abord essayé en entier sur le brouillon (alias, retraits) :
-  // refusé, rien n'entre dans le brouillon.
+  // refusé, rien n'entre dans le brouillon. Rend false si refusé.
   const draftChanges = (list: Change[], from = 'de Lenny') => {
     if (draftSet) {
       try {
@@ -449,7 +478,7 @@ function Workspace({
       } catch (e) {
         setNotice('');
         setError(`Changements ${from} refusés sur le brouillon : ${(e as Error).message}`);
-        return;
+        return false;
       }
     }
     for (const c of list) {
@@ -459,6 +488,7 @@ function Workspace({
       else saveComponent(c.name, c.component);
     }
     setNotice(`${list.length} changement(s) ${from} mis en brouillon : relire le diff avant de valider.`);
+    return true;
   };
   const reviewDrafts = () =>
     run(async () => setProposal(await propose(state!.revision, changes)));
@@ -648,7 +678,7 @@ function Workspace({
               </button>
             </>
           ) : published.result.status === 'unchanged' ? (
-            `GitHub : ${config?.github?.repo} est déjà à jour, aucune pull request ouverte.`
+            `GitHub : ${config?.github?.repo} est déjà à jour, aucune pull request ouverte.${untakenText(published.result.summary)}`
           ) : (
             <>
               Pull request {published.result.status === 'opened' ? 'ouverte' : 'mise à jour'} :{' '}
@@ -657,6 +687,7 @@ function Workspace({
               </a>
               {published.result.summary &&
                 ` · ${published.result.summary.files} fichier(s), ${published.result.summary.written} valeur(s) en dur remplacée(s), ${published.result.summary.changed} variable(s) changée(s), ${published.result.summary.added} ajoutée(s) ; ${published.result.summary.skipped} non écrite(s) (détail dans la PR).`}
+              {untakenText(published.result.summary)}
             </>
           )}
         </p>
@@ -728,6 +759,7 @@ function Workspace({
               draftSet={draftSet}
               draft={draftCount > 0}
               initial={compareAt}
+              onConfig={setConfig}
             />
           )}
         </div>
@@ -747,12 +779,13 @@ function Workspace({
       {view === 'board' && repoPanel && config && (
         <RepoPanel
           config={config}
+          draft={draftSet}
           start={repoPanel}
           onConfig={setConfig}
           onClose={() => setRepoPanel(null)}
           onDraft={(list, from) => {
-            draftChanges(list, from ?? 'lus dans le dépôt');
-            setRepoPanel(null);
+            // Refusé : le panneau reste ouvert, l'erreur dit pourquoi.
+            if (draftChanges(list, from ?? 'lus dans le dépôt')) setRepoPanel(null);
           }}
           onSemantic={() => {
             if (!draftSet) return;

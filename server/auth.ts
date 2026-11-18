@@ -172,8 +172,8 @@ export function authRoutes(deps: Deps) {
       [sha256(token), purpose],
     );
     const row = rows[0];
-    if (!row || row.used_at) throw new ApiError('Lien invalide ou déjà utilisé. Demande un nouveau lien.', 400);
-    if (new Date(row.expires_at) <= now()) throw new ApiError('Lien expiré. Demande un nouveau lien.', 400);
+    if (!row || row.used_at) throw new ApiError('Lien invalide ou déjà utilisé : demander un nouveau lien.', 400);
+    if (new Date(row.expires_at) <= now()) throw new ApiError('Lien expiré : demander un nouveau lien.', 400);
     await db.query('UPDATE email_tokens SET used_at = $2 WHERE token_hash = $1', [sha256(token), now()]);
     return row.account_id;
   }

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile } from 'node:fs/promises';
+import { DEFAULT_DAILY_CAP_CENTS, GIFT_DAILY_CAP_CENTS } from '../../server/admin.js';
 import { createAdminApp } from '../../server/admin-ui.js';
 import { connect, testApp } from './helpers.js';
 
@@ -34,6 +36,13 @@ async function setup() {
   };
   return { t, call };
 }
+
+// Recette du 2026-11-16 : l'aide annonçait 200 c$ après le retrait de l'offert, le code remet 50.
+test('admin ui : plafonds annoncés par l’aide de l’offert = constantes du code', async () => {
+  const html = await readFile(new URL('../../server/admin-ui.html', import.meta.url), 'utf8');
+  assert.ok(html.includes(`plafond ${DEFAULT_DAILY_CAP_CENTS} c$ par jour`), 'retrait de l’offert');
+  assert.ok(html.includes(`plafond ramené à ${GIFT_DAILY_CAP_CENTS} c$ par jour`), 'passage en offert');
+});
 
 test('admin ui : page sans jeton, API gardée par jeton, hôte et origine', async () => {
   const { t, call } = await setup();

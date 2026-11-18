@@ -163,7 +163,7 @@ test('compte : bienvenue, achats (URL Stripe transmise), passage Pro vu sans att
   assert.equal(welcome.choices[0].message.content, 'Réponse simulée.', 'génération offerte');
   await assert.rejects(account.relay({ messages: [{ role: 'user', content: 'ok' }] }, 'assistant'), (e: Error & { status: number }) => {
     assert.equal(e.status, 402);
-    assert.match(e.message, /Réglages → Compte/);
+    assert.match(e.message, /page Compte de l’app/);
     return true;
   });
   assert.equal(account.status().tier, 'free');

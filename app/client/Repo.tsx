@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import type { Change } from '../shared/model.js';
+import type { Change, TokenSet } from '../shared/model.js';
 import type { Config } from '../shared/project.js';
 import type { RepoReport } from '../shared/repo-propose.js';
 import {
@@ -35,8 +35,23 @@ const label = (c: Change) =>
   !('op' in c) ? `${c.key} (${c.mode}) → ${c.value}` : c.op === 'add' ? `+ ${c.key}` : c.op === 'remove' ? `− ${c.key}` : c.name;
 const gap = (kind: 'color' | 'px', g: number) => (kind === 'px' ? `${g} px` : `ΔE ${Math.round(g * 1000) / 10}`);
 
+// Changement déjà dans le brouillon (relecture faite avant de valider) :
+// le remettre serait refusé en bloc (« Token déjà existant »).
+export function inDraft(draft: TokenSet, c: Change) {
+  if (!('op' in c)) return draft.tokens[c.key]?.$values[c.mode] === c.value;
+  if (c.op === 'remove') return !draft.tokens[c.key];
+  if (c.op === 'add') {
+    // Type et valeurs par mode, sans dépendre de l'ordre des clés.
+    const t = draft.tokens[c.key];
+    const values = (v: Record<string, unknown>) => JSON.stringify(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)));
+    return !!t && t.$type === c.token.$type && t.$collection === c.token.$collection && values(t.$values) === values(c.token.$values);
+  }
+  return false;
+}
+
 export default function RepoPanel({
   config,
+  draft,
   start,
   onConfig,
   onDraft,
@@ -44,6 +59,8 @@ export default function RepoPanel({
   onClose,
 }: {
   config: Config;
+  // Jeu du brouillon (enregistré + brouillon) : ce qui y est déjà n'est pas reproposé.
+  draft: TokenSet;
   // `create` : projet tout juste créé depuis un dépôt, lecture lancée tout de suite.
   start: 'create' | 'open';
   onConfig: (config: Config) => void;
@@ -66,7 +83,7 @@ export default function RepoPanel({
     setPhase({ status: 'loading', what: 'Dépôts accessibles…' });
     try {
       const status = await getGithub();
-      if (!status.pro) return setPhase({ status: 'form', repos: null, reason: 'GitHub est réservé à DS-Studio Pro : passer Pro dans Réglages → Compte.' });
+      if (!status.pro) return setPhase({ status: 'form', repos: null, reason: 'GitHub est réservé à DS-Studio Pro : passer Pro depuis la page Compte.' });
       if (status.status !== 'connected') return setPhase({ status: 'form', repos: null, reason: 'Connecter GitHub dans Réglages → GitHub, puis revenir ici.' });
       const { repos } = await githubAction('repos');
       setPhase({ status: 'form', repos: repos ?? [], reason: null });
@@ -86,7 +103,7 @@ export default function RepoPanel({
     sendRepoAgent(preview.nonce).then(
       (r) => setPhase({ status: 'agent', ...r }),
       // Un aperçu ne sert qu'une fois : un nouvel essai repasse par le consentement.
-      (e: Error) => setPhase({ status: 'error', message: `${e.message} Pour réessayer, redemande à l’agent : nouvel aperçu, nouvelle confirmation.` }),
+      (e: Error) => setPhase({ status: 'error', message: `${e.message} Pour réessayer, demander de nouveau à l’agent : nouvel aperçu, nouvelle confirmation.` }),
     );
   };
   const backToPlan = () =>
@@ -200,7 +217,7 @@ export default function RepoPanel({
           </div>
         </>
       )}
-      {phase.status === 'done' && <Result result={phase.result} onDraft={onDraft} />}
+      {phase.status === 'done' && <Result result={phase.result} draft={draft} onDraft={onDraft} />}
       {phase.status === 'consent' && (
         <Consent preview={phase.preview} sending={phase.sending} onSend={() => sendAgent(phase.preview)} onCancel={() => void backToPlan()} />
       )}
@@ -451,8 +468,10 @@ function Consent({ preview, sending, onSend, onCancel }: { preview: AgentPreview
   );
 }
 
-function Result({ result, onDraft }: { result: RepoResult; onDraft: (changes: Change[]) => void }) {
+function Result({ result, draft, onDraft }: { result: RepoResult; draft: TokenSet; onDraft: (changes: Change[]) => void }) {
   const { changes, rejected, report, source } = result;
+  // Relecture avant validation : seuls les changements absents du brouillon restent à reprendre.
+  const pending = changes.filter((c) => !inDraft(draft, c));
   return (
     <>
       <p className="hint">
@@ -491,9 +510,12 @@ function Result({ result, onDraft }: { result: RepoResult; onDraft: (changes: Ch
           </ul>
         </details>
       )}
+      {changes.length > 0 && pending.length === 0 && (
+        <p className="hint">Tout est déjà dans le brouillon : le relire puis le valider (« Voir le diff et valider »).</p>
+      )}
       <div className="form-actions">
-        <button className="primary" disabled={changes.length === 0} onClick={() => onDraft(changes)}>
-          {changes.length ? 'Mettre en brouillon' : 'Rien à reprendre'}
+        <button className="primary" disabled={pending.length === 0} onClick={() => onDraft(pending)}>
+          {pending.length ? 'Mettre en brouillon' : 'Rien à reprendre'}
         </button>
       </div>
     </>

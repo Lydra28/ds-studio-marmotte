@@ -4,7 +4,7 @@ import type { TokenSet } from '../shared/model.js';
 import { exportCss, exportJson } from '../shared/export.js';
 export { exportCss, exportJson, exportName } from '../shared/export.js';
 import type { Config } from '../shared/project.js';
-import { rewriteRepo, type RewriteResult } from '../shared/repo-rewrite.js';
+import { RETAKE_PATH, rewriteRepo, type Declared, type RewriteResult } from '../shared/repo-rewrite.js';
 import type { RepoPlan } from './repo-read.js';
 
 // Code du projet sur GitHub. Projet lu dans un dépôt (`source: 'repo'`, plan
@@ -181,7 +181,12 @@ export interface RepoPrSummary {
   removed: number;
   skipped: number;
   unmapped: number;
+  /** Variables du dépôt jamais reprises dans l'atelier (laissées telles quelles). */
+  untaken: number;
 }
+
+/** Chemin à suivre dans l'interface pour reprendre les tokens du dépôt (libellés réels). */
+const where = (d: Declared) => `${d.file} ligne ${d.line}`;
 
 const list = <T,>(items: T[], line: (x: T) => string, max = 40) => [
   ...items.slice(0, max).map((x) => `- ${line(x)}`),
@@ -202,6 +207,11 @@ export function repoPrBody(r: RewriteResult, version: { revision: number; hash: 
     `- ${r.changed.length} variable(s) à la nouvelle valeur${r.changed.length ? ' : ' + names(r.changed) : ''}`,
     `- ${r.added.length} variable(s) ajoutée(s)${r.added.length ? ` dans ${code(r.added[0].file)}` : ''}`,
     `- ${r.removed.length} déclaration(s) retirée(s), sans usage${r.removed.length ? ' : ' + names(r.removed) : ''}`,
+    ...(r.untaken.length
+      ? [
+          `- ${r.untaken.length} variable(s) du dépôt jamais reprise(s) dans l’atelier, laissée(s) telle(s) quelle(s) : ${names(r.untaken.map((u) => u.code))}. Pour les reprendre : ${RETAKE_PATH}.`,
+        ]
+      : []),
     '',
     `### Fichiers modifiés (${r.files.length})`,
     ...list(r.files, (f) => `${code(f.path)} : ${f.edits} modification(s)`),
@@ -241,21 +251,33 @@ export async function publishRepoVersion(
   // PR mergée depuis la lecture : le code a changé sous le plan, relecture d'abord.
   const closed = await call('GET', `/pulls?state=closed&head=${encodeURIComponent(head)}&per_page=20`);
   if (closed.status === 200 && Array.isArray(closed.data) && closed.data.some((p) => p.merged_at && String(p.merged_at) > plan.date))
-    throw new StudioError('La PR DS-Studio a été mergée depuis la dernière lecture du dépôt : le relire (bouton Dépôt) avant de publier.', 409);
+    throw new StudioError('La PR DS-Studio a été mergée depuis la dernière lecture du dépôt : le relire (bouton GitHub, « Relire le dépôt ») avant de publier.', 409);
 
   const base = await call('GET', `/git/ref/heads/${target.base}`);
   if (base.status !== 200) fail(`branche ${target.base}`, base);
   const sha = String(base.data.object.sha);
   const files = await readBase(sha);
-  const result = rewriteRepo({ tokens: plan.tokens, entries: plan.entries, set: version.set, rename: target.rename, files, truncated: plan.truncated });
-  if (result.blocked.length)
+  const result = rewriteRepo({
+    tokens: plan.tokens,
+    entries: plan.entries,
+    set: version.set,
+    rename: target.rename,
+    files,
+    proposed: plan.proposed,
+    truncated: plan.truncated,
+  });
+  if (result.blocked.length) {
+    const b = result.blocked;
+    const shown = b.slice(0, 10);
     throw new StudioError(
-      `Token(s) retiré(s) dans l’atelier mais encore utilisé(s) dans le code : ${result.blocked
-        .slice(0, 10)
-        .map((b) => `${b.code} (${b.uses} usage(s))`)
-        .join(', ')}. Les remettre ou remplacer leurs usages, puis « Réessayer ».`,
+      `Publication refusée : ${b.length} token(s) retiré(s) dans l’atelier mais encore utilisé(s) dans le code : ${shown
+        .map((x) => `${x.code} (token ${x.key} de l’atelier, déclaré dans ${where(x)}, ${x.uses} usage(s))`)
+        .join(' ; ')}${b.length > shown.length ? ' ; …' : ''}. ` +
+        `Soit remettre ${b.length > 1 ? 'ces tokens' : 'ce token'} dans le design system sous le même nom (${shown.map((x) => x.key).join(', ')}) puis accepter une nouvelle version ; ` +
+        `soit remplacer ${b.length > 1 ? 'leurs' : 'ses'} usages var(…) dans le code, relire le dépôt (« GitHub » → « Relire le dépôt ») puis « Réessayer ».`,
       409,
     );
+  }
   const summary: RepoPrSummary = {
     files: result.files.length,
     written: result.written,
@@ -264,6 +286,7 @@ export async function publishRepoVersion(
     removed: result.removed.length,
     skipped: result.skipped.length,
     unmapped: result.unmapped,
+    untaken: result.untaken.length,
   };
   if (!result.files.length) return { status: 'unchanged' as const, branch: null, url: null, summary };
 

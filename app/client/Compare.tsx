@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { setsByRevision, type State, type TokenSet } from '../shared/model.js';
 import type { Config } from '../shared/project.js';
-import type { VersionSummary } from './api.js';
+import { getConfig, setSiteUrl, type VersionSummary } from './api.js';
 import { devices, SiteFrame, type Device } from './Site.js';
 import { PreviewGap, previewSrc, ScreenPicker, type Screen } from './DesignSystem.js';
 
@@ -68,15 +68,69 @@ export function defaultBefore(state: State, versions: VersionSummary[], draft: b
   return versions.find((v) => v.revision < state.revision)?.revision ?? Math.max(0, state.revision - 1);
 }
 
+// Adresse du Site en direct posée ou changée depuis Comparer (projet créé sans
+// site, comme Devonia). Même règle qu'à la création : https, origine seule ;
+// le message du serveur dit pourquoi une adresse est écartée.
+function SiteAddress({ current, onSaved }: { current: string | null; onSaved: (config: Config) => void }) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState(current ?? '');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      onSaved(await setSiteUrl(value.trim()));
+      setOpen(false);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!open)
+    return (
+      <button onClick={() => setOpen(true)}>{current ? 'Changer l’adresse du site' : 'Ajouter l’adresse du site'}</button>
+    );
+  return (
+    <form className="site-address" onSubmit={submit} aria-label="Adresse du site">
+      <label>
+        Adresse du site
+        <input
+          type="url"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="https://exemple.fr"
+          required
+          autoFocus
+        />
+      </label>
+      <button type="submit" className="primary" disabled={busy}>
+        Enregistrer l’adresse
+      </button>
+      <button type="button" onClick={() => setOpen(false)}>
+        Annuler
+      </button>
+      {error && (
+        <p className="site-address__error" role="alert">
+          {error}
+        </p>
+      )}
+    </form>
+  );
+}
+
 export default function CompareView({
   slug,
   relay,
-  config,
+  config: given,
   state,
   versions,
   draftSet,
   draft,
   initial,
+  onConfig,
 }: {
   slug: string;
   relay: number | null;
@@ -87,7 +141,21 @@ export default function CompareView({
   draft: boolean;
   // Révision « Avant » imposée (Historique, frise de la barre) ; sinon le défaut.
   initial?: number;
+  // Configuration changée ici (adresse du site), à reporter dans l'atelier.
+  onConfig?: (config: Config) => void;
 }) {
+  // Adresse du site posée ici : gardée même si l'atelier ne relit pas la
+  // configuration ; relue au montage quand le site manque.
+  const [config, setConfig] = useState(given);
+  useEffect(() => {
+    setConfig(given);
+  }, [given]);
+  useEffect(() => {
+    if (!given.site)
+      getConfig()
+        .then((c) => c.site && setConfig(c))
+        .catch(() => {});
+  }, [given]);
   const sets = useMemo(() => setsByRevision(state), [state]);
   const site = relay && config.site ? config.site : null;
   const repo = config.github?.source === 'repo';
@@ -238,6 +306,17 @@ export default function CompareView({
       )}
       <div className="compare__tools">
         <ScreenPicker value={content} onChange={setContent} site={!!site} label="Contenu comparé" />
+        {relay && (
+          <SiteAddress
+            key={config.site?.url ?? ''}
+            current={config.site?.url ?? null}
+            onSaved={(next) => {
+              setConfig(next);
+              onConfig?.(next);
+              setContent('site');
+            }}
+          />
+        )}
         <div className="devices" role="group" aria-label="Appareil">
           {(Object.keys(devices) as Device[]).map((d) => (
             <button key={d} aria-pressed={device === d} onClick={() => setDevice(d)}>

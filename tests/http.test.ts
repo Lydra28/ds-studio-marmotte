@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { Store } from '../app/server/store.js';
 import { migrateV1Tokens } from '../app/shared/model.js';
 import { createStudioServer } from '../app/server/http.js';
+import { Registry } from '../app/server/registry.js';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const seed = migrateV1Tokens(
   JSON.parse(
@@ -224,4 +225,42 @@ test('fermeture : une connexion de navigateur qui traîne ne retient pas l’arr
   assert.ok(elapsed < 5000, `fermeture en ${elapsed} ms`);
   lingering.destroy();
   await app.close(); // idempotente : le crochet after de la fixture la rappelle
+});
+
+test('adresse du Site en direct d’un projet existant : https posé sur disque, http refusé en clair', async (t) => {
+  const { origin, post, store } = await fixture(t);
+  const refused = await post('site', { url: 'http://devonia.fr/' });
+  assert.equal(refused.status, 400);
+  assert.match((await refused.json()).error, /http:\/\/ écartée : le Site en direct demande une adresse https:\/\//);
+  assert.equal((await post('site', { url: 'devonia' })).status, 400);
+  assert.equal((await (await fetch(origin + '/api/config')).json()).site, null);
+  const set = await post('site', { url: 'https://devonia.fr/projets' });
+  assert.equal(set.status, 200);
+  assert.deepEqual((await set.json()).site, { url: 'https://devonia.fr/', pages: ['/'] });
+  assert.deepEqual((await (await fetch(origin + '/api/config')).json()).site, { url: 'https://devonia.fr/', pages: ['/'] });
+  const disk = JSON.parse(await readFile(path.join(store.directory, 'project.config.json'), 'utf8'));
+  assert.deepEqual(disk.site, { url: 'https://devonia.fr/', pages: ['/'] });
+});
+
+test('création avec une adresse http : projet créé, Site en direct écarté et dit (notice)', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ds-http-site-'));
+  const app = await createStudioServer({ root, registry: Registry.folder(dir, path.join(root, 'templates/blank/design-system.tokens.json')) });
+  await new Promise<void>((r) => app.server.listen(0, '127.0.0.1', r));
+  t.after(async () => {
+    await app.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+  const origin = `http://127.0.0.1:${(app.server.address() as { port: number }).port}`;
+  const { csrf } = await (await fetch(origin + '/api/bootstrap')).json();
+  const create = (siteUrl: string, name: string) =>
+    fetch(origin + '/api/projects', {
+      method: 'POST',
+      headers: { Origin: origin, 'Content-Type': 'application/json', 'X-DS-Studio': csrf },
+      body: JSON.stringify({ name, siteUrl }),
+    }).then((r) => r.json());
+  const http = await create('http://devonia.fr/', 'En http');
+  assert.match(http.notice, /http:\/\/ écartée/);
+  assert.equal(JSON.parse(await readFile(path.join(dir, http.slug, 'project.config.json'), 'utf8')).site, null);
+  assert.equal((await create('https://devonia.fr/', 'En https')).notice, null);
+  assert.equal((await create('', 'Sans site')).notice, null);
 });

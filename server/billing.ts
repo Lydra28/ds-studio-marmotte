@@ -393,9 +393,9 @@ export function billingRoutes(deps: Deps) {
   // Pages de retour minimales (le site du lot 7 les remplacera).
   app.get('/done', (c) => {
     const s = c.req.query('s');
-    if (s === 'ok') return c.html(htmlPage('Paiement enregistré', 'Merci. Après un paiement depuis l’app DS-Studio, le solde ou le palier Pro s’y met à jour tout seul en quelques secondes ; sinon, cliquer « Actualiser » dans Réglages → Compte.'));
+    if (s === 'ok') return c.html(htmlPage('Paiement enregistré', 'Merci. Après un paiement depuis l’app DS-Studio, le solde ou le palier Pro s’y met à jour tout seul en quelques secondes ; sinon, cliquer « Actualiser » sur la page Compte de l’app.'));
     if (s === 'cancel') return c.html(htmlPage('Paiement annulé', 'Rien n’a été débité. Fermer cette page et retourner dans DS-Studio.'));
-    return c.html(htmlPage('Retour du portail', 'Changements pris en compte. Si l’app DS-Studio est ouverte, le compte s’y met à jour tout seul ; sinon, cliquer « Actualiser » dans Réglages → Compte.'));
+    return c.html(htmlPage('Retour du portail', 'Changements pris en compte. Si l’app DS-Studio est ouverte, le compte s’y met à jour tout seul ; sinon, cliquer « Actualiser » sur la page Compte de l’app.'));
   });
 
   // Webhook : corps brut (jamais parsé avant la signature), 400 si la

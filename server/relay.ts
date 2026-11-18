@@ -218,8 +218,8 @@ export function relayRoutes(deps: Deps) {
     if (charged === 'credits' && me.creditCents <= 0) {
       throw new ApiError(
         me.plan === 'pro'
-          ? 'Usage inclus du mois épuisé et solde de crédits à zéro : recharger des crédits dans Réglages → Compte.'
-          : 'Solde de crédits à zéro : recharger des crédits dans Réglages → Compte pour utiliser l’agent et le Mur.',
+          ? 'Usage inclus du mois épuisé et solde de crédits à zéro : recharger des crédits depuis la page Compte de l’app.'
+          : 'Solde de crédits à zéro : recharger des crédits depuis la page Compte de l’app pour utiliser l’agent et le Mur.',
         402,
       );
     }

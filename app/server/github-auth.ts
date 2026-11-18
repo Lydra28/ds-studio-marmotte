@@ -13,7 +13,7 @@ import { StudioError } from './store.js';
 // au navigateur. Réservé à Pro (cadrage GitHub, décision 8).
 export const GITHUB_CLIENT_ID = 'Iv23liZqDLgcMvMUlhMN';
 export const GITHUB_APP_SLUG = 'ds-studio-app';
-export const PRO_ONLY = 'GitHub est réservé à DS-Studio Pro : passer Pro dans Réglages → Compte.';
+export const PRO_ONLY = 'GitHub est réservé à DS-Studio Pro : passer Pro depuis la page Compte de l’app.';
 const SESSION_LOST = 'Connexion GitHub expirée ou retirée : reconnecter GitHub dans Réglages.';
 const UNREACHABLE = 'GitHub injoignable (réseau ou délai dépassé).';
 const API_VERSION = '2022-11-28';

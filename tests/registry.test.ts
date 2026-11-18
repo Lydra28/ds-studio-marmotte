@@ -4,7 +4,7 @@ import { cp, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Registry, coverOf, openInstance, slugify } from '../app/server/registry.js';
+import { Registry, SITE_HTTP, coverOf, openInstance, siteNotice, siteOrigin, slugify, withSite } from '../app/server/registry.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const template = path.join(root, 'templates/blank/design-system.tokens.json');
@@ -48,4 +48,31 @@ test('projets : liste, création vierge au nom unique, lien Figma vérifié, ins
   await assert.rejects(() => single.create({ name: 'Y' }), /indisponible/);
   await registry.flush();
   assert.equal(slugify('  Été / Hiver !! '), 'ete-hiver');
+});
+
+test('site en direct : adresse posée ou changée sur un projet existant, http écarté avec un message', async (t) => {
+  // Même règle qu'à la création : https, origine seule ; http et adresses privées refusés.
+  assert.equal(siteOrigin(' https://devonia.fr/projets?x=1 '), 'https://devonia.fr/');
+  assert.throws(() => siteOrigin('http://devonia.fr/'), (e: Error) => e.message === SITE_HTTP);
+  assert.throws(() => siteOrigin('devonia'), /Adresse du site attendue/);
+  assert.throws(() => siteOrigin('https://localhost:3000/'), /Lien refusé/);
+  // Création : l'adresse http reste lue pour les styles, mais le message le dit.
+  assert.equal(siteNotice('http://devonia.fr/'), SITE_HTTP);
+  assert.equal(siteNotice('https://devonia.fr/'), null);
+  assert.equal(siteNotice(''), null);
+
+  const dir = await mkdtemp(path.join(tmpdir(), 'ds-site-url-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const registry = Registry.folder(dir, template);
+  const slug = await registry.create({ name: 'Devonia', siteUrl: 'http://devonia.fr/' });
+  assert.equal((await registry.get(slug)).config.site, null);
+  // Projet existant sans site (cas Devonia) : l'adresse est posée, écrite sur disque.
+  await registry.updateConfig(slug, (c) => withSite(c, siteOrigin('https://devonia.fr/accueil')));
+  const disk = JSON.parse(await readFile(path.join(dir, slug, 'project.config.json'), 'utf8'));
+  assert.deepEqual(disk.site, { url: 'https://devonia.fr/', pages: ['/'] });
+  assert.deepEqual((await registry.get(slug)).config.site, disk.site);
+  // Même site : pages gardées ; autre site : pages remises à « / ».
+  const withPages = withSite({ ...disk, site: { url: 'https://devonia.fr/', pages: ['/', '/a'] } }, 'https://devonia.fr/');
+  assert.deepEqual(withPages.site?.pages, ['/', '/a']);
+  assert.deepEqual(withSite(withPages, 'https://autre.fr/').site, { url: 'https://autre.fr/', pages: ['/'] });
 });

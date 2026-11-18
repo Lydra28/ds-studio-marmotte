@@ -164,7 +164,9 @@ function start(root: HTMLElement) {
       $('[data-sub]').textContent = me.subscription.cancelAtPeriodEnd ? `résilié, actif jusqu’au ${end}` : `actif, renouvelé le ${end}`;
     }
 
+    // Compte offert : jamais débité, donc aucune recharge (comme Settings.tsx de l'app).
     const packs = $('[data-packs]');
+    packs.hidden = me.gifted;
     packs.replaceChildren(
       ...(me.catalog?.packs ?? []).map((p) => {
         const b = document.createElement('button');

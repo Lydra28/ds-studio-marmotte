@@ -87,6 +87,36 @@ export const newProjectSchema = z
   })
   .strict();
 
+// Site en direct : origine https seule, à la création comme pour un projet
+// existant. Une adresse en http:// n'est jamais retenue (le relais ne sert que
+// du https) ; elle reste utilisable pour lire les styles du site.
+export const SITE_HTTP = 'Adresse en http:// écartée : le Site en direct demande une adresse https://.';
+export function siteOrigin(raw: string) {
+  let url: URL;
+  try {
+    url = new URL(publicUrl(raw.trim()));
+  } catch (e) {
+    throw e instanceof StudioError ? e : new StudioError('Adresse du site attendue : https://… (page publique).');
+  }
+  if (url.protocol !== 'https:') throw new StudioError(SITE_HTTP);
+  return url.origin + '/';
+}
+// Message de la création quand l'adresse donnée n'ouvre pas le Site en direct.
+export function siteNotice(raw: string) {
+  if (!raw.trim()) return null;
+  try {
+    siteOrigin(raw);
+    return null;
+  } catch (e) {
+    return (e as Error).message;
+  }
+}
+// Adresse du site posée ou changée : pages gardées si c'est le même site.
+export function withSite(config: Config, url: string): Config {
+  const same = config.site && new URL(config.site.url).origin === new URL(url).origin ? config.site : null;
+  return configSchema.parse({ ...config, site: { url, pages: same?.pages ?? ['/'] } });
+}
+
 // Dépôt rattaché à un projet : réglages d'export gardés si c'est le même dépôt.
 export function withRepo(config: Config, repo: string, base: string, subdir: string | null): Config {
   const same = config.github?.repo.toLowerCase() === repo.toLowerCase() ? config.github : null;

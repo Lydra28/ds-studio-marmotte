@@ -123,6 +123,24 @@ test('prix et téléchargements : montants du catalogue, fichiers à nom fixe', 
   await expect(page.getByText('en cours de validation par Figma')).toBeVisible();
 });
 
+// Recette du 2026-11-16 : un compte offert voyait les boutons de recharge sur le site.
+test('compte : compte offert, ni recharge, ni Passer Pro, ni portail', async ({ page }) => {
+  const errors = await offline(page);
+  await page.route(`${API}/**`, (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/v1/me') return json(route, 200, { ...ME, gifted: true, tier: 'pro' });
+    if (path === '/v1/billing/withdrawals') return json(route, 200, { days: 14, email: ME.email, purchases: [] });
+    return json(route, 404, { error: 'inconnu' });
+  });
+  await page.goto('/compte/');
+  await expect(page.locator('[data-email]').first()).toHaveText(ME.email);
+  await expect(page.getByRole('button', { name: /^Recharger/ })).toHaveCount(0);
+  await expect(page.locator('[data-packs]')).toBeHidden();
+  await expect(page.locator('[data-pro]')).toBeHidden();
+  await expect(page.locator('[data-portal]')).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
 test('compte : connexion par cookie du site, solde, recharge vers Stripe, déconnexion', async ({ page }) => {
   const errors = await offline(page);
   let logged = false;

@@ -320,7 +320,7 @@ test('facturation : compte gratuit, génération offerte puis 402, recharge, Pro
   await expect(account.getByRole('button', { name: 'Gérer mon abonnement' })).toHaveCount(0);
   await expect(account).not.toContainText('jamais débité');
   await page.screenshot({ path: 'test-results/reglages-facturation-gratuit.png', fullPage: true });
-  // Une génération offerte, puis 402 qui renvoie vers Réglages → Compte.
+  // Une génération offerte, puis 402 qui renvoie vers la page Compte.
   await page.getByRole('button', { name: '← Retour' }).click();
   await expect(page.locator('.bar .project')).toHaveText('Marmotte');
   await page.getByRole('button', { name: 'Ouvrir Lenny' }).click();
@@ -330,7 +330,7 @@ test('facturation : compte gratuit, génération offerte puis 402, recharge, Pro
   await expect(panel).toContainText('Réponse simulée 1 (assistant)');
   await panel.getByLabel('Message à Lenny').fill('Encore');
   await panel.getByRole('button', { name: 'Envoyer' }).click();
-  await expect(panel.getByRole('alert')).toContainText('Réglages → Compte');
+  await expect(panel.getByRole('alert')).toContainText('page Compte de l’app');
   await panel.getByRole('button', { name: 'Effacer' }).click();
   await panel.getByRole('button', { name: 'Fermer Lenny' }).click();
   // Recharge : la page de paiement s'ouvre dans un nouvel onglet ; le solde se met à jour tout seul (webhook simulé, relecture auto).
@@ -381,6 +381,60 @@ test('mur des DA : image déposée, réduite, retirée ; génération bloquée s
   await expect(card).toHaveCount(0);
   await page.getByRole('button', { name: 'Retour à la planche' }).click();
   await expect(page.getByRole('heading', { name: 'Couleurs · Primitives' })).toBeVisible();
+});
+
+// Recette du 2026-11-17 : après « Retirer », la réponse remplaçait l'état du Mur
+// sans enabled ni reason, et « Proposer » se grisait compte connecté.
+test('mur des DA : compte connecté, « Proposer » reste actif après un retrait', async ({ page }) => {
+  await page.getByRole('button', { name: /^Compte,/ }).click();
+  const form = page.getByRole('form', { name: 'Compte DS-Studio' });
+  await form.getByLabel('Adresse mail').fill('associe@example.com');
+  await form.getByLabel('Mot de passe').fill('mot-de-passe-de-test');
+  await form.getByRole('button', { name: 'Se connecter' }).click();
+  await expect(page.getByRole('region', { name: 'Compte' })).toContainText('associe@example.com');
+  await page.goto('/#/p/marmotte');
+  await page.getByRole('navigation').getByRole('button', { name: 'Mur des DA' }).click();
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP4z8AARAwQCgAf7gP9i18U1AAAAABJRU5ErkJggg==',
+    'base64',
+  );
+  const add = page.locator('.inspiration-add input[type=file]');
+  await add.setInputFiles({ name: 'un.png', mimeType: 'image/png', buffer: png });
+  await expect(page.locator('.inspiration')).toHaveCount(1);
+  await add.setInputFiles({ name: 'deux.png', mimeType: 'image/png', buffer: png });
+  await expect(page.locator('.inspiration')).toHaveCount(2);
+  const propose = page.getByRole('button', { name: /^Proposer \d DA$/ });
+  await expect(propose).toBeEnabled();
+  await page.getByRole('button', { name: 'Retirer un.png' }).click();
+  await expect(page.locator('.inspiration')).toHaveCount(1);
+  await expect(propose).toBeEnabled();
+  await page.getByRole('button', { name: 'Retirer deux.png' }).click();
+  await expect(page.locator('.inspiration')).toHaveCount(0);
+  await page.getByRole('button', { name: /^Compte,/ }).click();
+  await page.getByRole('region', { name: 'Compte' }).getByRole('button', { name: 'Se déconnecter' }).click();
+  await expect(form).toBeVisible();
+});
+
+// Brouillon en sessionStorage, perdu à la fermeture : la page demande avant de
+// partir (Romain, 2026-11-18 ; dialogue natif côté Electron).
+test('brouillon : alerte avant de quitter la page, aucune sans brouillon', async ({ page }) => {
+  const seen: string[] = [];
+  page.on('dialog', (d) => {
+    seen.push(d.type());
+    void d.accept();
+  });
+  await page.reload();
+  await expect(page.locator('.bar .project')).toHaveText('Marmotte');
+  expect(seen).toEqual([]);
+  // Sections dépliées par le beforeEach : état gardé pour la session.
+  const sm = page.getByLabel('space/sm', { exact: true });
+  await sm.click();
+  await sm.fill('15');
+  await expect(page.getByRole('button', { name: '1 écart(s) · Corrections' })).toBeVisible();
+  await page.reload();
+  expect(seen).toEqual(['beforeunload']);
+  // Accepté : la page part ; le brouillon de la session reste lisible.
+  await expect(page.getByLabel('space/sm', { exact: true })).toHaveValue('15');
 });
 
 test('boucle : écart signalé, correction essayée, diff validé, preview à jour', async ({ page }) => {
