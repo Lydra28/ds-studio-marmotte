@@ -14,6 +14,8 @@ export interface Deps {
   keys: LicenseKeys;
   /** Clé OpenRouter du serveur (vide : relais désactivé) ; `fetch` remplaçable par les tests. */
   openRouter: { apiKey: string; fetch?: typeof fetch };
+  /** Délai sans octet reçu d'un corps du relais (`BODY_IDLE_MS` sinon) ; raccourci par les tests seulement. */
+  relayReadMs?: number;
   /** Stripe (lot 4) : client et secret du webhook ; absent, les routes de paiement répondent 503. */
   billing?: Billing;
   /** Remontée des erreurs inattendues (Sentry en production). */

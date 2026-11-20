@@ -38,9 +38,11 @@ en lecture seule et seulement si la case est cochée, pour l'assistant.
 Remise à zéro : supprime uniquement ce que DS-Studio a écrit, après avoir
 montré la liste et demandé une confirmation.
 
-Réseau : le plugin parle uniquement à l'application DS-Studio sur votre poste
-(localhost). Aucune donnée ne quitte votre ordinateur. Il faut l'application
-DS-Studio installée et un code d'appairage affiché par celle-ci.
+Réseau : le plugin ne parle qu'à l'application DS-Studio sur votre poste
+(localhost). Seule exception : une question posée à l'assistant, et la
+sélection si vous cochez la case, passent par le serveur DS-Studio vers le
+modèle d'IA, sans y être conservées. Il faut l'application DS-Studio
+installée et un code d'appairage affiché par celle-ci.
 
 Catégorie : Design tools.
 

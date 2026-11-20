@@ -88,6 +88,22 @@ test('en-têtes : CSP stricte, API seule destination des requêtes', async ({ re
   expect(html).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>/); // aucun script en ligne
 });
 
+test('référencement : adresse canonique, plan du site des pages publiques, robots', async ({ page, request }) => {
+  const ORIGIN = 'https://design-system-studio.fr';
+  const sitemap = await (await request.get('/sitemap.xml')).text();
+  const listed = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1].replace(ORIGIN, ''));
+  // Pages de passage hors du plan : liaison de l'app, confirmation, retours de paiement.
+  const hidden = ['/compte/verifier/', '/compte/app/', '/merci/', '/paiement-annule/'];
+  expect(listed.sort()).toEqual(PAGES.filter((p) => !hidden.includes(p)).sort());
+  for (const path of PAGES) {
+    await page.goto(path);
+    await expect(page.locator('link[rel="canonical"]'), path).toHaveAttribute('href', ORIGIN + path);
+  }
+  await page.goto('/inconnue/');
+  await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
+  expect(await (await request.get('/robots.txt')).text()).toContain(`Sitemap: ${ORIGIN}/sitemap.xml`);
+});
+
 test('prix et téléchargements : montants du catalogue, fichiers à nom fixe', async ({ page }) => {
   await offline(page);
   await page.goto('/prix/');

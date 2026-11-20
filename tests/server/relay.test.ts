@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { DEFAULT_RELAY_MODEL, MAX_COMPLETION_TOKENS, MAX_SPEC_CHARS, PARALLEL_MARGIN_CENTS, RELAY_MODELS } from '../../server/relay.js';
+import { DEFAULT_RELAY_MODEL, MAX_COMPLETION_TOKENS, MAX_READING, MAX_SPEC_CHARS, PARALLEL_MARGIN_CENTS, RELAY_MODELS } from '../../server/relay.js';
 import { completion, connect, testApp, type TestApp } from './helpers.js';
 
 const HOUR = 3600_000;
@@ -434,6 +434,296 @@ test('relais : champs hors liste retirés, max_tokens plafonné, routage réduit
     ])
       assert.equal((await chat(t, token, { messages: [{ role: 'user', content: [part] }] })).status, 400, part.type);
     assert.equal(t.openRouter.calls.length, 3);
+  } finally {
+    await t.close();
+  }
+});
+
+// Audit du 2026-11-18, n° 1 et n° 6 : taille des corps du relais. Valeurs
+// écrites en clair (et non importées) : sans le correctif, ces tests tournent
+// et échouent sur leurs assertions.
+const MB = 1024 * 1024;
+const CAP = 12 * MB;
+const CAP_UNPAID = 8 * MB;
+const LARGE = 2 * MB;
+const MAX_LARGE = 3;
+/** Corps JSON valide d'exactement `bytes` octets (texte ASCII). */
+const sized = (bytes: number) => {
+  const overhead = JSON.stringify({ messages: [{ role: 'user', content: '' }] }).length;
+  return JSON.stringify({ messages: [{ role: 'user', content: 'x'.repeat(bytes - overhead) }] });
+};
+/** Corps servi en flux à la demande (rien n'est lu d'avance) ; `read()` dit combien d'octets ont été tirés. */
+const lazy = (total: number, chunk = 256 * 1024) => {
+  const head = new TextEncoder().encode('{"messages":[{"role":"user","content":"');
+  const tail = new TextEncoder().encode('"}]}');
+  const fill = new Uint8Array(chunk).fill(0x78);
+  let sent = 0;
+  const stream = new ReadableStream<Uint8Array>(
+    {
+      pull(out) {
+        if (sent === 0) {
+          sent += head.length;
+          return out.enqueue(head);
+        }
+        if (sent >= total) return out.close();
+        const n = Math.min(chunk, total - tail.length - sent);
+        if (n <= 0) {
+          sent += tail.length;
+          return out.enqueue(tail);
+        }
+        sent += n;
+        out.enqueue(fill.subarray(0, n));
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  return { stream, read: () => sent };
+};
+const raw = (t: TestApp, token: string, body: BodyInit, headers: Record<string, string> = {}) =>
+  t.app.request('http://server.test/v1/relay/chat', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', ...headers },
+    body,
+    duplex: 'half',
+  } as RequestInit);
+
+test('relais : corps plafonné à 12 Mo, 8 Mo pour un compte sans achat (choix de Romain du 2026-11-19) ; Content-Length vérifié avant lecture, corps sans longueur borné en flux', async () => {
+  const t = await testApp();
+  try {
+    const token = await connect(t, user);
+    const id = (await t.db.query<{ id: string }>('SELECT id FROM accounts WHERE email = $1', [user.email])).rows[0].id;
+    await t.db.query('UPDATE accounts SET credit_cents = 500 WHERE id = $1', [id]);
+    const nine = sized(9 * MB);
+
+    // Compte gratuit sans achat : 8 Mo, rien ne part chez OpenRouter au-delà.
+    assert.equal((await chat(t, token, JSON.parse(sized(CAP_UNPAID)))).status, 200, '8 Mo tout juste : accepté');
+    const unpaid = await t.api('/v1/relay/chat', { token, method: 'POST', headers: { 'content-type': 'application/json' }, body: nine });
+    assert.equal(unpaid.status, 413, 'gratuit sans achat : 9 Mo refusés');
+    assert.match(String(unpaid.body.error), /trop lourde \(plus de 8 Mo\) pour un compte sans achat/);
+    assert.doesNotMatch(String(unpaid.body.error), /\btu\b|\bretire\b|\brecharge\b/i, 'jamais de « tu » ni d’impératif');
+    const calls = t.openRouter.calls.length;
+
+    // Content-Length trop grand : 413 sans tirer un octet du corps.
+    const untouched = lazy(9 * MB);
+    const declared = await raw(t, token, untouched.stream, { 'content-length': String(9 * MB) });
+    assert.equal(declared.status, 413);
+    assert.equal(untouched.read(), 0, 'corps jamais lu');
+    // Content-Length mensonger (annonce 100 octets) : lecture arrêtée au plafond.
+    const liar = lazy(64 * MB);
+    assert.equal((await raw(t, token, liar.stream, { 'content-length': '100' })).status, 413);
+    assert.ok(liar.read() <= CAP_UNPAID + 256 * 1024, `lecture arrêtée au plafond (${liar.read()} octets tirés)`);
+    assert.equal(t.openRouter.calls.length, calls, 'aucun appel parti');
+
+    // Achat non rétracté, crédit posé par l'admin, Pro, compte offert : 12 Mo.
+    await t.db.query("INSERT INTO purchases (account_id, kind, ref, amount_cents, purchased_at) VALUES ($1, 'credits', 'checkout:cs_test', 500, $2)", [id, t.now()]);
+    assert.equal((await raw(t, token, nine)).status, 200, 'avec un achat : 9 Mo acceptés');
+    await t.db.query('UPDATE purchases SET withdrawn_at = $2 WHERE account_id = $1', [id, t.now()]);
+    assert.equal((await raw(t, token, nine)).status, 413, 'achat rétracté : de nouveau 8 Mo');
+    await t.db.query("INSERT INTO credit_events (account_id, delta_cents, reason, ref, created_at) VALUES ($1, 200, 'admin', 'admin:test', $2)", [id, t.now()]);
+    assert.equal((await raw(t, token, nine)).status, 200, 'crédit posé par l’admin : 12 Mo');
+    await t.db.query("DELETE FROM credit_events WHERE reason = 'admin'");
+    await t.db.query("UPDATE accounts SET plan = 'pro', monthly_included_cents = 1100 WHERE id = $1", [id]);
+    assert.equal((await raw(t, token, nine)).status, 200, 'Pro : 12 Mo');
+    await t.db.query("UPDATE accounts SET plan = 'free', gifted = true WHERE id = $1", [id]);
+    assert.equal((await raw(t, token, nine)).status, 200, 'offert : 12 Mo');
+
+    // Au-delà de 12 Mo : refusé pour tous, par Content-Length comme en flux.
+    assert.equal((await raw(t, token, sized(CAP))).status, 200, '12 Mo tout juste : accepté');
+    const over = await t.api('/v1/relay/chat', { token, method: 'POST', headers: { 'content-type': 'application/json' }, body: sized(CAP + 1) });
+    assert.equal(over.status, 413);
+    assert.match(String(over.body.error), /trop lourde \(plus de 12 Mo\)/);
+    const big = lazy(13 * MB);
+    assert.equal((await raw(t, token, big.stream, { 'content-length': String(13 * MB) })).status, 413);
+    assert.equal(big.read(), 0, 'Content-Length au-delà de 12 Mo : corps jamais lu');
+    const endless = lazy(64 * MB);
+    assert.equal((await raw(t, token, endless.stream)).status, 413, 'sans Content-Length : 413');
+    assert.ok(endless.read() <= CAP + 256 * 1024, `sans Content-Length : lecture arrêtée au plafond (${endless.read()} octets tirés)`);
+  } finally {
+    await t.close();
+  }
+});
+
+test('relais : au plus 3 corps de plus de 2 Mo traités à la fois, tous comptes confondus ; place rendue en succès, en erreur et à la fin du maintien', { timeout: 60_000 }, async () => {
+  const t = await testApp();
+  try {
+    const until = async (ready: () => boolean, what: string) => {
+      for (let i = 0; i < 500; i++) {
+        if (ready()) return;
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      assert.fail(`délai dépassé : ${what}`);
+    };
+    // Cinq comptes offerts (12 Mo, un appel chacun) : la garde est commune à tous.
+    const tokens: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const u = { email: `lourd${i}@example.com`, password: user.password };
+      tokens.push(await connect(t, u));
+      await t.db.query('UPDATE accounts SET gifted = true WHERE email = $1', [u.email]);
+    }
+    const heavy = sized(LARGE + MB);
+    let open!: () => void;
+    // OpenRouter retient les appels lourds jusqu'à `open()` ; les petits répondent tout de suite.
+    const hold = () => {
+      const gate = new Promise<void>((r) => (open = r));
+      t.openRouter.state.reply = async (call) => {
+        if (JSON.stringify(call.body).length > LARGE) await gate;
+        return completion();
+      };
+    };
+    // Réponse, ou « en attente » au bout de 2 s (sans le correctif, la requête attendrait OpenRouter).
+    const soon = async <T,>(p: T | Promise<T>) =>
+      Promise.race<T | { status: string }>([p, new Promise<{ status: string }>((r) => setTimeout(() => r({ status: 'en attente' }), 2000))]);
+
+    // Trois corps lourds en cours (lus en flux, dont un annoncé par Content-Length).
+    hold();
+    let base = t.openRouter.calls.length;
+    const running = [
+      raw(t, tokens[0], heavy),
+      raw(t, tokens[1], heavy),
+      raw(t, tokens[2], heavy, { 'content-length': String(heavy.length) }),
+    ];
+    await until(() => t.openRouter.calls.length === base + MAX_LARGE, 'trois appels lourds partis');
+    const fourth = await soon(t.api('/v1/relay/chat', { token: tokens[3], method: 'POST', headers: { 'content-type': 'application/json' }, body: heavy }));
+    assert.equal(fourth.status, 429, 'quatrième corps lourd refusé');
+    assert.match(String('body' in fourth ? fourth.body.error : ''), /plusieurs requêtes lourdes/);
+    assert.doesNotMatch(String('body' in fourth ? fourth.body.error : ''), /\btu\b|\bréessaie\b|\battends\b/i);
+    const declared = await soon(raw(t, tokens[3], heavy, { 'content-length': String(heavy.length) }));
+    assert.equal(declared.status, 429, 'annoncé par Content-Length : refusé aussi');
+    assert.equal((await chat(t, tokens[4])).status, 200, 'un petit corps passe pendant ce temps');
+    open();
+    for (const r of await Promise.all(running)) assert.equal(r.status, 200);
+    t.openRouter.state.reply = () => completion();
+    assert.equal((await raw(t, tokens[3], heavy)).status, 200, 'places rendues : le quatrième passe');
+
+    // Échecs : 502 d'OpenRouter, 400 du schéma, 413 en flux après 2 Mo ; chaque place est rendue.
+    t.openRouter.state.reply = () => Response.json({ error: { message: 'down' } }, { status: 500 });
+    for (let i = 0; i < MAX_LARGE + 1; i++) assert.equal((await raw(t, tokens[i], heavy)).status, 502);
+    t.openRouter.state.reply = () => completion();
+    const invalid = JSON.stringify({ messages: [], pad: 'x'.repeat(LARGE + MB) });
+    for (let i = 0; i < MAX_LARGE + 1; i++) assert.equal((await raw(t, tokens[i], invalid)).status, 400);
+    for (let i = 0; i < MAX_LARGE + 1; i++) assert.equal((await raw(t, tokens[i], lazy(CAP + MB).stream)).status, 413);
+    hold();
+    base = t.openRouter.calls.length;
+    const again = [0, 1, 2].map((i) => raw(t, tokens[i], heavy));
+    await until(() => t.openRouter.calls.length === base + MAX_LARGE, 'trois appels lourds repartis');
+    open();
+    for (const r of await Promise.all(again)) assert.equal(r.status, 200, 'aucune place perdue dans les échecs');
+
+    // Maintien : la place est tenue tant que l'appel court (réponse 200 déjà partie), puis rendue.
+    hold();
+    base = t.openRouter.calls.length;
+    const streams = await Promise.all([0, 1, 2].map((i) => raw(t, tokens[i], heavy, { 'x-ds-keepalive': '1' })));
+    for (const s of streams) assert.equal(s.status, 200);
+    await until(() => t.openRouter.calls.length === base + MAX_LARGE, 'appels du maintien partis');
+    assert.equal((await soon(raw(t, tokens[3], heavy))).status, 429, 'places tenues pendant le maintien');
+    open();
+    for (const s of streams) await s.text();
+    t.openRouter.state.reply = () => completion();
+    assert.equal((await raw(t, tokens[3], heavy)).status, 200, 'places rendues à la fin du maintien');
+  } finally {
+    await t.close();
+  }
+});
+
+// Relecture du 2026-11-19 : la place d'un corps lourd n'est prise qu'au
+// passage réel des 2 Mo, jamais sur la seule annonce ; une lecture qui
+// traîne est abandonnée (408) ; au plus MAX_READING corps en lecture.
+// Délais larges et relances plutôt qu'attentes fixes : stable sur une CI lente.
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Début d'un corps JSON, puis `bytes` octets, puis plus rien. */
+const stalled = (bytes = 0) =>
+  new ReadableStream<Uint8Array>({
+    start(out) {
+      out.enqueue(new TextEncoder().encode('{"messages":[{"role":"user","content":"'));
+      if (bytes) out.enqueue(new Uint8Array(bytes).fill(0x78));
+    },
+  });
+/** Relance `call` jusqu'au statut voulu (5 s au plus) ; rend le dernier statut obtenu. */
+const retryUntil = async (status: number, call: () => Response | Promise<Response>) => {
+  let last = 0;
+  for (let i = 0; i < 100 && last !== status; i++) {
+    last = (await call()).status;
+    if (last !== status) await sleep(50);
+  }
+  return last;
+};
+async function mutedAccounts(t: TestApp, prefix: string, n: number) {
+  const tokens: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const u = { email: `${prefix}${i}@example.com`, password: user.password };
+    tokens.push(await connect(t, u));
+    await t.db.query('UPDATE accounts SET gifted = true WHERE email = $1', [u.email]);
+  }
+  return tokens;
+}
+
+test('relais : place lourde prise sur les octets reçus, pas sur l’annonce ; lecture muette abandonnée en 408', { timeout: 60_000 }, async () => {
+  const t = await testApp({ relayReadMs: 3000 });
+  try {
+    const tokens = await mutedAccounts(t, 'muet', 4);
+    const heavy = sized(LARGE + MB);
+
+    // Trois clients annoncent 9 Mo et n'envoient presque rien. 500 ms suffisent
+    // à l'ancien code pour prendre les trois places sur l'annonce (quelques
+    // requêtes en base) ; le Mur d'un quatrième passe quand même.
+    const mute = [0, 1, 2].map((i) => raw(t, tokens[i], stalled(10), { 'content-length': String(9 * MB) }));
+    await sleep(500);
+    assert.equal((await raw(t, tokens[3], heavy)).status, 200, 'annonce seule : aucune place prise');
+    for (const r of await Promise.all(mute)) {
+      assert.equal(r.status, 408);
+      assert.match(String((await r.json()).error), /trop lente/);
+    }
+
+    // Trois clients passent 2 Mo puis se taisent : places prises, rendues au délai.
+    const slow = [0, 1, 2].map((i) => raw(t, tokens[i], stalled(LARGE + MB)));
+    assert.equal(await retryUntil(429, () => raw(t, tokens[3], heavy)), 429, 'places prises au passage des 2 Mo');
+    for (const r of await Promise.all(slow)) assert.equal(r.status, 408);
+    assert.equal((await raw(t, tokens[3], heavy)).status, 200, 'places rendues après le 408');
+  } finally {
+    await t.close();
+  }
+});
+
+test('relais : envoi au compte-gouttes coupé au délai total (4 × délai sans octet)', { timeout: 60_000 }, async () => {
+  const idle = 300;
+  const t = await testApp({ relayReadMs: idle });
+  try {
+    const [token] = await mutedAccounts(t, 'goutte', 1);
+    // Un octet toutes les idle/3 : jamais muet assez longtemps, coupé à 4 × idle.
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const trickle = new ReadableStream<Uint8Array>({
+      start(out) {
+        out.enqueue(new TextEncoder().encode('{"messages":[{"role":"user","content":"'));
+        timer = setInterval(() => out.enqueue(new Uint8Array([0x78])), idle / 3);
+      },
+      cancel() {
+        clearInterval(timer);
+      },
+    });
+    const started = Date.now();
+    const cut = await raw(t, token, trickle);
+    clearInterval(timer);
+    const took = Date.now() - started;
+    assert.equal(cut.status, 408);
+    // Borne haute large : elle compte aussi le compte, le plafond et l'usage lus avant la lecture.
+    assert.ok(took >= 4 * idle - 50 && took < 12 * idle, `coupé au délai total (${took} ms)`);
+  } finally {
+    await t.close();
+  }
+});
+
+test('relais : au plus 20 corps en lecture à la fois, tous comptes confondus', { timeout: 60_000 }, async () => {
+  const t = await testApp({ relayReadMs: 3000 });
+  try {
+    const tokens = await mutedAccounts(t, 'lecteur', MAX_READING + 1);
+    const small = () => raw(t, tokens[MAX_READING], JSON.stringify({ messages: [{ role: 'user', content: 'bonjour' }] }));
+    const waiting = tokens.slice(0, MAX_READING).map((tok) => raw(t, tok, stalled()));
+    assert.equal(await retryUntil(429, small), 429, 'vingt lectures en cours : la suivante refusée');
+    const refused = await small();
+    assert.equal(refused.status, 429);
+    assert.match(String((await refused.json()).error), /beaucoup de requêtes/);
+    for (const r of await Promise.all(waiting)) assert.equal(r.status, 408);
+    assert.equal((await small()).status, 200, 'places de lecture rendues');
   } finally {
     await t.close();
   }

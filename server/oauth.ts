@@ -17,12 +17,13 @@
 // App : elle demande un lien (`/app-link`), ouvre le site sur
 // `/compte/app/?code=…`, le site connecté l'approuve (`/app-link/approve`),
 // l'app récupère sa session (`/app-link/token`). Rien à déclarer côté OS.
-import { createHash, randomBytes, randomInt } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { z } from 'zod';
 import { body, COOKIE, sha256, type Account, type Row } from './auth.js';
 import { ApiError, type Deps } from './core.js';
+import { requestIpKey } from './ip-key.js';
 
 export type Provider = 'google' | 'github';
 export interface OAuthClient {
@@ -85,6 +86,14 @@ const newUserCode = () => {
   return `${Array.from({ length: 4 }, pick).join('')}-${Array.from({ length: 4 }, pick).join('')}`;
 };
 
+// Refus attendu du fournisseur à l'échange du code (code faux, déjà servi ou
+// expiré : 4xx, ou GitHub qui répond 200 avec `error`). Jamais signalé à
+// Sentry : un tiers le provoque à volonté (audit du 2026-11-18, n° 4).
+// 5xx, réseau, profil illisible : signalés.
+class ProviderRefusal extends Error {}
+/** Erreurs de l'échange du code dues au seul code (faux, expiré, rejoué) : attendues, jamais signalées. */
+const CODE_REFUSALS = new Set(['invalid_grant', 'bad_verification_code']);
+
 /** Ce que le fournisseur garantit : identifiant stable et adresse vérifiée (sinon `null`). */
 export interface Identity {
   subject: string;
@@ -110,6 +119,17 @@ export function oauthRoutes(deps: Deps, kit: Kit) {
   const http = config.fetch ?? fetch;
   const routes = new Hono();
   const secure = deps.publicUrl.startsWith('https://');
+  // Cookie d'état signé (HMAC-SHA256, audit du 2026-11-18, n° 4) : un état
+  // que ce serveur n'a pas émis, ou de plus de 10 min, est refusé avant tout
+  // appel au fournisseur. Clé aléatoire par processus, aucune variable de plus
+  // dans Render : une seule instance, et un redéploiement ne fait échouer
+  // qu'une connexion en cours (`?oauth=etat`, à relancer).
+  const stateKey = randomBytes(32);
+  const mac = (payload: string) => createHmac('sha256', stateKey).update(payload).digest();
+  const sealState = (v: { p: Provider; s: string; v: string; a: string | null }) => {
+    const payload = b64url(Buffer.from(JSON.stringify({ ...v, t: now().getTime() })));
+    return `${payload}.${b64url(mac(payload))}`;
+  };
   const callbackUrl = (p: Provider) => `${deps.publicUrl}/v1/auth/oauth/${p}/callback`;
   const providerOf = (c: Context): Provider => {
     const p = c.req.param('provider');
@@ -139,7 +159,7 @@ export function oauthRoutes(deps: Deps, kit: Kit) {
     if (!client) return back(c, { app, failure: 'indisponible' });
     const state = b64url(randomBytes(24));
     const verifier = b64url(randomBytes(32));
-    setCookie(c, STATE_COOKIE, b64url(Buffer.from(JSON.stringify({ p: provider, s: state, v: verifier, a: app ?? null }))), {
+    setCookie(c, STATE_COOKIE, sealState({ p: provider, s: state, v: verifier, a: app ?? null }), {
       httpOnly: true,
       secure,
       sameSite: 'Lax', // envoyé au retour du fournisseur (navigation de premier niveau)
@@ -172,7 +192,7 @@ export function oauthRoutes(deps: Deps, kit: Kit) {
     try {
       identity = await fetchIdentity(provider, client, code, saved.v);
     } catch (e) {
-      deps.report?.(e);
+      if (!(e instanceof ProviderRefusal)) deps.report?.(e);
       console.warn(`OAuth ${provider} : ${e instanceof Error ? e.message : String(e)}`);
       return back(c, { app, failure: 'erreur' });
     }
@@ -201,9 +221,19 @@ export function oauthRoutes(deps: Deps, kit: Kit) {
 
   function readState(raw: string | undefined): { p: Provider; s: string; v: string; a: string | null } | null {
     if (!raw) return null;
+    const dot = raw.lastIndexOf('.');
+    if (dot < 1) return null;
+    const payload = raw.slice(0, dot);
+    const given = Buffer.from(raw.slice(dot + 1), 'base64url');
+    const want = mac(payload);
+    // Comparaison à temps constant, longueurs vérifiées d'abord (timingSafeEqual l'exige).
+    if (given.length !== want.length || !timingSafeEqual(given, want)) return null;
     try {
-      const v = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8')) as Record<string, unknown>;
+      const v = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as Record<string, unknown>;
       if ((v.p !== 'google' && v.p !== 'github') || typeof v.s !== 'string' || typeof v.v !== 'string') return null;
+      // Le `maxAge` du cookie ne lie que le navigateur : l'âge est revérifié ici.
+      const age = typeof v.t === 'number' ? now().getTime() - v.t : NaN;
+      if (!(age >= 0 && age <= STATE_MINUTES * 60_000)) return null;
       return { p: v.p, s: v.s, v: v.v, a: typeof v.a === 'string' ? v.a : null };
     } catch {
       return null;
@@ -226,7 +256,15 @@ export function oauthRoutes(deps: Deps, kit: Kit) {
       signal: AbortSignal.timeout(10_000),
     });
     const tokenBody = (await tokenRes.json().catch(() => ({}))) as { access_token?: string; error?: string };
-    if (!tokenRes.ok || !tokenBody.access_token) throw new Error(`jeton refusé (${tokenRes.status} ${tokenBody.error ?? ''})`.trim());
+    if (!tokenRes.ok || !tokenBody.access_token) {
+      const detail = `jeton refusé (${tokenRes.status} ${tokenBody.error ?? ''})`.replace(' )', ')');
+      // Seul un code faux, expiré ou rejoué est attendu (Google `invalid_grant`
+      // en 400, GitHub `bad_verification_code` en 200) : pas de signalement.
+      // Un client mal réglé (`invalid_client`, `redirect_uri_mismatch`…) coupe
+      // la connexion pour tous : signalé (relecture du 2026-11-19).
+      const refused = tokenRes.status < 500 && CODE_REFUSALS.has(tokenBody.error ?? '');
+      throw refused ? new ProviderRefusal(detail) : new Error(detail);
+    }
     const auth = { authorization: `Bearer ${tokenBody.access_token}` };
     if (provider === 'google') {
       const res = await http(GOOGLE_USERINFO, { headers: auth, signal: AbortSignal.timeout(10_000) });
@@ -327,7 +365,7 @@ export function oauthRoutes(deps: Deps, kit: Kit) {
     return /^[A-Z]{2}$/.test(v) && v !== 'XX' && v !== 'T1' ? v : null;
   };
   routes.post('/app-link', async (c) => {
-    const ip = c.req.header('cf-connecting-ip') ?? 'inconnue';
+    const ip = requestIpKey(c); // par /64 en IPv6 (ip-key.ts)
     const since = now().getTime() - 3600_000;
     const mine = (linksByIp.get(ip) ?? []).filter((at) => at > since);
     if (mine.length >= LINKS_PER_IP_PER_HOUR) throw new ApiError('Trop de demandes de connexion depuis cette connexion : réessayer dans une heure.', 429);

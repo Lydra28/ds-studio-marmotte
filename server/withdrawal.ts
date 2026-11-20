@@ -14,9 +14,9 @@
 // shortcut: remboursement et résiliation faits à la main dans Stripe ; à
 // automatiser (refunds.create, subscriptions.cancel) quand les rétractations
 // dépassent quelques-unes par mois.
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { z } from 'zod';
-import { body, requireAccount } from './auth.js';
+import { body, requireAccount, sessionClient } from './auth.js';
 import { ApiError, clock, type Deps } from './core.js';
 import { addCredits } from './credits.js';
 import type { Db, Tx } from './db.js';
@@ -104,7 +104,28 @@ export async function withdraw(db: Db, m: { accountId: string; purchaseId: numbe
     await tx.query('UPDATE purchases SET withdrawn_at = $2, withdrawal_name = $3, refund_cents = $4 WHERE id = $1', [p.id, m.now, m.name, refund]);
     if (p.kind === 'credits' && refund > 0)
       await addCredits(tx, { accountId: m.accountId, deltaCents: -refund, reason: 'withdrawal', ref: `withdrawal:${p.id}`, now: m.now });
-    if (p.kind === 'pro') await tx.query('UPDATE accounts SET monthly_included_cents = 0 WHERE id = $1', [m.accountId]);
+    if (p.kind === 'pro') {
+      // CGV § 4 : « L'abonnement Pro est alors arrêté » (décision de Romain du
+      // 2026-11-20, rc.20). Compte gratuit dès la déclaration, abonnement noté
+      // résilié : ses événements Stripe en retard (`invoice.paid`,
+      // `customer.subscription.updated` actif) sont refusés par la garde de
+      // `startPro` et des webhooks d'abonnement (billing.ts). Seulement si
+      // c'est le dernier abonnement payé du compte : un réabonnement plus
+      // récent n'est pas touché. L'annulation chez Stripe reste à faire à la
+      // main (`shortcut:` existant, mail à l'admin).
+      // shortcut: « plus récent » lu dans `purchases`, qui ne note pas un
+      // abonnement payé 0 € (code promo à 100 %) ; revoir à l'activation des
+      // codes promo dans Checkout (noter alors l'abonnement de chaque achat).
+      const newer = await tx.query(
+        "SELECT 1 FROM purchases WHERE account_id = $1 AND kind = 'pro' AND id <> $2 AND purchased_at > $3 LIMIT 1",
+        [m.accountId, p.id, p.purchased_at],
+      );
+      if (newer.rows.length === 0)
+        await tx.query(
+          "UPDATE accounts SET plan = 'free', subscription_status = 'canceled', monthly_included_cents = 0, cancel_at_period_end = false, current_period_end = NULL WHERE id = $1",
+          [m.accountId],
+        );
+    }
     return {
       purchaseId: Number(p.id),
       kind: p.kind,
@@ -152,15 +173,24 @@ const withdrawBody = z.object({
 export function withdrawalRoutes(deps: Deps) {
   const app = new Hono();
   const account = requireAccount(deps);
+  const clientOf = sessionClient(deps);
   const now = clock(deps);
+  // Comme le portail : une session de l'app (lien piégé, jeton volé) ne lit ni
+  // ne déclare de rétractation ; seule la page Compte du site le fait (audit
+  // final du 2026-11-18, n° 3).
+  const siteOnly = async (c: Context) => {
+    const me = await account(c);
+    if ((await clientOf(c)) !== 'site') throw new ApiError('Rétractation depuis la page Compte du site seulement.', 403);
+    return me;
+  };
 
   app.get('/withdrawals', async (c) => {
-    const me = await account(c);
+    const me = await siteOnly(c);
     return c.json({ days: WITHDRAWAL_DAYS, email: me.email, purchases: await withdrawable(deps.db, me.id, now()) });
   });
 
   app.post('/withdraw', async (c) => {
-    const me = await account(c);
+    const me = await siteOnly(c);
     const input = await body(c, withdrawBody);
     const r = await withdraw(deps.db, { accountId: me.id, purchaseId: input.purchaseId, name: input.name, now: now() });
     const received = when(new Date(r.receivedAt));

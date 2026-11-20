@@ -3,7 +3,8 @@ import test from 'node:test';
 import { createAdminApp } from '../../server/admin-ui.js';
 import { handleEvent } from '../../server/billing.js';
 import { deleteAccount } from '../../server/retention.js';
-import { connect, testApp } from './helpers.js';
+import { createHash } from 'node:crypto';
+import { connect as connectApp, testApp } from './helpers.js';
 
 // Rétractation (option A du 2026-11-06, server/withdrawal.ts) : registre des
 // achats par le webhook, 14 jours, remboursement de ce qui n'a pas servi,
@@ -13,6 +14,13 @@ const user = (n: number) => ({ email: `retract${n}@exemple.test`, password: 'mot
 let seq = 0;
 type T = Awaited<ReturnType<typeof testApp>>;
 
+// Rétractation réservée à une session du site (audit final du 2026-11-18,
+// n° 3) : session ouverte comme l'app puis marquée `site`, jeton en Bearer.
+const connect = async (t: T, u: { email: string; password: string }) => {
+  const token = await connectApp(t, u);
+  await t.db.query("UPDATE sessions SET client = 'site' WHERE token_hash = $1", [createHash('sha256').update(token).digest('hex')]);
+  return token;
+};
 const accountId = async (t: T, email: string) => (await t.db.query<{ id: string }>('SELECT id FROM accounts WHERE email = $1', [email])).rows[0].id;
 const paid = (t: T, id: string, mode: 'payment' | 'subscription', amount: number) =>
   handleEvent(
@@ -111,6 +119,81 @@ test('rétractation : Pro remboursé au prorata du mois restant, inclus coupé ;
   }
 });
 
+// Décision de Romain du 2026-11-20 (rc.20) : CGV § 4, « L'abonnement Pro est
+// alors arrêté ». Le compte repasse en gratuit à la déclaration, et les
+// événements Stripe de l'abonnement, tant qu'il n'est pas annulé à la main, ne
+// lui redonnent pas Pro. Un réabonnement plus récent n'est pas touché.
+test('rétractation de Pro : compte gratuit dès la déclaration, événements Stripe en retard sans effet, réabonnement possible', async () => {
+  const t = await testApp();
+  try {
+    const token = await connect(t, user(1));
+    const id = await accountId(t, user(1).email);
+    const state = async () =>
+      (await t.db.query<{ plan: string; subscription_status: string | null; monthly_included_cents: number }>(
+        'SELECT plan, subscription_status, monthly_included_cents FROM accounts WHERE id = $1',
+        [id],
+      )).rows[0];
+    const stored = async () =>
+      (await t.db.query<{ stripe_subscription_id: string | null; current_period_end: unknown }>(
+        'SELECT stripe_subscription_id, current_period_end FROM accounts WHERE id = $1',
+        [id],
+      )).rows[0];
+    assert.equal(await paid(t, id, 'subscription', 999), 'new');
+    const session = `cs_w${seq}`;
+    const sub = `sub_w${seq}`;
+    const customer = `cus_w${seq}`;
+    assert.equal((await state()).plan, 'pro');
+    t.tick(DAY);
+    const [pro] = (await list(t, token)).purchases;
+    assert.equal((await t.api('/v1/billing/withdraw', { json: { purchaseId: pro.id, name: 'Camille Test' }, token })).status, 200);
+    assert.deepEqual(await state(), { plan: 'free', subscription_status: 'canceled', monthly_included_cents: 0 });
+    assert.deepEqual(await stored(), { stripe_subscription_id: sub, current_period_end: null }, 'abonnement gardé pour reconnaître ses événements');
+    assert.equal(((await t.api('/v1/me', { token })).body as { plan: string }).plan, 'free', '/v1/me : gratuit, la licence de l’app suit');
+
+    // Abonnement encore actif chez Stripe (annulation à la main) : rien ne redonne Pro.
+    const event = (type: string, object: unknown) => handleEvent(t.db, { id: `evt_late${++seq}`, type, data: { object } } as never, t.now());
+    await event('invoice.paid', { customer, parent: { subscription_details: { subscription: sub } } });
+    await event('customer.subscription.updated', { id: sub, customer, status: 'active', cancel_at_period_end: false });
+    await event('customer.subscription.updated', { id: sub, customer, status: 'active', cancel_at: Math.floor(t.now().getTime() / 1000) + 86400 });
+    for (const status of ['trialing', 'past_due']) await event('customer.subscription.updated', { id: sub, customer, status });
+    await event('invoice.payment_failed', { customer, parent: { subscription_details: { subscription: sub } } });
+    // Même session de paiement rejouée sous un autre identifiant d'événement, et paiement différé.
+    const checkout = { id: session, mode: 'subscription', payment_status: 'paid', amount_total: 999, currency: 'eur', client_reference_id: id, customer, subscription: sub, metadata: null };
+    await event('checkout.session.completed', checkout);
+    await event('checkout.session.async_payment_succeeded', checkout);
+    assert.deepEqual(await state(), { plan: 'free', subscription_status: 'canceled', monthly_included_cents: 0 }, 'événements de l’abonnement rétracté : toujours gratuit');
+    assert.equal((await stored()).stripe_subscription_id, sub);
+    // Annulation faite par Romain dans Stripe : reste gratuit.
+    await event('customer.subscription.deleted', { id: sub, customer, status: 'canceled' });
+    assert.equal((await state()).plan, 'free');
+
+    // Réabonnement : un nouvel abonnement redonne Pro.
+    await event('invoice.paid', { customer, parent: { subscription_details: { subscription: 'sub_nouveau' } } });
+    assert.equal((await state()).plan, 'pro', 'nouvel abonnement : Pro');
+  } finally {
+    await t.close();
+  }
+});
+
+test('rétractation d’un ancien abonnement : le réabonnement plus récent reste Pro', async () => {
+  const t = await testApp();
+  try {
+    const token = await connect(t, user(1));
+    const id = await accountId(t, user(1).email);
+    assert.equal(await paid(t, id, 'subscription', 999), 'new');
+    const first = (await list(t, token)).purchases[0];
+    await t.db.query("UPDATE accounts SET subscription_status = 'canceled' WHERE id = $1", [id]);
+    t.tick(DAY);
+    assert.equal(await paid(t, id, 'subscription', 999), 'new');
+    assert.equal((await t.api('/v1/billing/withdraw', { json: { purchaseId: first.id, name: 'Camille Test' }, token })).status, 200);
+    const a = (await t.db.query<{ plan: string; monthly_included_cents: number }>('SELECT plan, monthly_included_cents FROM accounts WHERE id = $1', [id])).rows[0];
+    assert.equal(a.plan, 'pro', 'abonnement en cours gardé');
+    assert.ok(a.monthly_included_cents > 0, 'inclus du bon abonnement gardé');
+  } finally {
+    await t.close();
+  }
+});
+
 test('rétractation : accusé en échec, déclaration gardée et Romain prévenu', async () => {
   const t = await testApp({ adminEmail: 'romain@exemple.test' });
   try {
@@ -170,6 +253,26 @@ test('rétractation : CORS du site, suivi admin:ui, nom effacé à la suppressio
     assert.deepEqual(del, { ok: true, mode: 'anonymised', forfeitedCents: 1 });
     const kept = (await t.db.query<{ withdrawal_name: string | null; amount_cents: number }>('SELECT withdrawal_name, amount_cents FROM purchases')).rows;
     assert.deepEqual(kept, [{ withdrawal_name: null, amount_cents: 500 }], 'achat gardé, nom effacé');
+  } finally {
+    await t.close();
+  }
+});
+
+test('rétractation : une session de l’app ne lit ni ne déclare rien (403), le site oui', async () => {
+  const t = await testApp();
+  try {
+    const app = await connectApp(t, user(9));
+    const id = await accountId(t, user(9).email);
+    assert.equal(await paid(t, id, 'payment', 500), 'new');
+    const listed = await t.api('/v1/billing/withdrawals', { token: app });
+    assert.equal(listed.status, 403);
+    assert.match(String(listed.body.error), /page Compte du site/);
+    const [p] = (await list(t, await connect(t, user(9)))).purchases;
+    assert.ok(p, 'achat visible depuis le site');
+    assert.equal((await t.api('/v1/billing/withdraw', { json: { purchaseId: p.id, name: 'Camille Test' }, token: app })).status, 403);
+    assert.equal(await credit(t, id), 501, 'solde intact');
+    const none = await t.db.query('SELECT 1 FROM purchases WHERE account_id = $1 AND withdrawn_at IS NOT NULL', [id]);
+    assert.equal(none.rows.length, 0, 'aucune rétractation enregistrée');
   } finally {
     await t.close();
   }

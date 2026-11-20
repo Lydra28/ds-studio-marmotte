@@ -31,6 +31,13 @@ export function createApp(deps: Deps) {
   });
   app.notFound((c) => c.json({ error: 'Route inconnue.' }, 404));
 
+  // L'API n'est pas une page : aucune réponse indexée par les moteurs (Search
+  // Console du 2026-11-19 : racine en 404, départ OAuth en noindex).
+  app.use('*', async (c, next) => {
+    await next();
+    c.header('X-Robots-Tag', 'noindex');
+  });
+
   // Secret d'origine (revue du 2026-11-13, n° 9) : une requête sans le secret
   // que Cloudflare ajoute est venue en direct par l'URL onrender.com, où l'IP
   // du client (`CF-Connecting-IP`) se falsifie. Premier temps : noté (au plus

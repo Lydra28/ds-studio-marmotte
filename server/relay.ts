@@ -6,9 +6,8 @@
 // est ceil(coût × RATE) en centimes d'euro (credits.ts), le coût reste en
 // centimes de dollar.
 import { Hono, type Context } from 'hono';
-import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
-import { body, requireAccount, type Account } from './auth.js';
+import { requireAccount, type Account } from './auth.js';
 import { ApiError, clock, type Deps } from './core.js';
 import { chargedCents } from './credits.js';
 import type { Db } from './db.js';
@@ -17,8 +16,21 @@ import type { Db } from './db.js';
 // premier (même liste que l'assistant de l'app : modèle par défaut, plan B).
 export const RELAY_MODELS: readonly string[] = ['deepseek/deepseek-v4.1-flash-1017', 'openai/gpt-6.1-terra'];
 export const DEFAULT_RELAY_MODEL = RELAY_MODELS[0];
-// Le Mur envoie ses inspirations en data: (jusqu'à 5 Mo chacune).
-export const MAX_BODY_BYTES = 32 * 1024 * 1024;
+// Taille des corps (audit du 2026-11-18, n° 1 et n° 6) : l'instance Render a
+// 512 Mo et un corps coûte environ trois fois sa taille en mémoire (texte lu,
+// JSON analysé, corps renvoyé à OpenRouter).
+/** Plafond d'un appel. Le Mur envoie au plus 8 inspirations en data:, réduites à 1 280 px en JPEG : 11,6 Mo au pire (bruit pur), 2 à 6 Mo pour de vraies images. */
+export const MAX_BODY_BYTES = 12 * 1024 * 1024;
+/** Plafond d'un compte gratuit sans achat en cours ni crédit posé par l'admin (ni Pro ni offert) : un compte neuf créé en série ne coûte pas un appel à 12 Mo. 8 Mo et non 4 : le Mur réel (2 à 6 Mo) passe pour la génération offerte d'un nouvel inscrit (choix de Romain du 2026-11-19). */
+export const MAX_BODY_BYTES_UNPAID = 8 * 1024 * 1024;
+/** Au-delà, un corps compte parmi les corps lourds traités en même temps. */
+export const LARGE_BODY_BYTES = 2 * 1024 * 1024;
+/** Corps lourds traités en même temps, tous comptes confondus (lecture, appel et réponse compris). */
+export const MAX_LARGE_BODIES = 3;
+/** Lecture du corps bornée dans le temps (relecture du 2026-11-19) : 408 après 30 s sans octet reçu, ou 4 fois ce délai en tout (12 Mo en 2 min : 0,8 Mbit/s suffit). Un client muet ne garde ni place ni mémoire. */
+export const BODY_IDLE_MS = 30_000;
+/** Corps en cours de lecture, tous comptes confondus : chacun peut tenir jusqu'à 2 Mo avant de prendre une place lourde (20 × 2 Mo = 40 Mo au plus). */
+export const MAX_READING = 20;
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 const MODELS_ENDPOINT = 'https://openrouter.ai/api/v1/models';
 const PRICES_TTL_MS = 24 * 3600_000;
@@ -138,18 +150,92 @@ export const MAX_PARALLEL = 2;
 export const PARALLEL_MARGIN_CENTS = 100;
 const BUSY = 'Une génération est déjà en cours sur ce compte : attendre sa fin, puis réessayer.';
 const BUSY_LOW = `Une génération est déjà en cours sur ce compte et il reste moins de ${PARALLEL_MARGIN_CENTS / 100} € à débiter : une seule à la fois. Attendre sa fin, puis réessayer.`;
+const LARGE_BUSY = 'Le serveur traite déjà plusieurs requêtes lourdes (images du Mur) : réessayer dans une minute.';
+const TOO_SLOW = 'Requête trop lente à envoyer : vérifier la connexion, puis réessayer.';
+const READING_BUSY = 'Le serveur reçoit déjà beaucoup de requêtes : réessayer dans une minute.';
+const mo = (bytes: number) => `${bytes / 1024 / 1024} Mo`;
+const tooLarge = (cap: number) =>
+  new ApiError(
+    cap < MAX_BODY_BYTES
+      ? `Requête trop lourde (plus de ${mo(cap)}) pour un compte sans achat : retirer des inspirations du Mur, ou recharger des crédits pour envoyer jusqu’à ${mo(MAX_BODY_BYTES)}.`
+      : `Requête trop lourde (plus de ${mo(cap)}) : retirer des inspirations du Mur, puis réessayer.`,
+    413,
+  );
+
+/** Plafond de corps du compte : 12 Mo s'il est offert, Pro, a un achat non rétracté ou un crédit posé par l'admin ; 8 Mo sinon. */
+export async function bodyCap(db: Pick<Db, 'query'>, me: Pick<Account, 'id' | 'gifted' | 'plan'>): Promise<number> {
+  if (me.gifted || me.plan === 'pro') return MAX_BODY_BYTES;
+  const { rows } = await db.query<{ paid: boolean }>(
+    `SELECT EXISTS (SELECT 1 FROM purchases WHERE account_id = $1 AND withdrawn_at IS NULL)
+         OR EXISTS (SELECT 1 FROM credit_events WHERE account_id = $1 AND reason = 'admin' AND delta_cents > 0) AS paid`,
+    [me.id],
+  );
+  return rows[0]?.paid ? MAX_BODY_BYTES : MAX_BODY_BYTES_UNPAID;
+}
+
+/** Taille annoncée par `Content-Length`, ou `null` (absente, illisible, ou corps en morceaux). */
+function declaredLength(c: Context): number | null {
+  if (c.req.header('transfer-encoding')) return null;
+  const raw = c.req.header('content-length');
+  const n = raw === undefined ? NaN : Number(raw);
+  return Number.isSafeInteger(n) && n >= 0 ? n : null;
+}
+
+// Corps lu en flux, borné : 413 dès que `cap` est dépassé, sans lire la
+// suite (le serveur Node vide ce qui reste sans le garder). `Content-Length`
+// est déjà vérifié avant ; cette borne couvre un corps sans longueur ou qui
+// en annonce une fausse. `large` est appelé quand le corps lu passe
+// LARGE_BODY_BYTES (place parmi les corps lourds, ou 429) : jamais sur la
+// seule annonce. `idleMs` sans octet reçu, ou 4 × `idleMs` en tout : 408 et
+// lecture abandonnée.
+async function readJson(c: Context, cap: number, large: () => void, idleMs: number): Promise<unknown> {
+  const stream = c.req.raw.body;
+  if (!stream) return null;
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  const deadline = Date.now() + 4 * idleMs;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    for (;;) {
+      const wait = Math.max(0, Math.min(idleMs, deadline - Date.now()));
+      const late = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new ApiError(TOO_SLOW, 408)), wait);
+      });
+      const { done, value } = await Promise.race([reader.read(), late]);
+      clearTimeout(timer);
+      if (done) break;
+      size += value.byteLength;
+      if (size > cap) throw tooLarge(cap);
+      if (size > LARGE_BODY_BYTES) large();
+      chunks.push(value);
+    }
+  } catch (e) {
+    void reader.cancel().catch(() => {});
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks, size).toString('utf8')) as unknown;
+  } catch {
+    return null;
+  }
+}
 
 // Appels en cours par compte (revue du 2026-11-13, n° 1). Le solde et le
 // plafond sont lus avant l'appel, le débit arrive après : sans cette garde,
 // des appels lancés ensemble passaient tous sur le même solde.
-// shortcut: compteur en mémoire, exact pour une seule instance (render.yaml) ; à porter en base avant de passer à plusieurs instances.
-function inflight() {
+// Sert aussi aux corps lourds, tous comptes confondus (une seule clé).
+// shortcut: compteurs en mémoire, exacts pour une seule instance (render.yaml) ; à porter en base avant de passer à plusieurs instances.
+type Slot = { others: () => number; release: () => void };
+function inflight(max: number, busy: string) {
   const counts = new Map<string, number>();
   return {
-    /** Prend une place, ou 429 au-delà de MAX_PARALLEL ; `others()` compte, au moment où on le demande, les autres appels encore en cours. Sans attente : deux requêtes ne se croisent pas. */
-    take(accountId: string) {
+    /** Prend une place, ou 429 au-delà de `max` ; `others()` compte, au moment où on le demande, les autres appels encore en cours. Sans attente : deux requêtes ne se croisent pas. */
+    take(accountId: string): Slot {
       const taken = counts.get(accountId) ?? 0;
-      if (taken >= MAX_PARALLEL) throw new ApiError(BUSY, 429);
+      if (taken >= max) throw new ApiError(busy, 429);
       counts.set(accountId, taken + 1);
       let held = true;
       const release = () => {
@@ -180,28 +266,43 @@ export function relayRoutes(deps: Deps) {
   const account = requireAccount(deps);
   const fetchImpl = deps.openRouter.fetch ?? fetch;
   const prices = pricesCache(fetchImpl);
-  const slots = inflight();
-  const limit = bodyLimit({
-    maxSize: MAX_BODY_BYTES,
-    onError: (c) => c.json({ error: `Requête trop lourde (plus de ${MAX_BODY_BYTES / 1024 / 1024} Mo).` }, 413),
-  });
+  const slots = inflight(MAX_PARALLEL, BUSY);
+  const largeSlots = inflight(MAX_LARGE_BODIES, LARGE_BUSY);
+  const readers = inflight(MAX_READING, READING_BUSY);
 
-  app.post('/chat', limit, (c) => guarded(c));
+  app.post('/chat', (c) => guarded(c));
 
   // Une place par appel en cours, rendue quand l'appel finit (réponse, refus ou
   // client parti) : `chat` dit s'il a confié la place à un appel qui la rendra.
+  // Même chose pour la place d'un corps lourd. Le compte est connu par le jeton
+  // avant toute lecture du corps : son plafond (8 ou 12 Mo) est vérifié sur
+  // `Content-Length` d'abord, puis pendant la lecture.
   async function guarded(c: Context) {
     const session = await account(c);
+    const cap = await bodyCap(deps.db, session);
+    const declared = declaredLength(c);
+    if (declared !== null && declared > cap) throw tooLarge(cap);
     const slot = slots.take(session.id);
+    let large: Slot | undefined;
+    const hold = {
+      others: slot.others,
+      large: () => {
+        large ??= largeSlots.take('');
+      },
+      release: () => {
+        slot.release();
+        large?.release();
+      },
+    };
     let handed = false;
     try {
-      return await chat(c, slot, () => (handed = true));
+      return await chat(c, cap, hold, () => (handed = true));
     } finally {
-      if (!handed) slot.release();
+      if (!handed) hold.release();
     }
   }
 
-  async function chat(c: Context, slot: { others: () => number; release: () => void }, hand: () => void) {
+  async function chat(c: Context, cap: number, slot: { others: () => number; large: () => void; release: () => void }, hand: () => void) {
     // Compte relu une fois la place prise : le solde tient compte de l'appel
     // précédent, même fini pendant que cette requête arrivait.
     const me = await account(c);
@@ -232,7 +333,17 @@ export function relayRoutes(deps: Deps) {
       if (margin < PARALLEL_MARGIN_CENTS) throw new ApiError(BUSY_LOW, 429);
     }
 
-    const input = await body(c, relaySchema);
+    // Place de lecture, tous comptes confondus, rendue dès le corps lu.
+    const reading = readers.take('');
+    let received: unknown;
+    try {
+      received = await readJson(c, cap, slot.large, deps.relayReadMs ?? BODY_IDLE_MS);
+    } finally {
+      reading.release();
+    }
+    const parsed = relaySchema.safeParse(received ?? {});
+    if (!parsed.success) throw new ApiError(parsed.error.issues[0]?.message ?? 'Requête invalide.', 400);
+    const input = parsed.data;
     const model = input.model && RELAY_MODELS.includes(input.model) ? input.model : DEFAULT_RELAY_MODEL;
     // Non streamé en V0 ; le modèle et le plafond de sortie sont ceux du serveur.
     const payload = {

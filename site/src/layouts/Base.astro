@@ -7,9 +7,14 @@ import PixelIcon from '../components/PixelIcon.astro';
 interface Props {
   title: string;
   description?: string;
+  /** Faux pour la page 404 : pas d'adresse canonique. */
+  canonical?: boolean;
 }
-const { title, description = 'DS-Studio : l’atelier de design system installé sur le poste. Tokens, aperçu en direct, versions, Figma.' } =
-  Astro.props;
+const {
+  title,
+  description = 'DS-Studio : l’atelier de design system installé sur le poste. Tokens, aperçu en direct, versions, Figma.',
+  canonical = true,
+} = Astro.props;
 const catalog = await loadCatalog();
 const path = Astro.url.pathname;
 const nav = [
@@ -28,6 +33,7 @@ const nav = [
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title === 'DS-Studio' ? title : `${title} · DS-Studio`}</title>
     <meta name="description" content={description} />
+    {canonical && <link rel="canonical" href={new URL(path, Astro.site).href} />}
     <link rel="icon" type="image/png" href={icon.src} />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

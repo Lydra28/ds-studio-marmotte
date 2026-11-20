@@ -12,6 +12,10 @@ test('serveur : /v1/health répond avec la version et le schéma de la base', as
     const missing = await t.api('/v1/nulle-part');
     assert.equal(missing.status, 404);
     assert.equal(missing.body.error, 'Route inconnue.');
+    // Aucune réponse de l'API indexée : succès, route inconnue, racine.
+    assert.equal(health.headers.get('x-robots-tag'), 'noindex');
+    assert.equal(missing.headers.get('x-robots-tag'), 'noindex');
+    assert.equal((await t.api('/')).headers.get('x-robots-tag'), 'noindex');
   } finally {
     await t.close();
   }

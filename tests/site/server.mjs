@@ -33,7 +33,7 @@ for (const line of readFileSync(path.join(dist, '_headers'), 'utf8').split('\n')
   const m = line.match(/^\s+([^:]+):\s*(.+)$/);
   if (m) headers[m[1]] = m[2];
 }
-const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.png': 'image/png' };
+const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.png': 'image/png', '.xml': 'application/xml', '.txt': 'text/plain' };
 
 http
   .createServer((req, res) => {

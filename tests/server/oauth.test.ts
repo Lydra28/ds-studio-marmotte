@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { APPROVALS_PER_10_MIN, ENDPOINTS, GITHUB_API, GOOGLE_USERINFO, LINK_MINUTES, LINK_RETYPE, STATE_COOKIE } from '../../server/oauth.js';
+import {
+  APPROVALS_PER_10_MIN,
+  ENDPOINTS,
+  GITHUB_API,
+  GOOGLE_USERINFO,
+  LINK_MINUTES,
+  LINK_RETYPE,
+  LINKS_PER_IP_PER_HOUR,
+  STATE_COOKIE,
+} from '../../server/oauth.js';
 import { purge } from '../../server/retention.js';
 import { createHash } from 'node:crypto';
 import { connect, lastToken, testApp, type TestApp } from './helpers.js';
@@ -27,11 +36,14 @@ function fakeProviders() {
     google: { sub: 'g-1', email: 'pro@example.com', verified: true } as FakeUser,
     github: { id: 42, emails: [{ email: 'dev@example.com', primary: true, verified: true }] } as FakeUser,
     tokenStatus: 200,
+    /** Réponse de l'échange du code imposée (jette : panne réseau). */
+    tokenReply: null as null | (() => Response),
   };
   const seen: { url: string; body: string }[] = [];
   const fetchImpl = (async (url: RequestInfo | URL, init?: RequestInit) => {
     const u = String(url);
     seen.push({ url: u, body: init?.body ? String(init.body) : '' });
+    if ((u === ENDPOINTS.google.token || u === ENDPOINTS.github.token) && state.tokenReply) return state.tokenReply();
     if (u === ENDPOINTS.google.token || u === ENDPOINTS.github.token)
       return state.tokenStatus === 200 ? Response.json({ access_token: 'jeton-du-fournisseur' }) : Response.json({ error: 'bad_verification_code' }, { status: state.tokenStatus });
     if (u === GOOGLE_USERINFO) {
@@ -227,6 +239,89 @@ test('oauth : adresse non vérifiée, état faux, refus, fournisseur absent ou e
   }
 });
 
+// Audit du 2026-11-18, n° 4 : un état fabriqué déclenchait un échange de code
+// chez le fournisseur et un signalement Sentry à chaque appel.
+test('oauth : état non émis par le serveur ou périmé → refusé sans aucun appel au fournisseur', async () => {
+  const { t, fake } = await setup();
+  try {
+    const b64 = (v: unknown) => Buffer.from(JSON.stringify(v)).toString('base64url');
+    const callback = (cookie: string, state = 'etat-fabrique') =>
+      t.api(`/v1/auth/oauth/google/callback?code=code-fabrique&state=${state}`, { headers: { cookie: `${STATE_COOKIE}=${cookie}` } });
+    const failure = (res: { headers: Headers }) => new URL(String(res.headers.get('location'))).searchParams.get('oauth');
+    const exchanges = () => fake.seen.filter((s) => s.url === ENDPOINTS.google.token).length;
+
+    // Ancien format (JSON en base64, sans signature), cohérent avec la requête.
+    const forged = { p: 'google', s: 'etat-fabrique', v: 'verificateur', a: null, t: t.now().getTime() };
+    assert.equal(failure(await callback(b64(forged))), 'etat');
+    // Signature inventée, ou de la bonne longueur mais fausse.
+    assert.equal(failure(await callback(`${b64(forged)}.${Buffer.alloc(32, 7).toString('base64url')}`)), 'etat');
+    assert.equal(failure(await callback(`${b64(forged)}.abc`)), 'etat');
+    // Vrai cookie dont le contenu est retouché (signature d'origine gardée).
+    const start = await t.api('/v1/auth/oauth/google/start');
+    const real = String(cookieOf(start.headers, STATE_COOKIE));
+    const state = String(new URL(String(start.headers.get('location'))).searchParams.get('state'));
+    const [payload, sig] = real.split('.');
+    const edited = { ...JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')), a: 'BBBB-BBBB' };
+    assert.equal(failure(await callback(`${b64(edited)}.${sig}`, state)), 'etat');
+    // Vrai cookie, rejoué après 10 min (le maxAge ne lie que le navigateur).
+    t.tick(10 * 60_000 + 1000);
+    assert.equal(failure(await callback(real, state)), 'etat');
+    // Cookie d'une autre instance du serveur (autre clé).
+    const other = await setup();
+    try {
+      const s2 = await other.t.api('/v1/auth/oauth/google/start');
+      const st2 = String(new URL(String(s2.headers.get('location'))).searchParams.get('state'));
+      assert.equal(failure(await callback(String(cookieOf(s2.headers, STATE_COOKIE)), st2)), 'etat');
+    } finally {
+      await other.t.close();
+    }
+    assert.equal(exchanges(), 0, 'aucun échange de code parti');
+    assert.equal(fake.seen.length, 0, 'aucun appel sortant');
+
+    // Témoin : le vrai cookie, dans les 10 min, passe.
+    assert.ok((await signIn(t, 'google')).session);
+  } finally {
+    await t.close();
+  }
+});
+
+test('oauth : code refusé par le fournisseur non signalé ; client mal réglé, 5xx et panne réseau signalés', async () => {
+  const reported: unknown[] = [];
+  const { t, fake } = await setup((e) => void reported.push(e));
+  try {
+    // Code faux, expiré ou rejoué : Google répond 400 `invalid_grant`, GitHub un 200 qui porte `error`.
+    fake.state.tokenReply = () => Response.json({ error: 'invalid_grant' }, { status: 400 });
+    assert.equal((await signIn(t, 'google')).location.searchParams.get('oauth'), 'erreur');
+    fake.state.tokenReply = () => Response.json({ error: 'bad_verification_code' });
+    assert.equal((await signIn(t, 'github')).location.searchParams.get('oauth'), 'erreur');
+    assert.equal(reported.length, 0, 'refus attendus : rien envoyé à Sentry');
+
+    // Client mal réglé dans Render ou chez le fournisseur : connexion coupée pour tous, signalé.
+    for (const [status, error] of [[401, 'invalid_client'], [400, 'redirect_uri_mismatch'], [200, 'incorrect_client_credentials']] as const) {
+      fake.state.tokenReply = () => Response.json({ error }, { status });
+      assert.equal((await signIn(t, 'github')).location.searchParams.get('oauth'), 'erreur');
+    }
+    assert.equal(reported.length, 3, 'erreurs de réglage signalées');
+    assert.match(String(reported[0]), /invalid_client/);
+    reported.length = 0;
+
+    fake.state.tokenReply = () => new Response('panne', { status: 503 });
+    assert.equal((await signIn(t, 'google')).location.searchParams.get('oauth'), 'erreur');
+    assert.equal(reported.length, 1, '5xx signalé');
+    assert.match(String(reported[0]), /503/);
+    fake.state.tokenReply = () => {
+      throw new TypeError('fetch failed');
+    };
+    assert.equal((await signIn(t, 'google')).location.searchParams.get('oauth'), 'erreur');
+    assert.equal(reported.length, 2, 'panne réseau signalée');
+    fake.state.tokenReply = () => Response.json({});
+    assert.equal((await signIn(t, 'google')).location.searchParams.get('oauth'), 'erreur');
+    assert.equal(reported.length, 3, '200 sans jeton ni erreur : anomalie signalée');
+  } finally {
+    await t.close();
+  }
+});
+
 test('oauth : GitHub ne demande aucun accès aux dépôts', async () => {
   const { t } = await setup();
   try {
@@ -241,6 +336,28 @@ test('oauth : GitHub ne demande aucun accès aux dépôts', async () => {
 
 const HOME = '203.0.113.5';
 const ELSEWHERE = '198.51.100.7';
+
+// Audit du 2026-11-18, n° 2 : liens d'app comptés par /64 en IPv6.
+test('app : liens demandés comptés par /64 en IPv6, IPv4 mappée comptée comme l’IPv4', async () => {
+  const { t } = await setup();
+  try {
+    const ask = (ip: string) => t.api('/v1/auth/app-link', { method: 'POST', headers: { 'cf-connecting-ip': ip } });
+    for (let n = 0; n < LINKS_PER_IP_PER_HOUR; n++) assert.equal((await ask(`2001:db8:feed:1:${(n + 1).toString(16)}::${n}`)).status, 200, `lien ${n + 1}`);
+    const tooMany = await ask('2001:DB8:FEED:0001:ffff:ffff:ffff:ffff');
+    assert.equal(tooMany.status, 429, 'même /64, autre adresse');
+    assert.match(String(tooMany.body.error), /depuis cette connexion/);
+    assert.equal((await ask('2001:db8:feed:2::1')).status, 200, 'un autre /64 compte à part');
+
+    for (let n = 0; n < LINKS_PER_IP_PER_HOUR; n++) assert.equal((await ask(HOME)).status, 200);
+    assert.equal((await ask(`::ffff:${HOME}`)).status, 429, 'IPv4 mappée = IPv4');
+    // La comparaison « même réseau » de la liaison garde l'adresse exacte.
+    const link = await t.api('/v1/auth/app-link', { method: 'POST', headers: { 'cf-connecting-ip': '2001:db8:feed:3::1' } });
+    const row = await t.db.query<{ ip_hash: string }>('SELECT ip_hash FROM app_links WHERE user_code = $1', [link.body.userCode]);
+    assert.equal(row.rows[0].ip_hash, sha256('ip:2001:db8:feed:3::1'));
+  } finally {
+    await t.close();
+  }
+});
 
 test('app : lien venu d’un autre réseau → code à saisir ; chaque liaison prévient par mail', async () => {
   const { t } = await setup();

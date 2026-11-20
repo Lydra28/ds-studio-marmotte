@@ -12,6 +12,7 @@ import { ApiError, type Deps } from './core.js';
 import { hashPassword, verifyPassword } from './passwords.js';
 import { addCredits, WELCOME_CENTS } from './credits.js';
 import { oauthRoutes } from './oauth.js';
+import { requestIpKey } from './ip-key.js';
 
 export interface Account {
   id: string;
@@ -56,6 +57,11 @@ export const MAIL_GAP_SECONDS = 60;
 export const SIGNUPS_PER_IP_PER_HOUR = 30;
 /** Comptes créés par heure, tous clients confondus : filet si l'adresse IP est falsifiée (revoir quand une heure normale dépasse 100 inscriptions). */
 export const SIGNUPS_PER_HOUR = 300;
+/** Échecs de mot de passe admis par adresse et par connexion (IP, /64 en IPv6) en 10 min, puis 429 avant tout calcul scrypt (audit du 2026-11-18, n° 5). */
+export const LOGIN_FAILURES_PER_10_MIN = 10;
+/** Échecs admis par adresse en 10 min, toutes connexions confondues : filet contre un dictionnaire réparti, assez haut pour qu'un tiers ne bloque pas le titulaire depuis une seule connexion (relecture du 2026-11-19). */
+export const LOGIN_FAILURES_PER_ADDRESS_10_MIN = 100;
+export const LOGIN_LOCKED = 'Trop d’essais de mot de passe pour cette adresse : réessayer dans quelques minutes, ou utiliser « mot de passe oublié ».';
 
 const emailSchema = z
   .string()
@@ -225,7 +231,7 @@ export function authRoutes(deps: Deps) {
 
   // Inscriptions récentes par adresse IP, et dernier signalement du plafond global.
   // Adresse lue dans `CF-Connecting-IP`, jamais `X-Forwarded-For` (que le
-  // client écrit lui-même). Fiable une fois le secret d'origine en refus
+  // client écrit lui-même), comptée par /64 en IPv6 (`ipKey` d'ip-key.ts). Fiable une fois le secret d'origine en refus
   // (app.ts : une requête directe n'arrive plus ici) ; avant, falsifiable par
   // l'URL onrender.com, le plafond global reste le filet. Pas de compteur
   // commun aux requêtes sans secret : une règle Cloudflare absente ou fausse
@@ -233,13 +239,12 @@ export function authRoutes(deps: Deps) {
   // shortcut: en mémoire, exact pour une seule instance Render (revoir avant plusieurs instances).
   const signupsByIp = new Map<string, number[]>();
   let capReportedAt = 0;
-  const clientIp = (c: Context) => c.req.header('cf-connecting-ip') ?? 'inconnue';
 
   // Plafonds d'inscription (formulaire et Google ou GitHub) : lève un 429, sinon
   // renvoie la fonction qui compte l'inscription une fois le compte créé.
   async function admitSignup(c: Context) {
     // Par adresse IP d'abord : un seul poste ne ferme pas les inscriptions aux autres.
-    const ip = clientIp(c);
+    const ip = requestIpKey(c);
     const since = now().getTime() - hours(1);
     const mine = (signupsByIp.get(ip) ?? []).filter((at) => at > since);
     if (mine.length >= SIGNUPS_PER_IP_PER_HOUR) throw new ApiError('Trop d’inscriptions depuis cette connexion : réessayer dans une heure.', 429);
@@ -310,12 +315,48 @@ export function authRoutes(deps: Deps) {
     }
   });
 
+  // Essais de mot de passe (audit du 2026-11-18, n° 5), sur le modèle
+  // d'`approvalsByAccount` d'oauth.ts. Deux comptes : par adresse saisie et
+  // connexion (10), par adresse seule (100). Un tiers qui tape de faux mots de
+  // passe depuis sa connexion ne bloque donc pas le titulaire depuis la sienne
+  // (relecture du 2026-11-19). Compté par adresse saisie et non par compte
+  // trouvé : une adresse inconnue est freinée pareil, le 429 ne dit pas si le
+  // compte existe. Chaque essai est noté avant le scrypt (une rafale en
+  // parallèle ne passe pas le plafond) et oublié s'il réussit : seuls les
+  // échecs restent. Une connexion réussie ou un « mot de passe oublié » mené à
+  // bien efface les deux (preuve du mot de passe ou de la boîte mail).
+  // shortcut: en mémoire, exact pour une seule instance Render (revoir avant plusieurs instances).
+  const loginTries = new Map<string, number[]>();
+  let loginPrunedAt = 0;
+  // Une adresse mail valide ne contient pas d'espace : séparateur sans ambiguïté.
+  const pairKey = (email: string, ip: string) => `${email} ${ip}`;
+  function admitLogin(email: string, ip: string): () => void {
+    const at = now().getTime();
+    const since = at - 600_000;
+    // Nettoyage au plus une fois par minute : pas de balayage à chaque essai.
+    if (loginTries.size > 10_000 && at - loginPrunedAt > 60_000) {
+      loginPrunedAt = at;
+      for (const [key, list] of loginTries) if (!list.some((t) => t > since)) loginTries.delete(key);
+    }
+    const keys = [pairKey(email, ip), email];
+    const limits = [LOGIN_FAILURES_PER_10_MIN, LOGIN_FAILURES_PER_ADDRESS_10_MIN];
+    const lists = keys.map((key) => (loginTries.get(key) ?? []).filter((t) => t > since));
+    if (lists.some((list, i) => list.length >= limits[i])) throw new ApiError(LOGIN_LOCKED, 429);
+    keys.forEach((key, i) => loginTries.set(key, [...lists[i], at]));
+    return () => keys.forEach((key) => loginTries.delete(key));
+  }
+  function forgetLogins(email: string) {
+    for (const key of loginTries.keys()) if (key === email || key.startsWith(`${email} `)) loginTries.delete(key);
+  }
+
   auth.post('/login', async (c) => {
     const data = await body(c, z.object({ email: emailSchema, password: passwordSchema.or(z.string()), client: clientSchema }));
+    const succeeded = admitLogin(data.email, requestIpKey(c));
     const account = await accountByEmail(data.email);
     if (account && account.password_hash === null)
       throw new ApiError('Ce compte se connecte avec Google ou GitHub. Pour avoir aussi un mot de passe : « mot de passe oublié ».', 401);
     if (!account || !(await verifyPassword(data.password, account.password_hash as string))) throw new ApiError('Adresse ou mot de passe incorrect.', 401);
+    succeeded();
     if (!account.email_verified_at) throw new ApiError('Adresse non confirmée : ouvrir le lien reçu par mail, ou en demander un nouveau.', 403);
     const session = await openSession(account.id, data.client);
     if (data.client === 'site') {
@@ -343,11 +384,12 @@ export function authRoutes(deps: Deps) {
   auth.post('/reset', async (c) => {
     const data = await body(c, z.object({ token: z.string().min(10), password: passwordSchema }));
     const accountId = await consumeEmailToken(data.token, 'reset');
-    await db.query('UPDATE accounts SET password_hash = $2, email_verified_at = COALESCE(email_verified_at, $3) WHERE id = $1', [
-      accountId,
-      await hashPassword(data.password),
-      now(),
-    ]);
+    const changed = await db.query<{ email: string }>(
+      'UPDATE accounts SET password_hash = $2, email_verified_at = COALESCE(email_verified_at, $3) WHERE id = $1 RETURNING email',
+      [accountId, await hashPassword(data.password), now()],
+    );
+    // Boîte mail prouvée : les essais comptés sur cette adresse tombent.
+    if (changed.rows[0]) forgetLogins(changed.rows[0].email);
     // Toute session ouverte avec l'ancien mot de passe tombe, et les liaisons
     // d'app approuvées mais pas encore récupérées (sinon session neuve après coup).
     await db.query('DELETE FROM sessions WHERE account_id = $1', [accountId]);

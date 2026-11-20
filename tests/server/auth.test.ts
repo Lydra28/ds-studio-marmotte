@@ -1,7 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { MAX_JSON_BYTES, MAX_WEBHOOK_BYTES } from '../../server/app.js';
-import { MAIL_GAP_SECONDS, RESET_HOURS, SESSION_DAYS, SIGNUPS_PER_HOUR, SIGNUPS_PER_IP_PER_HOUR, VERIFY_HOURS } from '../../server/auth.js';
+import {
+  LOGIN_FAILURES_PER_10_MIN,
+  LOGIN_FAILURES_PER_ADDRESS_10_MIN,
+  LOGIN_LOCKED,
+  MAIL_GAP_SECONDS,
+  RESET_HOURS,
+  SESSION_DAYS,
+  SIGNUPS_PER_HOUR,
+  SIGNUPS_PER_IP_PER_HOUR,
+  VERIFY_HOURS,
+} from '../../server/auth.js';
 import { memoryMailer } from '../../server/mail.js';
 import { lastToken, testApp } from './helpers.js';
 
@@ -222,6 +232,127 @@ test('comptes : mail redemandé en échec → jeton retiré, la demande suivante
     assert.equal((await t.api('/v1/auth/forgot', { json: { email: user.email } })).status, 200);
     assert.equal(box.sent.filter((m) => /mot de passe/.test(m.subject)).length, 1, 'mail parti au second essai, sans attendre');
     assert.equal(Number((await t.db.query<{ n: string | number }>("SELECT count(*) AS n FROM email_tokens WHERE purpose = 'reset'")).rows[0].n), 1, 'jeton du mail en échec retiré');
+  } finally {
+    await t.close();
+  }
+});
+
+// Audit du 2026-11-18, n° 2 : une connexion IPv6 a tout un /64 ; compter
+// l'adresse exacte laissait un script en changer à chaque inscription.
+test('comptes : inscriptions par IP comptées par /64 en IPv6, IPv4 mappée comptée comme l’IPv4', async () => {
+  const t = await testApp();
+  try {
+    const sign = (name: string, ip: string) =>
+      t.api('/v1/auth/signup', { json: { email: `${name}@example.com`, password: user.password }, headers: { 'cf-connecting-ip': ip } });
+    // 300 inscriptions, une adresse différente du même /64 à chaque fois (formes variées).
+    const statuses: number[] = [];
+    for (let n = 0; n < 300; n++) {
+      const ip = n % 2 ? `2001:DB8:ABCD:12:${n.toString(16)}::1` : `2001:db8:abcd:0012:0:0:${n.toString(16)}:${(n * 7).toString(16)}`;
+      const res = await sign(`v6-${n}`, ip);
+      statuses.push(res.status);
+      if (res.status === 429) assert.match(String(res.body.error), /depuis cette connexion/, `refus ${n} : plafond par IP, pas le plafond global`);
+    }
+    assert.equal(statuses.filter((s) => s === 201).length, SIGNUPS_PER_IP_PER_HOUR, 'plafond par IP atteint dans le /64');
+    assert.equal(statuses.filter((s) => s === 429).length, 300 - SIGNUPS_PER_IP_PER_HOUR);
+    assert.equal(t.mailer.sent.length, SIGNUPS_PER_IP_PER_HOUR, 'aucun mail pour les inscriptions refusées');
+    assert.equal((await sign('v6-voisin', '2001:db8:abcd:13::1')).status, 201, 'un autre /64 compte à part');
+
+    // IPv4 mappée : la même machine que l'IPv4.
+    for (let n = 0; n < SIGNUPS_PER_IP_PER_HOUR; n++) assert.equal((await sign(`v4-${n}`, '192.0.2.50')).status, 201);
+    assert.equal((await sign('v4-mappee', '::ffff:192.0.2.50')).status, 429);
+    assert.equal((await sign('v4-mappee-hex', '::FFFF:C000:232')).status, 429);
+    assert.equal((await sign('v4-voisine', '::ffff:192.0.2.51')).status, 201);
+  } finally {
+    await t.close();
+  }
+});
+
+// Audit du 2026-11-18, n° 5 : essais de mot de passe sans limite, un scrypt chacun.
+test('comptes : 10 échecs de mot de passe par adresse en 10 min → 429 avant le scrypt, adresse inconnue freinée pareil', async () => {
+  const t = await testApp({ report: () => {} });
+  try {
+    const signup = async (email: string) => {
+      await t.api('/v1/auth/signup', { json: { email, password: user.password } });
+      await t.api('/v1/auth/verify', { json: { token: lastToken(t.mailer, email) } });
+    };
+    const email = 'romain@example.com';
+    await signup(email);
+    await signup('voisin@example.com');
+    await signup('temoin@example.com');
+    const login = (address: string, password: string) => t.api('/v1/auth/login', { json: { email: address, password } });
+
+    for (let i = 0; i < LOGIN_FAILURES_PER_10_MIN; i++) assert.equal((await login(email, `mauvais-${i}`)).status, 401, `échec ${i + 1}`);
+    const locked = await login(email, user.password);
+    assert.equal(locked.status, 429, 'bloqué, même avec le bon mot de passe');
+    assert.equal(locked.body.error, LOGIN_LOCKED);
+    assert.doesNotMatch(LOGIN_LOCKED, /\b(tu|toi|ton|ta|tes)\b/i);
+
+    // Sans scrypt : une empreinte piégée (N = 2^20, au-delà de la mémoire permise)
+    // fait échouer tout scrypt en 500. Témoin d'abord, puis le compte bloqué.
+    const POISON = `scrypt$1048576$8$1$${Buffer.alloc(16).toString('base64')}$${Buffer.alloc(64).toString('base64')}`;
+    await t.db.query('UPDATE accounts SET password_hash = $2 WHERE email = $1', ['temoin@example.com', POISON]);
+    assert.equal((await login('temoin@example.com', user.password)).status, 500, 'témoin : le piège déclenche bien le scrypt');
+    const saved = await t.db.query<{ password_hash: string }>('SELECT password_hash FROM accounts WHERE email = $1', [email]);
+    await t.db.query('UPDATE accounts SET password_hash = $2 WHERE email = $1', [email, POISON]);
+    assert.equal((await login(email, user.password)).status, 429, '429 rendu sans calculer de scrypt');
+    await t.db.query('UPDATE accounts SET password_hash = $2 WHERE email = $1', [email, saved.rows[0].password_hash]);
+
+    // Compteur par adresse : le voisin se connecte.
+    assert.equal((await login('voisin@example.com', user.password)).status, 200);
+    // Adresse inconnue : 401 puis le même 429, rien ne dit si le compte existe.
+    for (let i = 0; i < LOGIN_FAILURES_PER_10_MIN; i++) assert.equal((await login('inconnu@example.com', user.password)).status, 401);
+    const unknown = await login('inconnu@example.com', user.password);
+    assert.equal(unknown.status, 429);
+    assert.equal(unknown.body.error, LOGIN_LOCKED);
+
+    // Levé après 10 min.
+    t.tick(600_000 + 1000);
+    assert.equal((await login(email, user.password)).status, 200, 'levé après 10 min');
+
+    // Une connexion réussie efface les échecs : 9 + succès + 9 restent sous le plafond.
+    for (let i = 0; i < LOGIN_FAILURES_PER_10_MIN - 1; i++) await login(email, 'mauvais');
+    assert.equal((await login(email, user.password)).status, 200);
+    for (let i = 0; i < LOGIN_FAILURES_PER_10_MIN - 1; i++) assert.equal((await login(email, 'mauvais')).status, 401);
+    assert.equal((await login(email, user.password)).status, 200);
+
+    // « Mot de passe oublié » mené à bien : le compte bloqué se reconnecte aussitôt.
+    for (let i = 0; i < LOGIN_FAILURES_PER_10_MIN; i++) await login(email, 'mauvais');
+    assert.equal((await login(email, user.password)).status, 429);
+    await t.api('/v1/auth/forgot', { json: { email } });
+    assert.equal((await t.api('/v1/auth/reset', { json: { token: lastToken(t.mailer, email), password: 'nouveau-mot-de-passe' } })).status, 200);
+    assert.equal((await login(email, 'nouveau-mot-de-passe')).status, 200, 'débloqué par le mot de passe oublié');
+
+    // Rafale en parallèle : chaque essai est noté avant le scrypt, 10 au plus passent.
+    t.tick(600_000 + 1000);
+    const burst = await Promise.all(Array.from({ length: 25 }, () => login('voisin@example.com', 'mauvais')));
+    assert.equal(burst.filter((r) => r.status === 401).length, LOGIN_FAILURES_PER_10_MIN);
+    assert.equal(burst.filter((r) => r.status === 429).length, 25 - LOGIN_FAILURES_PER_10_MIN);
+
+    // Relecture du 2026-11-19 : un tiers qui échoue depuis sa connexion ne
+    // bloque pas le titulaire depuis la sienne ; au-delà de 100 échecs sur
+    // l'adresse, toutes connexions confondues, plus personne ne passe.
+    t.tick(600_000 + 1000);
+    const from = (ip: string, password: string) =>
+      t.api('/v1/auth/login', { json: { email, password }, headers: { 'cf-connecting-ip': ip } });
+    for (let i = 0; i < LOGIN_FAILURES_PER_10_MIN; i++) assert.equal((await from('203.0.113.9', 'mauvais')).status, 401);
+    assert.equal((await from('203.0.113.9', 'nouveau-mot-de-passe')).status, 429, 'connexion du tiers bloquée');
+    assert.equal((await from('198.51.100.7', 'nouveau-mot-de-passe')).status, 200, 'titulaire libre depuis sa connexion');
+    t.tick(600_000 + 1000);
+    const spread = LOGIN_FAILURES_PER_ADDRESS_10_MIN / LOGIN_FAILURES_PER_10_MIN;
+    for (let n = 0; n < spread; n++)
+      for (let i = 0; i < LOGIN_FAILURES_PER_10_MIN; i++) assert.equal((await from(`192.0.2.${n + 1}`, 'mauvais')).status, 401);
+    assert.equal((await from('198.51.100.7', 'nouveau-mot-de-passe')).status, 429, 'plafond par adresse atteint');
+
+    // Une connexion réussie efface aussi le compteur par adresse : 90 échecs
+    // répartis, un succès, puis 90 autres sans 429 (180 > 100 sinon).
+    t.tick(600_000 + 1000);
+    const scatter = async (from0: number) => {
+      for (let n = 0; n < 9; n++)
+        for (let i = 0; i < LOGIN_FAILURES_PER_10_MIN; i++) assert.equal((await from(`192.0.2.${from0 + n}`, 'mauvais')).status, 401);
+    };
+    await scatter(20);
+    assert.equal((await from('198.51.100.7', 'nouveau-mot-de-passe')).status, 200);
+    await scatter(40);
   } finally {
     await t.close();
   }

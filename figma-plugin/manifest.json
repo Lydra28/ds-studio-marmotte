@@ -14,6 +14,6 @@
       "http://localhost:4311",
       "http://localhost:4312"
     ],
-    "reasoning": "DS-Studio est une application installée sur le poste du designer. Le plugin lit la dernière version acceptée du design system et renvoie les composants du fichier à cette application locale seulement (port 4310 : app installée ; 4311 : app en développement ; 4312 : tests). Aucune donnée ne quitte le poste."
+    "reasoning": "DS-Studio est une application installée sur le poste du designer. Le plugin lit la dernière version acceptée du design system et renvoie les composants du fichier à cette application locale seulement (port 4310 : app installée ; 4311 : app en développement ; 4312 : tests). Le plugin ne parle qu'à cette application. Seule exception : une question posée à l'assistant, et la sélection si l'utilisateur coche la case, passent par le serveur DS-Studio vers le modèle d'IA, sans y être conservées."
   }
 }
