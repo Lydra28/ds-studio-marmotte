@@ -561,6 +561,117 @@ code,
 .fold-body {
   margin-top: 4px;
 }
+
+/* Planche premium (2026-11-26, demande de Romain) : un gros compteur pixel par
+   section, une bande de couleurs quand elle est repliée, une ouverture douce,
+   des nuanciers qui se soulèvent et des échelles lime qui se déploient. */
+.fold-count {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--f-title);
+  font-size: 28px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--c-text);
+}
+.fold-count small {
+  font-family: var(--f-label);
+  font-size: 12px;
+  letter-spacing: 0;
+  color: var(--c-muted);
+}
+.board section.is-folded .fold-count {
+  font-size: 22px;
+  color: var(--c-soft);
+}
+.fold-strip {
+  display: inline-flex;
+  height: 14px;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--c-line);
+}
+.fold-strip span {
+  width: 12px;
+}
+.board section {
+  transition: border-color 0.2s ease-out;
+}
+.board section:not(.is-folded):hover {
+  border-color: var(--c-line-strong);
+}
+.board .swatch .editor input[type='color'],
+.board .swatch .chip {
+  height: 64px;
+  border-radius: 10px;
+  transition:
+    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.board .swatch .editor input[type='color']::-webkit-color-swatch {
+  border-radius: 10px;
+}
+.board .swatch:hover .editor input[type='color'],
+.board .swatch:hover .chip {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 28px -14px rgb(0 0 0 / 0.8);
+}
+.board .swatch .editor .raw {
+  font-family: var(--f-title);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+.board .token-row {
+  transition: background-color 0.15s ease-out;
+}
+.board .token-row:not(.is-draft):not(.has-flag):not(.type-head):hover {
+  background: var(--c-raised);
+}
+.board .token-row .chip {
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+}
+.board .specimen {
+  width: 48px;
+  color: var(--c-text);
+}
+.board .scale-bar {
+  background: var(--c-accent);
+  border-radius: 0 2px 2px 0;
+  transform-origin: left;
+}
+.board .radius-demo {
+  border-color: var(--c-accent);
+  background: color-mix(in srgb, var(--c-accent) 8%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .board .fold-body:not([hidden]) {
+    animation: fold-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  }
+  .board .fold-body:not([hidden]) .scale-bar {
+    animation: scale-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.1s backwards;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .board .swatch:hover .editor input[type='color'],
+  .board .swatch:hover .chip {
+    transform: none;
+  }
+}
+@keyframes fold-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes scale-in {
+  from {
+    transform: scaleX(0);
+  }
+}
 .count.draft {
   background: var(--c-draft-bg);
   color: var(--c-draft);

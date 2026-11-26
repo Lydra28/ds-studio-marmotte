@@ -41,6 +41,9 @@ function Fold({
   onFold,
   flags,
   drafts,
+  count,
+  unit = 'tokens',
+  colors = [],
   children,
 }: {
   id: string;
@@ -50,6 +53,10 @@ function Fold({
   onFold: (id: string) => void;
   flags: number;
   drafts: number;
+  // Gros compteur pixel de la section, et bande de couleurs quand elle est repliée (2026-11-26).
+  count?: number;
+  unit?: string;
+  colors?: string[];
   children: ReactNode;
 }) {
   return (
@@ -65,6 +72,19 @@ function Fold({
           <span className="fold-meta">
             {flags > 0 && <span className="count warn">{flags} écart(s)</span>}
             {drafts > 0 && <span className="count draft">{drafts} en brouillon</span>}
+          </span>
+        )}
+        {folded && colors.length > 0 && (
+          <span className="fold-strip" aria-hidden="true">
+            {colors.slice(0, 16).map((c, i) => (
+              <span key={i} style={{ background: c }} />
+            ))}
+          </span>
+        )}
+        {count !== undefined && (
+          <span className="fold-count">
+            {count}
+            <small>{unit}</small>
           </span>
         )}
       </div>
@@ -467,6 +487,11 @@ export default function Board({
       onFold,
       flags: findings.filter((f) => keys.includes(f.key)).length,
       drafts: id === 'h-components' ? componentDrafts.size : keys.filter(isDraft).length,
+      count: keysOf[id] ? keys.length : undefined,
+      unit: id === 'h-components' ? 'fiches' : 'tokens',
+      colors: id === 'h-colors' || id === 'h-tokens'
+        ? keys.filter((k) => set.tokens[k]?.$type === 'color').map((k) => String(resolve(set, k)))
+        : [],
     };
   };
 
