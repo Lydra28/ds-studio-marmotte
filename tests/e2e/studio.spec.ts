@@ -445,6 +445,8 @@ test('boucle : écart signalé, correction essayée, diff validé, preview à jo
   await expect(mascot.locator('.mascot-badge')).toHaveText('1');
   await expect(mascot.getByRole('status')).toHaveText('1 écart(s) : regarde « Corrections ».');
   await expect.poll(() => previewVar(page, '--space-sm')).toBe('15px');
+  // Onglet dédié (2026-11-26) : les corrections ne sont plus sous la preview.
+  await page.getByRole('navigation', { name: 'Étapes du projet' }).getByRole('button', { name: 'Corrections', exact: true }).click();
   await page.getByRole('button', { name: 'Essayer 16 px' }).click();
   await expect(page.getByRole('button', { name: /écart\(s\) · Corrections/ })).toHaveCount(0);
   await expect(mascot.getByRole('status')).toHaveText('Plus aucun écart !');
@@ -457,13 +459,17 @@ test('boucle : écart signalé, correction essayée, diff validé, preview à jo
   await expect.poll(() => previewVar(page, '--space-sm')).toBe('16px');
 });
 
-test('écarts : le compteur du haut mène aux corrections, « Tout corriger » met tout en brouillon', async ({ page }) => {
+test('écarts : le compteur du haut ouvre l’onglet Corrections, « Tout corriger » met tout en brouillon', async ({ page }) => {
   await page.getByLabel('space/sm', { exact: true }).fill('15');
   await page.getByLabel('space/md', { exact: true }).fill('23');
   await page.getByRole('button', { name: '2 écart(s) · Corrections' }).click();
   await expect(page.locator('#corrections')).toBeInViewport();
+  await expect(page.locator('.corrections-total strong')).toHaveText('2');
+  await expect(page.locator('.corrections-group h3')).toHaveText('Espacements en multiples de 4');
   await page.getByRole('button', { name: 'Tout corriger (2)' }).click();
   await expect(page.getByRole('button', { name: /écart\(s\) · Corrections/ })).toHaveCount(0);
+  await expect(page.locator('.corrections-total strong')).toHaveText('0');
+  await page.getByRole('navigation', { name: 'Étapes du projet' }).getByRole('button', { name: 'Design system', exact: true }).click();
   await expect(page.getByLabel('space/sm', { exact: true })).toHaveValue('16');
   await expect(page.getByLabel('space/md', { exact: true })).toHaveValue('24');
   await expect(page.getByText(/2 correction\(s\) mises en brouillon/)).toBeVisible();

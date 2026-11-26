@@ -581,16 +581,13 @@ function Workspace({
         onView={(v) => (v === 'versions' ? openVersions(versionsTab) : setView(v))}
         versions={versions.map((v) => v.revision)}
         onVersion={(revision) => openVersions('compare', revision)}
-        boardBadge={
+        correctionsBadge={
           findings.length ? (
             <button
               className="tab-badge warn"
               title="Voir les corrections proposées"
               aria-label={`${findings.length} écart(s) · Corrections`}
-              onClick={() => {
-                setView('board');
-                setTimeout(() => void document.getElementById('corrections')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-              }}
+              onClick={() => setView('corrections')}
             >
               {findings.length}
             </button>
@@ -720,6 +717,18 @@ function Workspace({
             setView('board');
           }}
         />
+      )}
+      {view === 'corrections' && (
+        <div className="corrections-view">
+          <Corrections
+            findings={findings}
+            onFix={(f) => f.fix && edit(f.fix.key, f.fix.mode, f.fix.value)}
+            onFixAll={(list) => {
+              for (const f of list) if (f.fix) edit(f.fix.key, f.fix.mode, f.fix.value);
+              setNotice(`${list.length} correction(s) mises en brouillon : relire le diff avant de valider.`);
+            }}
+          />
+        </div>
       )}
       {view === 'versions' && config && (
         <div className="versions-view">
@@ -857,14 +866,6 @@ function Workspace({
               )}
             </div>
           </section>
-          <Corrections
-            findings={findings}
-            onFix={(f) => f.fix && edit(f.fix.key, f.fix.mode, f.fix.value)}
-            onFixAll={(list) => {
-              for (const f of list) if (f.fix) edit(f.fix.key, f.fix.mode, f.fix.value);
-              setNotice(`${list.length} correction(s) mises en brouillon : relire le diff avant de valider.`);
-            }}
-          />
         </aside>
       </main>
       </div>

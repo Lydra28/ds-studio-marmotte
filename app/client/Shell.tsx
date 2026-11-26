@@ -42,7 +42,7 @@ export const sections = [
 // Sections repliables : celles de la sous-barre et « Autres primitives ».
 export const foldable = ['h-colors', 'h-tokens', 'h-type', 'h-scales', 'h-others', 'h-components', 'h-names'];
 
-export type View = 'wall' | 'board' | 'versions';
+export type View = 'wall' | 'board' | 'corrections' | 'versions';
 const NEW = '__new';
 
 // Barre du haut, dans l'ordre du travail : s'inspirer, construire, voir, versionner.
@@ -56,7 +56,7 @@ export function TopNav({
   onView,
   versions,
   onVersion,
-  boardBadge,
+  correctionsBadge,
   children,
 }: {
   current: string;
@@ -69,14 +69,15 @@ export function TopNav({
   // Révisions des versions acceptées : une marche de « chaleur » chacune.
   versions: number[];
   onVersion: (revision: number) => void;
-  // Écarts du projet, en badge sur l'onglet Design system (plus de pastille à part).
-  boardBadge?: ReactNode;
+  // Écarts du projet, en badge sur l'onglet Corrections (onglet dédié, demande de Romain du 2026-11-26).
+  correctionsBadge?: ReactNode;
   children: ReactNode;
 }) {
   const { projects } = useProjects();
   const steps: [View, string][] = [
     ['wall', 'Mur des DA'],
     ['board', 'Design system'],
+    ['corrections', 'Corrections'],
     ['versions', 'Versions'],
   ];
   return (
@@ -113,7 +114,7 @@ export function TopNav({
               <button aria-current={view === v ? 'page' : undefined} onClick={() => onView(v)}>
                 {label}
               </button>
-              {v === 'board' && boardBadge}
+              {v === 'corrections' && correctionsBadge}
             </li>
           ))}
         </ol>

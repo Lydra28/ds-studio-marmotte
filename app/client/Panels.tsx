@@ -214,45 +214,66 @@ export function Corrections({
   onFixAll: (list: Finding[]) => void;
 }) {
   const fixable = findings.filter((f) => f.fix);
+  // Onglet dédié (demande de Romain du 2026-11-26) : le total en grand, l'état
+  // de chaque règle, puis les écarts groupés par règle.
   return (
     <section className="corrections" id="corrections" aria-labelledby="h-corr">
       <div className="corrections-head">
-        <h2 id="h-corr">Corrections</h2>
+        <div>
+          <h2 id="h-corr">Corrections</h2>
+          <p className="hint">
+            {findings.length === 0
+              ? `Aucun écart sur ${rules.length} règles.`
+              : fixable.length
+                ? 'Chaque correction rejoint le brouillon : rien n’est enregistré avant le diff.'
+                : 'Aucune correction automatique : ces écarts se règlent à la main (piste indiquée), ou avec Lenny.'}
+          </p>
+        </div>
+        <p className={`corrections-total ${findings.length ? 'is-warn' : 'is-ok'}`}>
+          <strong>{findings.length}</strong>
+          <span>écart(s)</span>
+        </p>
         {fixable.length > 0 && (
           <button className="primary" onClick={() => onFixAll(fixable)}>
             Tout corriger ({fixable.length})
           </button>
         )}
       </div>
-      {findings.length > 0 && (
-        <p className="hint">
-          {fixable.length
-            ? 'Chaque correction rejoint le brouillon : rien n’est enregistré avant le diff.'
-            : 'Aucune correction automatique : ces écarts se règlent à la main (piste indiquée), ou avec Lenny.'}
-        </p>
-      )}
-      {findings.length === 0 ? (
-        <p className="hint">
-          Aucun écart sur {rules.length} règles : {rules.map((r) => r.label.toLowerCase()).join(', ')}.
-        </p>
-      ) : (
-        <ul>
-          {findings.map((f, i) => (
-            <li key={`${f.rule}-${f.key}-${f.mode}-${i}`}>
-              <p>
-                <code>{f.key}</code> {f.mode && <small>{f.mode}</small>}
-                <br />
-                {f.message}
-              </p>
-              {f.fix ? (
-                <button onClick={() => onFix(f)}>Essayer {f.fixLabel}</button>
-              ) : (
-                f.fixLabel && <small className="hint">Piste : {f.fixLabel}</small>
-              )}
+      <ul className="corrections-rules" aria-label="Règles vérifiées">
+        {rules.map((r) => {
+          const n = findings.filter((f) => f.rule === r.id).length;
+          return (
+            <li key={r.id} className={n ? 'is-warn' : 'is-ok'}>
+              <span className="corrections-count">{n || '✓'}</span>
+              {r.label}
             </li>
-          ))}
-        </ul>
-      )}
+          );
+        })}
+      </ul>
+      {rules
+        .map((r) => [r, findings.filter((f) => f.rule === r.id)] as const)
+        .filter(([, list]) => list.length > 0)
+        .map(([r, list]) => (
+          <div key={r.id} className="corrections-group">
+            <h3>{r.label}</h3>
+            <ul>
+              {list.map((f, i) => (
+                <li key={`${f.rule}-${f.key}-${f.mode}-${i}`}>
+                  <p>
+                    <code>{f.key}</code> {f.mode && <small>{f.mode}</small>}
+                    <br />
+                    {f.message}
+                  </p>
+                  {f.fix ? (
+                    <button onClick={() => onFix(f)}>Essayer {f.fixLabel}</button>
+                  ) : (
+                    f.fixLabel && <small className="hint">Piste : {f.fixLabel}</small>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
     </section>
   );
 }

@@ -727,6 +727,111 @@ dialog.diff,
   border-radius: var(--r-ctl);
   box-shadow: inset 0 0 0 1px rgb(255 106 31 / 0.35);
 }
+/* Onglet Corrections (2026-11-26) : une colonne, le total en grand chiffre
+   pixel, l'état de chaque règle, puis les écarts groupés par règle. */
+.corrections-view {
+  max-width: 880px;
+  margin: 24px auto 120px;
+  padding: 0 24px;
+}
+.corrections-view .corrections {
+  padding: 28px;
+}
+.corrections-view .corrections-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 8px 24px;
+}
+.corrections-view .corrections-head > button {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+.corrections-total {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--f-label);
+  color: var(--c-muted);
+}
+.corrections-total strong {
+  font-family: var(--f-title);
+  font-weight: 400;
+  font-size: 56px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.corrections-total.is-warn strong {
+  color: var(--c-warn);
+}
+.corrections-total.is-ok strong {
+  color: var(--c-ok);
+}
+.corrections .corrections-rules {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 8px;
+  margin: 24px 0 0;
+}
+.corrections .corrections-rules li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--c-bg);
+  box-shadow: inset 0 0 0 1px var(--c-line);
+  color: var(--c-soft);
+  font-size: 13px;
+}
+.corrections .corrections-rules li.is-warn {
+  box-shadow: inset 0 0 0 1px rgb(255 106 31 / 0.35);
+  color: var(--c-text);
+}
+.corrections-count {
+  flex: none;
+  min-width: 24px;
+  font-family: var(--f-title);
+  font-size: 16px;
+  text-align: center;
+  color: var(--c-ok);
+}
+.is-warn > .corrections-count {
+  color: var(--c-warn);
+}
+.corrections-group {
+  margin-top: 28px;
+}
+.corrections-group h3 {
+  margin: 0 0 8px;
+  font-family: var(--f-label);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--c-muted);
+}
+.corrections-group li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.corrections-group li p {
+  margin: 0;
+  flex: 1 1 320px;
+}
+@media (max-width: 640px) {
+  .corrections-view {
+    padding: 0 16px;
+  }
+  .corrections-view .corrections {
+    padding: 20px;
+  }
+  .corrections-total strong {
+    font-size: 40px;
+  }
+}
 /* Barre du brouillon : flotte au-dessus du travail, en verre. */
 .draft-bar {
   border-radius: var(--r-panel);
@@ -1334,7 +1439,7 @@ dialog.diff th {
     transform: translateY(-4px);
   }
 }
-/* Écarts : badge sur l'onglet Design system (ouvre les corrections) ; un
+/* Écarts : badge sur l'onglet Corrections (ouvre l'onglet) ; un
    pixel lime quand tout est conforme. */
 .tab-badge {
   flex: none;
