@@ -181,7 +181,10 @@ export function PreviewScreen({ set }: { set: TokenSet }) {
               error="Ajouter une adresse complète pour recevoir les alertes."
             />
             <Input label="Champ désactivé" placeholder="Non disponible" disabled />
-            <Button>{sent ? 'Enregistré' : 'Enregistrer'}</Button>
+            <Button>Enregistrer</Button>
+            <p className="ds-text" role="status">
+              {sent ? 'Profil enregistré.' : ''}
+            </p>
           </form>
           <section className="ds-panel ds-states ds-rise" style={rank(4)} aria-labelledby="ds-button-states">
             <h2 id="ds-button-states">États du bouton</h2>
@@ -418,8 +421,11 @@ function FormScreen({ set }: { set: TokenSet }) {
           </label>
           <div className="ds-row">
             <Button variant="secondary">Retour</Button>
-            <Button>{sent ? 'Enregistré' : 'Continuer'}</Button>
+            <Button>Continuer</Button>
           </div>
+          <p className="ds-text" role="status">
+            {sent ? 'Étape enregistrée.' : ''}
+          </p>
         </form>
       </main>
     </DSScope>

@@ -736,8 +736,7 @@ body.preview-body {
 
 /* Titres : la typo du projet en grand, resserrée, équilibrée. */
 .ds h1,
-.ds h2,
-.ds h3 {
+.ds h2 {
   font-family: var(--font-family-heading, var(--font-family-base, system-ui));
   font-weight: var(--font-weight-heading, 700);
   line-height: var(--font-line-height-heading, 120%);
@@ -752,10 +751,6 @@ body.preview-body {
 .ds h2 {
   font-size: var(--font-size-title, 20px);
   letter-spacing: -0.01em;
-}
-.ds h3 {
-  font-size: var(--font-size-heading, 28px);
-  letter-spacing: -0.02em;
 }
 .ds-label {
   margin: 0;
@@ -1037,6 +1032,7 @@ body.preview-body {
 }
 .ds-list li {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-md, 16px);
   justify-content: space-between;
   align-items: center;
@@ -1232,7 +1228,7 @@ body.preview-body {
 }
 .ds-prose blockquote::before {
   content: '';
-  width: 40px;
+  width: var(--space-2xl, 48px);
   height: var(--border-width-medium, 2px);
   background: var(--bg-brand, #333);
 }
