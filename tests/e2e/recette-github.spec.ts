@@ -38,6 +38,9 @@ test('recette GitHub : relecture avant validation → rien à reprendre ; « Ré
   await page.goto('/');
   await page.getByRole('button', { name: 'Nouveau projet depuis un dépôt' }).click();
   const create = page.getByRole('form', { name: 'Nouveau projet' });
+  // Le nom est prérempli quand la liste des dépôts arrive : l'attendre, sinon
+  // il s'ajoute à la saisie (CI du 2026-11-26).
+  await expect(create.getByLabel('Nom')).toHaveValue('site-vitrine');
   await create.getByLabel('Nom').fill('Recette GitHub');
   await create.getByRole('button', { name: 'Créer le projet' }).click();
   await expect(page).toHaveURL(/#\/p\/recette-github$/);
