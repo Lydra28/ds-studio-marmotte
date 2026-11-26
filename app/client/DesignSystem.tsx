@@ -111,7 +111,7 @@ function Ledger() {
       {activity.map(([title, when, tone, status]) => (
         <li key={title}>
           <span>{title}</span>
-          <time>{when}</time>
+          <small>{when}</small>
           <span className={`ds-status ${tone}`}>{status}</span>
         </li>
       ))}
@@ -147,19 +147,21 @@ export function PreviewScreen({ set }: { set: TokenSet }) {
           </header>
           <div className="ds-figures">
             <div className="ds-fig">
+              <p className="ds-label">Composants documentés</p>
               <strong>
                 86<small> %</small>
               </strong>
-              <p>des composants documentés</p>
               <span className="ds-delta">+12 %</span>
             </div>
             <div className="ds-fig">
+              <p className="ds-label">Tokens sémantiques</p>
               <strong>142</strong>
-              <p>tokens sémantiques</p>
+              <p>Couche des usages</p>
             </div>
             <div className="ds-fig">
+              <p className="ds-label">Écarts aux règles</p>
               <strong>0</strong>
-              <p>écart aux règles</p>
+              <p>Sur 4 règles vérifiées</p>
             </div>
           </div>
         </section>
@@ -180,7 +182,6 @@ export function PreviewScreen({ set }: { set: TokenSet }) {
           </header>
           <form
             className="ds-form"
-            aria-labelledby="ds-profile"
             onSubmit={(e) => {
               e.preventDefault();
               setSent(true);
@@ -361,7 +362,7 @@ function DashboardScreen({ set }: { set: TokenSet }) {
             <Button variant="ghost">Tout voir</Button>
           </div>
         </section>
-        <div className="ds-alert ds-rise" style={rank(3)} role="note">
+        <div className="ds-alert ds-rise" style={rank(3)}>
           <p>
             <strong>À revoir.</strong> Le contraste du bouton secondaire est sous 4,5:1.
           </p>

@@ -808,7 +808,9 @@ body.preview-body {
   display: grid;
   gap: var(--space-2xs, 4px);
   align-content: start;
-  padding: 0 var(--space-lg, 24px) 0 var(--space-md, 16px);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 0 var(--space-md, 16px);
   border-left: var(--ds-rule);
 }
 .ds-fig strong {
@@ -824,7 +826,7 @@ body.preview-body {
   letter-spacing: -0.01em;
   color: var(--text-secondary, #444);
 }
-.ds-fig p {
+.ds-fig p:not(.ds-label) {
   margin: 0;
   color: var(--text-secondary, #444);
   font-size: var(--font-size-label, 14px);
@@ -852,7 +854,6 @@ body.preview-body {
 .ds-table li:first-child {
   border-top: var(--ds-rule);
 }
-.ds-table time,
 .ds-table small {
   font-size: var(--font-size-label, 14px);
   color: var(--text-muted, #666);
@@ -862,7 +863,7 @@ body.preview-body {
   .ds-table li {
     grid-template-columns: 1fr auto;
   }
-  .ds-table time {
+  .ds-table small {
     grid-row: 2;
   }
 }
@@ -870,6 +871,8 @@ body.preview-body {
   font-size: var(--font-size-label, 14px);
   font-weight: var(--font-weight-heading, 700);
   color: var(--text-secondary, #444);
+}
+.ds-table .ds-status {
   text-align: right;
 }
 .ds-status.ok {
@@ -1037,7 +1040,7 @@ body.preview-body {
   grid-template-columns: 1fr auto;
   gap: var(--space-md, 16px);
   align-items: baseline;
-  padding: var(--space-sm, 12px) 0;
+  padding: var(--space-sm, 12px);
   border-bottom: var(--ds-rule);
   cursor: pointer;
   transition: box-shadow 0.2s var(--ds-ease);
@@ -1047,7 +1050,6 @@ body.preview-body {
 }
 .ds-choices label.is-selected {
   box-shadow: inset var(--border-width-medium, 2px) 0 0 var(--bg-brand, #333);
-  padding-left: var(--space-sm, 12px);
 }
 .ds-choices label.is-selected strong {
   color: var(--text-brand, #333);
@@ -1150,6 +1152,16 @@ body.preview-body {
   .ds *,
   .ds *::before {
     transition: none !important;
+  }
+}
+/* Contraste forcé : les ombres internes disparaissent, les repères passent
+   en bordure. */
+@media (forced-colors: active) {
+  .ds-top a[aria-current='page'] {
+    text-decoration: underline;
+  }
+  .ds-choices label.is-selected {
+    border-left: var(--border-width-medium, 2px) solid CanvasText;
   }
 }
 @keyframes ds-rise {
