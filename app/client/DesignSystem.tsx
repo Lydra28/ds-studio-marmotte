@@ -104,16 +104,31 @@ export function Input({
 // Rang d'un bloc dans l'apparition en cascade (styles.css, .ds-rise).
 const rank = (i: number) => ({ '--i': i }) as CSSProperties;
 
+// Registre d'activité : lignes à filets, statut en texte seul (pas de pastille).
+function Ledger() {
+  return (
+    <ul className="ds-table">
+      {activity.map(([title, when, tone, status]) => (
+        <li key={title}>
+          <span>{title}</span>
+          <time>{when}</time>
+          <span className={`ds-status ${tone}`}>{status}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 // Écran Composants de la preview : chaque composant du DS dans une mise en
-// page de produit (parti pris « calme et précis », 2026-11-26).
+// page de produit (parti pris « registre », 2026-11-26 : sections à filets,
+// titre à gauche, chiffres à même le fond, sans cartes ni pastilles).
 export function PreviewScreen({ set }: { set: TokenSet }) {
   const [sent, setSent] = useState(false);
-  const week = [38, 52, 46, 64, 58, 76, 88];
   return (
     <DSScope set={set} className="ds-screen">
       <DemoTop current="Accueil" />
       <main>
-        <section className="ds-hero ds-rise" style={rank(0)}>
+        <section className="ds-intro ds-rise" style={rank(0)}>
           <h1>Les tokens en situation.</h1>
           <p className="ds-lead">
             Chaque valeur essayée dans l’atelier s’applique ici avant d’être enregistrée.
@@ -125,54 +140,52 @@ export function PreviewScreen({ set }: { set: TokenSet }) {
             <Button disabled>Indisponible</Button>
           </div>
         </section>
-        <div className="ds-bento">
-          <section className="ds-panel is-lift ds-rise" style={rank(1)} aria-labelledby="ds-progress">
-            <div className="ds-panel-head">
-              <h2 id="ds-progress">Avancement</h2>
-              <span className="ds-trend">+12 % en 7 jours</span>
+        <section className="ds-section ds-rise" style={rank(1)} aria-labelledby="ds-progress">
+          <header>
+            <h2 id="ds-progress">Avancement</h2>
+            <p className="ds-label">7 derniers jours</p>
+          </header>
+          <div className="ds-figures">
+            <div className="ds-fig">
+              <strong>
+                86<small> %</small>
+              </strong>
+              <p>des composants documentés</p>
+              <span className="ds-delta">+12 %</span>
             </div>
-            <p className="ds-figure">
-              86<small> %</small>
-            </p>
-            <p className="ds-text">des composants documentés et vérifiés.</p>
-            <div className="ds-bars" aria-hidden="true">
-              {week.map((h, i) => (
-                <span key={i} style={{ height: `${h}%`, ...rank(i) }} />
-              ))}
+            <div className="ds-fig">
+              <strong>142</strong>
+              <p>tokens sémantiques</p>
             </div>
-            <div className="ds-axis" aria-hidden="true">
-              {['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'].map((d) => (
-                <span key={d}>{d}</span>
-              ))}
+            <div className="ds-fig">
+              <strong>0</strong>
+              <p>écart aux règles</p>
             </div>
-          </section>
-          <section className="ds-panel ds-list is-lift ds-rise" style={rank(2)} aria-labelledby="ds-activity">
-            <div className="ds-panel-head">
-              <h2 id="ds-activity">Activité</h2>
-              <Button variant="ghost">Tout voir</Button>
-            </div>
-            <ul>
-              {activity.map(([title, when, tone, status]) => (
-                <li key={title}>
-                  <span>
-                    <strong>{title}</strong>
-                    <small>{when}</small>
-                  </span>
-                  <span className={`ds-badge ${tone}`}>{status}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
+          </div>
+        </section>
+        <section className="ds-section ds-rise" style={rank(2)} aria-labelledby="ds-activity">
+          <header>
+            <h2 id="ds-activity">Activité</h2>
+            <p className="ds-label">Dernières révisions</p>
+          </header>
+          <div>
+            <Ledger />
+            <Button variant="ghost">Tout voir</Button>
+          </div>
+        </section>
+        <section className="ds-section ds-rise" style={rank(3)} aria-labelledby="ds-profile">
+          <header>
+            <h2 id="ds-profile">Profil</h2>
+            <p className="ds-label">Champs et erreurs</p>
+          </header>
           <form
-            className="ds-panel ds-form ds-rise"
-            style={rank(3)}
+            className="ds-form"
             aria-labelledby="ds-profile"
             onSubmit={(e) => {
               e.preventDefault();
               setSent(true);
             }}
           >
-            <h2 id="ds-profile">Profil</h2>
             <Input label="Nom" placeholder="Camille" />
             <Input
               label="E-mail"
@@ -186,8 +199,13 @@ export function PreviewScreen({ set }: { set: TokenSet }) {
               {sent ? 'Profil enregistré.' : ''}
             </p>
           </form>
-          <section className="ds-panel ds-states ds-rise" style={rank(4)} aria-labelledby="ds-button-states">
-            <h2 id="ds-button-states">États du bouton</h2>
+        </section>
+        <section className="ds-section ds-rise" style={rank(4)} aria-labelledby="ds-button-states">
+          <header>
+            <h2 id="ds-button-states">États</h2>
+            <p className="ds-label">Bouton et statuts</p>
+          </header>
+          <div>
             <div className="ds-row">
               <Button>default</Button>
               <Button state="hover">hover</Button>
@@ -197,15 +215,13 @@ export function PreviewScreen({ set }: { set: TokenSet }) {
             <p className="ds-text">
               Survol, focus clavier et désactivé suivent les tokens de marque, de focus et d’interaction.
             </p>
-            <h2>Statuts</h2>
             <div className="ds-row">
-              <span className="ds-badge ok">Validé</span>
-              <span className="ds-badge alert">À revoir</span>
-              <span className="ds-badge">En cours</span>
-              <span className="ds-trend">+12 %</span>
+              <span className="ds-status ok">Validé</span>
+              <span className="ds-status alert">À revoir</span>
+              <span className="ds-status">En cours</span>
             </div>
-          </section>
-        </div>
+          </div>
+        </section>
       </main>
     </DSScope>
   );
@@ -316,51 +332,38 @@ function DashboardScreen({ set }: { set: TokenSet }) {
           </div>
           <Button>Nouvelle tâche</Button>
         </div>
-        <div className="ds-bento">
-          <section className="ds-panel is-tall is-lift ds-rise" style={rank(1)} aria-labelledby="ds-active">
-            <div className="ds-panel-head">
-              <h2 id="ds-active">Projets actifs</h2>
-              <span className="ds-trend">+2 ce mois-ci</span>
-            </div>
-            <p className="ds-figure">12</p>
-            <p className="ds-text">Dont 4 livrés avant la date prévue.</p>
-            <div className="ds-bars" aria-hidden="true">
-              {[30, 44, 40, 58, 52, 70, 64, 82].map((h, i) => (
-                <span key={i} style={{ height: `${h}%`, ...rank(i) }} />
-              ))}
-            </div>
-          </section>
-          {[
-            ['Tâches en retard', '3', 'Dont 1 urgente'],
-            ['Satisfaction', '94 %', 'Sur 128 avis'],
-          ].map(([label, value, note], i) => (
-            <article key={label} className="ds-panel ds-stat is-lift ds-rise" style={rank(2 + i)}>
-              <p className="ds-label">{label}</p>
-              <strong>{value}</strong>
-              <p className="ds-text">{note}</p>
-            </article>
-          ))}
+        <div className="ds-figures ds-rise" style={rank(1)}>
+          <div className="ds-fig">
+            <p className="ds-label">Projets actifs</p>
+            <strong>12</strong>
+            <span className="ds-delta">+2 ce mois-ci</span>
+          </div>
+          <div className="ds-fig">
+            <p className="ds-label">Tâches en retard</p>
+            <strong>3</strong>
+            <p>Dont 1 urgente</p>
+          </div>
+          <div className="ds-fig">
+            <p className="ds-label">Satisfaction</p>
+            <strong>
+              94<small> %</small>
+            </strong>
+            <p>Sur 128 avis</p>
+          </div>
         </div>
-        <section className="ds-panel ds-list ds-rise" style={rank(4)} aria-labelledby="ds-recent">
-          <div className="ds-panel-head">
+        <section className="ds-section ds-rise" style={rank(2)} aria-labelledby="ds-recent">
+          <header>
             <h2 id="ds-recent">Activité récente</h2>
+            <p className="ds-label">Cette semaine</p>
+          </header>
+          <div>
+            <Ledger />
             <Button variant="ghost">Tout voir</Button>
           </div>
-          <ul>
-            {activity.map(([title, when, tone, status]) => (
-              <li key={title}>
-                <span>
-                  <strong>{title}</strong>
-                  <small>{when}</small>
-                </span>
-                <span className={`ds-badge ${tone}`}>{status}</span>
-              </li>
-            ))}
-          </ul>
         </section>
-        <div className="ds-banner ds-rise" style={rank(5)}>
+        <div className="ds-alert ds-rise" style={rank(3)} role="note">
           <p>
-            <strong>Une alerte demande votre attention.</strong> Le contraste du bouton secondaire est sous 4,5:1.
+            <strong>À revoir.</strong> Le contraste du bouton secondaire est sous 4,5:1.
           </p>
           <Button variant="secondary">Corriger</Button>
         </div>
@@ -389,7 +392,7 @@ function FormScreen({ set }: { set: TokenSet }) {
           <p className="ds-label">Étape 2 sur 3</p>
         </div>
         <form
-          className="ds-panel ds-form ds-rise"
+          className="ds-form ds-rise"
           style={rank(2)}
           aria-label="Inscription"
           onSubmit={(e) => {
@@ -464,12 +467,12 @@ function ArticleScreen({ set }: { set: TokenSet }) {
             pull request.
           </p>
         </div>
-        <aside className="ds-cta ds-rise" style={rank(3)}>
+        <aside className="ds-next ds-rise" style={rank(3)}>
           <div>
             <strong>Prêt à essayer ?</strong>
             <p>Changer une couleur dans l’atelier et regarder cette page suivre.</p>
           </div>
-          <Button variant="secondary">Commencer</Button>
+          <Button>Commencer</Button>
         </aside>
       </main>
     </DSScope>

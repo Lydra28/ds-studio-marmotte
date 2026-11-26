@@ -632,24 +632,18 @@ dialog.diff td {
   margin: 20px 0 8px;
 }
 /* ---------- Composants du DS : uniquement des variables issues des tokens ----------
-   Parti pris des écrans d'exemple (2026-11-26, demande de Romain) : « calme et
-   précis ». Grande typo, gros chiffres tabulaires, surfaces en relief doux,
-   barre en verre sur un halo de la marque, un seul mouvement : l'apparition en
-   cascade. Couleurs, rayons, espacements et typos viennent tous des tokens ;
-   ombres, verre et halo en sont dérivés (color-mix), jamais une couleur en dur. */
+   Parti pris des écrans d'exemple (2026-11-26, repris à la demande de Romain :
+   cartes, ronds et puces faisaient « IA ») : « registre ». Pas de cartes ni
+   d'ombres : des sections séparées par des filets, le titre en colonne à
+   gauche, les chiffres très grands à même le fond, les statuts en texte seul.
+   La barre du haut en verre et l'apparition fine restent. Couleurs, rayons,
+   espacements et typos viennent des tokens ; le verre en est dérivé. */
 body.preview-body {
   margin: 0;
 }
 .ds {
   --ds-ease: cubic-bezier(0.16, 1, 0.3, 1);
-  --ds-line: color-mix(in srgb, var(--border-default, #ddd) 70%, transparent);
-  --ds-shadow:
-    0 1px 2px color-mix(in srgb, var(--text-primary, #111) 5%, transparent),
-    0 18px 40px -24px color-mix(in srgb, var(--text-primary, #111) 30%, transparent);
-  --ds-shadow-up:
-    0 1px 2px color-mix(in srgb, var(--text-primary, #111) 6%, transparent),
-    0 24px 48px -24px color-mix(in srgb, var(--text-primary, #111) 38%, transparent);
-  --ds-glass: color-mix(in srgb, var(--bg-surface, #fff) 70%, transparent);
+  --ds-rule: var(--border-width-thin, 1px) solid var(--border-default, #ddd);
   font-family: var(--font-family-base, system-ui);
   font-size: var(--font-size-body, 16px);
   line-height: var(--font-line-height-body, 150%);
@@ -667,19 +661,16 @@ body.preview-body {
 }
 .ds-screen {
   min-height: 100vh;
-  background:
-    radial-gradient(70% 420px at 85% -80px, color-mix(in srgb, var(--bg-brand, #333) 16%, transparent), transparent),
-    var(--bg-canvas, #fff);
 }
 .ds-screen main {
   padding: var(--space-2xl, 48px) var(--space-lg, 24px) var(--space-3xl, 64px);
   max-width: 1040px;
   margin: 0 auto;
   display: grid;
-  gap: var(--space-xl, 32px);
+  gap: var(--space-2xl, 48px);
 }
 
-/* Barre du haut : verre sur le halo, collée en haut au défilement. */
+/* Barre du haut : verre, nom du projet en texte, onglet courant souligné. */
 .ds-top {
   position: sticky;
   top: 0;
@@ -688,50 +679,40 @@ body.preview-body {
   flex-wrap: wrap;
   gap: var(--space-md, 16px);
   justify-content: space-between;
-  align-items: center;
-  padding: var(--space-sm, 12px) var(--space-lg, 24px);
-  background: var(--ds-glass);
+  align-items: stretch;
+  padding: 0 var(--space-lg, 24px);
+  background: color-mix(in srgb, var(--bg-canvas, #fff) 78%, transparent);
   -webkit-backdrop-filter: blur(18px) saturate(1.4);
   backdrop-filter: blur(18px) saturate(1.4);
-  border-bottom: var(--border-width-thin, 1px) solid var(--ds-line);
+  border-bottom: var(--ds-rule);
 }
 .ds-brand {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs, 8px);
+  align-self: center;
   font-weight: var(--font-weight-heading, 700);
   letter-spacing: -0.01em;
 }
-.ds-brand::before {
-  content: '';
-  width: 14px;
-  height: 14px;
-  border-radius: var(--radius-control, 8px);
-  background: var(--bg-brand, #333);
-}
 .ds-top nav {
   display: flex;
-  gap: var(--space-3xs, 2px);
-  padding: var(--space-3xs, 2px);
-  border-radius: var(--radius-full, 999px);
-  background: color-mix(in srgb, var(--bg-surface-hover, #eee) 70%, transparent);
+  gap: var(--space-lg, 24px);
 }
 .ds-top a {
-  padding: var(--space-2xs, 4px) var(--space-sm, 12px);
-  border-radius: var(--radius-full, 999px);
+  display: flex;
+  align-items: center;
+  min-height: 52px;
   color: var(--text-secondary, #444);
   text-decoration: none;
   font-size: var(--font-size-label, 14px);
-  transition: color 0.2s var(--ds-ease), background-color 0.2s var(--ds-ease);
+  transition:
+    color 0.2s var(--ds-ease),
+    box-shadow 0.2s var(--ds-ease);
 }
 .ds-top a:hover {
   color: var(--text-primary, #111);
 }
 .ds-top a[aria-current='page'] {
-  background: var(--bg-surface, #fff);
   color: var(--text-primary, #111);
   font-weight: var(--font-weight-heading, 700);
-  box-shadow: var(--ds-shadow);
+  box-shadow: inset 0 calc(-1 * var(--border-width-medium, 2px)) 0 var(--bg-brand, #333);
 }
 
 /* Titres : la typo du projet en grand, resserrée, équilibrée. */
@@ -746,7 +727,7 @@ body.preview-body {
 .ds h1 {
   font-size: var(--font-size-display, 48px);
   letter-spacing: -0.03em;
-  max-width: 16ch;
+  max-width: 18ch;
 }
 .ds h2 {
   font-size: var(--font-size-title, 20px);
@@ -765,7 +746,6 @@ body.preview-body {
 }
 .ds-lead {
   font-size: var(--font-size-title, 20px);
-  line-height: var(--font-line-height-body, 150%);
 }
 .ds-row {
   display: flex;
@@ -773,43 +753,147 @@ body.preview-body {
   align-items: center;
   gap: var(--space-sm, 12px);
 }
-.ds-hero {
+.ds-intro {
   display: grid;
-  gap: var(--space-md, 16px);
-  padding-bottom: var(--space-md, 16px);
+  gap: var(--space-sm, 12px);
 }
-.ds-hero .ds-row {
-  margin-top: var(--space-xs, 8px);
+.ds-intro .ds-row {
+  margin-top: var(--space-sm, 12px);
+}
+.ds-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md, 16px);
+  justify-content: space-between;
+  align-items: flex-end;
 }
 
-/* Gros chiffres : tabulaires, serrés, lisibles d'un coup d'œil. */
-.ds-figure {
-  margin: 0;
+/* Section de registre : filet en haut, titre à gauche, contenu à droite. */
+.ds-section {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) 3fr;
+  gap: var(--space-md, 16px) var(--space-xl, 32px);
+  padding-top: var(--space-lg, 24px);
+  border-top: var(--ds-rule);
+}
+.ds-section > header {
+  display: grid;
+  gap: var(--space-2xs, 4px);
+  align-content: start;
+}
+.ds-section > div,
+.ds-section > form {
+  display: grid;
+  gap: var(--space-md, 16px);
+  align-content: start;
+  min-width: 0;
+}
+.ds-section > div > .ds-button {
+  justify-self: start;
+}
+@media (max-width: 720px) {
+  .ds-section {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Chiffres : très grands, tabulaires, un filet vertical à gauche de chacun
+   (régulier quand ils passent à la ligne). */
+.ds-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-lg, 24px) 0;
+}
+.ds-fig {
+  display: grid;
+  gap: var(--space-2xs, 4px);
+  align-content: start;
+  padding: 0 var(--space-lg, 24px) 0 var(--space-md, 16px);
+  border-left: var(--ds-rule);
+}
+.ds-fig strong {
   font-family: var(--font-family-heading, var(--font-family-base, system-ui));
-  font-size: min(calc(var(--font-size-display, 48px) * 1.5), 6rem);
+  font-size: min(calc(var(--font-size-display, 48px) * 1.25), 6rem);
   font-weight: var(--font-weight-heading, 700);
   line-height: 1;
   letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
-  color: var(--text-primary, #111);
 }
-.ds-figure small {
+.ds-fig strong small {
   font-size: 0.45em;
   letter-spacing: -0.01em;
   color: var(--text-secondary, #444);
 }
-.ds-trend {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2xs, 4px);
-  width: fit-content;
-  padding: var(--space-3xs, 2px) var(--space-xs, 8px);
-  border-radius: var(--radius-full, 999px);
-  background: var(--bg-brand-subtle, #eee);
+.ds-fig p {
+  margin: 0;
+  color: var(--text-secondary, #444);
+  font-size: var(--font-size-label, 14px);
+}
+.ds-delta {
   color: var(--text-brand, #333);
-  font-size: var(--font-size-caption, 12px);
   font-weight: var(--font-weight-heading, 700);
   font-variant-numeric: tabular-nums;
+}
+
+/* Registre : lignes à filets, valeurs alignées à droite, statut en texte. */
+.ds-table {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ds-table li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: var(--space-2xs, 4px) var(--space-lg, 24px);
+  align-items: baseline;
+  padding: var(--space-sm, 12px) 0;
+  border-bottom: var(--ds-rule);
+}
+.ds-table li:first-child {
+  border-top: var(--ds-rule);
+}
+.ds-table time,
+.ds-table small {
+  font-size: var(--font-size-label, 14px);
+  color: var(--text-muted, #666);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 520px) {
+  .ds-table li {
+    grid-template-columns: 1fr auto;
+  }
+  .ds-table time {
+    grid-row: 2;
+  }
+}
+.ds-status {
+  font-size: var(--font-size-label, 14px);
+  font-weight: var(--font-weight-heading, 700);
+  color: var(--text-secondary, #444);
+  text-align: right;
+}
+.ds-status.ok {
+  color: var(--text-brand, #333);
+}
+.ds-status.alert {
+  color: var(--text-danger, #b42318);
+}
+
+/* Alerte : une ligne entre deux filets, le mot en couleur de danger. */
+.ds-alert {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md, 16px);
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-md, 16px) 0;
+  border-block: var(--ds-rule);
+}
+.ds-alert p {
+  margin: 0;
+}
+.ds-alert strong {
+  color: var(--text-danger, #b42318);
 }
 
 /* Boutons. */
@@ -825,25 +909,20 @@ body.preview-body {
   transition:
     background-color 0.2s var(--ds-ease),
     border-color 0.2s var(--ds-ease),
-    box-shadow 0.25s var(--ds-ease),
-    transform 0.25s var(--ds-ease);
+    color 0.2s var(--ds-ease);
 }
 .ds-button.primary {
   /* Jamais la bordure de l'atelier (button.primary plus haut). */
   border-color: transparent;
   background: var(--bg-brand, #333);
   color: var(--text-on-brand, #fff);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--text-on-brand, #fff) 18%, transparent),
-    0 8px 20px -10px color-mix(in srgb, var(--bg-brand, #333) 80%, transparent);
 }
 .ds-button.primary:hover:not(:disabled),
 .ds-button.primary.is-hover {
   background: var(--bg-brand-hover, #111);
-  transform: translateY(-1px);
 }
 .ds-button.secondary {
-  background: var(--bg-surface, #fff);
+  background: transparent;
   color: var(--text-primary, #111);
   border-color: var(--border-interactive, #888);
 }
@@ -854,13 +933,11 @@ body.preview-body {
 .ds-button.ghost {
   background: transparent;
   color: var(--text-brand, #333);
+  padding-inline: var(--space-sm, 12px);
 }
 .ds-button.ghost:hover:not(:disabled),
 .ds-button.ghost.is-hover {
   background: var(--bg-brand-subtle, #eee);
-}
-.ds-button:active:not(:disabled) {
-  transform: translateY(0) scale(0.98);
 }
 .ds-button:focus-visible,
 .ds-button.is-focus {
@@ -870,92 +947,13 @@ body.preview-body {
 .ds-button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
-  box-shadow: none;
 }
 
-/* Surfaces : relief doux, filet clair, rayon des cartes du projet. */
-.ds-panel {
-  display: grid;
-  gap: var(--space-sm, 12px);
-  align-content: start;
-  padding: var(--space-lg, 24px);
-  background: var(--bg-surface, #fff);
-  border: var(--border-width-thin, 1px) solid var(--ds-line);
-  border-radius: var(--radius-card, 12px);
-  box-shadow: var(--ds-shadow);
-  transition:
-    transform 0.35s var(--ds-ease),
-    box-shadow 0.35s var(--ds-ease);
-}
-.ds-panel.is-lift:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--ds-shadow-up);
-}
-.ds-panel .ds-button {
-  justify-self: start;
-}
-/* Grille en mosaïque : un grand panneau, des panneaux d'appui, pas de cartes égales. */
-.ds-bento {
-  display: grid;
-  grid-template-columns: 1.35fr 1fr;
-  gap: var(--space-md, 16px);
-}
-.ds-bento > .is-tall {
-  grid-row: span 2;
-}
-@media (max-width: 720px) {
-  .ds-bento {
-    grid-template-columns: 1fr;
-  }
-  .ds-bento > .is-tall {
-    grid-row: auto;
-  }
-}
-.ds-panel-head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm, 12px);
-  justify-content: space-between;
-  align-items: center;
-}
-
-/* Barres de la semaine : la dernière porte la marque. */
-.ds-bars {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--space-xs, 8px);
-  height: 160px;
-  margin-top: var(--space-sm, 12px);
-}
-.ds-bars span {
-  flex: 1;
-  border-radius: var(--radius-control, 8px) var(--radius-control, 8px) 0 0;
-  background: var(--bg-brand-subtle, #eee);
-  transform-origin: bottom;
-}
-.ds-bars span:last-child {
-  background: var(--bg-brand, #333);
-}
-.ds-axis {
-  display: flex;
-  justify-content: space-between;
-  font-size: var(--font-size-caption, 12px);
-  color: var(--text-muted, #666);
-}
-
-/* Formulaire. */
+/* Formulaire : à même le fond, pas de carte. */
 .ds-form {
   display: grid;
   gap: var(--space-md, 16px);
-  padding: var(--space-lg, 24px);
-  background: var(--bg-surface, #fff);
-  border-radius: var(--radius-card, 12px);
-  border: var(--border-width-thin, 1px) solid var(--ds-line);
-  box-shadow: var(--ds-shadow);
-  max-width: 480px;
-}
-.ds-panel.ds-form {
-  max-width: none;
+  max-width: 560px;
 }
 .ds-form .ds-button {
   justify-self: start;
@@ -973,13 +971,11 @@ body.preview-body {
   font-size: var(--font-size-body, 16px);
   min-height: 44px;
   padding: var(--space-xs, 8px) var(--space-sm, 12px);
-  background: var(--bg-canvas, #fff);
+  background: var(--bg-surface, #fff);
   color: var(--text-primary, #111);
   border: var(--border-width-thin, 1px) solid var(--border-interactive, #888);
   border-radius: var(--radius-control, 8px);
-  transition:
-    border-color 0.2s var(--ds-ease),
-    box-shadow 0.2s var(--ds-ease);
+  transition: border-color 0.2s var(--ds-ease);
 }
 .ds-field input::placeholder {
   color: var(--text-muted, #666);
@@ -988,9 +984,8 @@ body.preview-body {
   border-color: var(--text-secondary, #444);
 }
 .ds-field input:focus-visible {
-  outline: none;
-  border-color: var(--border-focus, #333);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--border-focus, #333) 28%, transparent);
+  outline: var(--border-width-medium, 2px) solid var(--border-focus, #333);
+  outline-offset: 1px;
 }
 .ds-field input:disabled {
   opacity: 0.5;
@@ -1003,100 +998,10 @@ body.preview-body {
   font-size: var(--font-size-label, 14px);
   color: var(--text-danger, #b42318);
 }
-.ds-states {
+.ds-fields {
   display: grid;
-  gap: var(--space-sm, 12px);
-}
-
-/* Écrans d'exemple (tableau de bord, formulaire, article). */
-.ds-head {
-  display: flex;
-  flex-wrap: wrap;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: var(--space-md, 16px);
-  justify-content: space-between;
-  align-items: flex-end;
-}
-.ds-stat strong {
-  font-family: var(--font-family-heading, var(--font-family-base, system-ui));
-  font-size: var(--font-size-display, 48px);
-  line-height: 1;
-  font-weight: var(--font-weight-heading, 700);
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-primary, #111);
-}
-.ds-list ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.ds-list li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-md, 16px);
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-sm, 12px) 0;
-  border-top: var(--border-width-thin, 1px) solid var(--ds-line);
-}
-.ds-list li:first-child {
-  border-top: 0;
-}
-.ds-list li > span:first-child {
-  display: grid;
-  gap: var(--space-3xs, 2px);
-}
-.ds-list small {
-  font-size: var(--font-size-caption, 12px);
-  color: var(--text-muted, #666);
-}
-.ds-badge {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2xs, 4px);
-  font-size: var(--font-size-caption, 12px);
-  font-weight: var(--font-weight-heading, 700);
-  padding: var(--space-3xs, 2px) var(--space-xs, 8px);
-  border-radius: var(--radius-full, 999px);
-  background: var(--bg-surface-hover, #eee);
-  color: var(--text-secondary, #444);
-}
-.ds-badge::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: var(--radius-full, 999px);
-  background: currentColor;
-}
-.ds-badge.ok {
-  background: var(--bg-brand-subtle, #eee);
-  color: var(--text-brand, #333);
-}
-.ds-badge.alert {
-  background: var(--bg-danger-subtle, #fde);
-  color: var(--text-danger, #b42318);
-}
-.ds-banner {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-md, 16px);
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-md, 16px) var(--space-lg, 24px);
-  background: var(--bg-danger-subtle, #fde);
-  border-radius: var(--radius-card, 12px);
-}
-.ds-banner p {
-  margin: 0;
-  color: var(--text-primary, #111);
-}
-.ds-intro {
-  display: grid;
-  gap: var(--space-sm, 12px);
-}
-.ds-screen main.ds-narrow {
-  max-width: 720px;
 }
 .ds-steps {
   display: grid;
@@ -1108,25 +1013,18 @@ body.preview-body {
 }
 .ds-progress span {
   flex: 1;
-  height: var(--space-2xs, 4px);
-  border-radius: var(--radius-full, 999px);
+  height: var(--border-width-medium, 2px);
   background: var(--border-default, #ddd);
 }
 .ds-progress .done {
   background: var(--bg-brand, #333);
 }
-.ds-fields {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--space-md, 16px);
-}
+/* Formules : des lignes à filets, la choisie marquée par la marque. */
 .ds-choices {
   margin: 0;
   padding: 0;
   border: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: var(--space-sm, 12px);
 }
 .ds-choices legend {
   padding: 0;
@@ -1136,19 +1034,23 @@ body.preview-body {
 }
 .ds-choices label {
   display: grid;
-  gap: var(--space-3xs, 2px);
-  padding: var(--space-md, 16px);
-  border: var(--border-width-thin, 1px) solid var(--border-interactive, #888);
-  border-radius: var(--radius-control, 8px);
+  grid-template-columns: 1fr auto;
+  gap: var(--space-md, 16px);
+  align-items: baseline;
+  padding: var(--space-sm, 12px) 0;
+  border-bottom: var(--ds-rule);
   cursor: pointer;
-  transition:
-    border-color 0.2s var(--ds-ease),
-    background-color 0.2s var(--ds-ease);
+  transition: box-shadow 0.2s var(--ds-ease);
+}
+.ds-choices label:first-of-type {
+  border-top: var(--ds-rule);
 }
 .ds-choices label.is-selected {
-  border-color: var(--bg-brand, #333);
-  background: var(--bg-brand-subtle, #eee);
-  box-shadow: inset 0 0 0 1px var(--bg-brand, #333);
+  box-shadow: inset var(--border-width-medium, 2px) 0 0 var(--bg-brand, #333);
+  padding-left: var(--space-sm, 12px);
+}
+.ds-choices label.is-selected strong {
+  color: var(--text-brand, #333);
 }
 .ds-choices input {
   position: absolute;
@@ -1160,7 +1062,7 @@ body.preview-body {
 }
 .ds-choices small {
   color: var(--text-secondary, #444);
-  font-size: var(--font-size-caption, 12px);
+  font-size: var(--font-size-label, 14px);
 }
 .ds-check {
   display: flex;
@@ -1174,32 +1076,30 @@ body.preview-body {
   width: 18px;
   height: 18px;
 }
+.ds-screen main.ds-narrow {
+  max-width: 720px;
+}
+
+/* Article : une colonne de lecture, la palette en bandeau, citation en grand. */
 .ds-screen main.ds-article {
   max-width: 760px;
 }
-/* Couverture : la palette du projet en aplats, rien d'inventé. */
 .ds-cover {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  gap: var(--space-xs, 8px);
-  height: 260px;
-}
-.ds-cover span {
-  border-radius: var(--radius-card, 12px);
-  background: var(--bg-brand-subtle, #eee);
+  grid-template-columns: 5fr 2fr 1fr 3fr;
+  height: 120px;
 }
 .ds-cover span:nth-child(1) {
-  grid-row: span 2;
   background: var(--bg-brand, #333);
 }
 .ds-cover span:nth-child(2) {
-  grid-column: span 2;
-  background: var(--bg-surface-hover, #ddd);
+  background: var(--bg-brand-subtle, #eee);
+}
+.ds-cover span:nth-child(3) {
+  background: var(--text-primary, #111);
 }
 .ds-cover span:nth-child(4) {
-  background: var(--bg-surface, #fff);
-  box-shadow: inset 0 0 0 var(--border-width-thin, 1px) var(--ds-line);
+  background: var(--bg-surface-hover, #ddd);
 }
 .ds-prose {
   display: grid;
@@ -1213,51 +1113,37 @@ body.preview-body {
   margin-top: var(--space-md, 16px);
   font-size: var(--font-size-heading, 28px);
 }
-/* Citation : la typo de titre en grand, un trait de marque au-dessus, pas de bordure gauche. */
 .ds-prose blockquote {
   margin: var(--space-md, 16px) 0;
-  display: grid;
-  gap: var(--space-sm, 12px);
+  padding-top: var(--space-md, 16px);
+  border-top: var(--border-width-medium, 2px) solid var(--text-primary, #111);
   font-family: var(--font-family-heading, var(--font-family-base, system-ui));
   font-size: var(--font-size-heading, 28px);
   font-weight: var(--font-weight-heading, 700);
   line-height: var(--font-line-height-heading, 120%);
   letter-spacing: -0.02em;
   text-wrap: balance;
-  color: var(--text-primary, #111);
 }
-.ds-prose blockquote::before {
-  content: '';
-  width: var(--space-2xl, 48px);
-  height: var(--border-width-medium, 2px);
-  background: var(--bg-brand, #333);
-}
-.ds-cta {
-  box-shadow: 0 24px 48px -28px color-mix(in srgb, var(--bg-brand, #333) 90%, transparent);
+.ds-next {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-md, 16px);
   justify-content: space-between;
   align-items: center;
-  padding: var(--space-lg, 24px);
-  background: var(--bg-brand, #333);
-  color: var(--text-on-brand, #fff);
-  border-radius: var(--radius-card, 12px);
+  padding-top: var(--space-lg, 24px);
+  border-top: var(--ds-rule);
 }
-.ds-cta p {
-  margin: var(--space-3xs, 2px) 0 0;
+.ds-next p {
+  margin: var(--space-2xs, 4px) 0 0;
+  color: var(--text-secondary, #444);
 }
 
-/* Le seul mouvement : apparition en cascade au chargement de l'écran
-   (--i = rang). Déjà visible sans animation, rien en mouvement réduit. */
+/* Le seul mouvement : apparition en fondu au chargement de l'écran (--i =
+   rang). Rien en mouvement réduit. */
 @media (prefers-reduced-motion: no-preference) {
   .ds-rise {
-    animation: ds-rise 0.7s var(--ds-ease) backwards;
-    animation-delay: calc(var(--i, 0) * 70ms);
-  }
-  .ds-bars span {
-    animation: ds-grow 0.9s var(--ds-ease) backwards;
-    animation-delay: calc(240ms + var(--i, 0) * 50ms);
+    animation: ds-rise 0.6s var(--ds-ease) backwards;
+    animation-delay: calc(var(--i, 0) * 60ms);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1265,22 +1151,11 @@ body.preview-body {
   .ds *::before {
     transition: none !important;
   }
-  .ds-panel.is-lift:hover,
-  .ds-button:hover,
-  .ds-button:active {
-    transform: none !important;
-  }
 }
 @keyframes ds-rise {
   from {
     opacity: 0;
-    transform: translateY(10px);
-    filter: blur(4px);
-  }
-}
-@keyframes ds-grow {
-  from {
-    transform: scaleY(0.08);
+    transform: translateY(8px);
   }
 }
 
