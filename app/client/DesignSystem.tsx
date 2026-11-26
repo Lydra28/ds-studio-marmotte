@@ -306,29 +306,41 @@ function DashboardScreen({ set }: { set: TokenSet }) {
     <DSScope set={set} className="ds-screen">
       <DemoTop current="Accueil" />
       <main>
-        <div className="ds-head">
+        <div className="ds-head ds-rise" style={rank(0)}>
           <div className="ds-intro">
-            <p className="ds-kicker">Tableau de bord</p>
             <h1>Bonjour Camille</h1>
+            <p className="ds-lead">Trois tâches demandent votre attention aujourd’hui.</p>
           </div>
           <Button>Nouvelle tâche</Button>
         </div>
-        <div className="ds-stats">
+        <div className="ds-bento">
+          <section className="ds-panel is-tall is-lift ds-rise" style={rank(1)} aria-labelledby="ds-active">
+            <div className="ds-panel-head">
+              <h2 id="ds-active">Projets actifs</h2>
+              <span className="ds-trend">+2 ce mois-ci</span>
+            </div>
+            <p className="ds-figure">12</p>
+            <p className="ds-text">Dont 4 livrés avant la date prévue.</p>
+            <div className="ds-bars" aria-hidden="true">
+              {[30, 44, 40, 58, 52, 70, 64, 82].map((h, i) => (
+                <span key={i} style={{ height: `${h}%`, ...rank(i) }} />
+              ))}
+            </div>
+          </section>
           {[
-            ['Projets actifs', '12', '+2 ce mois-ci'],
             ['Tâches en retard', '3', 'Dont 1 urgente'],
             ['Satisfaction', '94 %', 'Sur 128 avis'],
-          ].map(([label, value, note]) => (
-            <article key={label} className="ds-card ds-stat">
-              <p className="ds-kicker">{label}</p>
+          ].map(([label, value, note], i) => (
+            <article key={label} className="ds-panel ds-stat is-lift ds-rise" style={rank(2 + i)}>
+              <p className="ds-label">{label}</p>
               <strong>{value}</strong>
               <p className="ds-text">{note}</p>
             </article>
           ))}
         </div>
-        <section className="ds-card ds-list" aria-label="Activité récente">
-          <div className="ds-head">
-            <h3>Activité récente</h3>
+        <section className="ds-panel ds-list ds-rise" style={rank(4)} aria-labelledby="ds-recent">
+          <div className="ds-panel-head">
+            <h2 id="ds-recent">Activité récente</h2>
             <Button variant="ghost">Tout voir</Button>
           </div>
           <ul>
@@ -343,7 +355,7 @@ function DashboardScreen({ set }: { set: TokenSet }) {
             ))}
           </ul>
         </section>
-        <div className="ds-banner">
+        <div className="ds-banner ds-rise" style={rank(5)}>
           <p>
             <strong>Une alerte demande votre attention.</strong> Le contraste du bouton secondaire est sous 4,5:1.
           </p>
@@ -360,19 +372,23 @@ function FormScreen({ set }: { set: TokenSet }) {
   return (
     <DSScope set={set} className="ds-screen">
       <DemoTop current="Profil" />
-      <main>
-        <div className="ds-intro">
-          <p className="ds-kicker">Inscription · étape 2 sur 3</p>
+      <main className="ds-narrow">
+        <div className="ds-intro ds-rise" style={rank(0)}>
           <h1>Votre espace</h1>
           <p className="ds-lead">Quelques informations pour préparer votre compte.</p>
         </div>
-        <div className="ds-progress" aria-hidden="true">
-          <span className="done" />
-          <span className="done" />
-          <span />
+        <div className="ds-steps ds-rise" style={rank(1)}>
+          <div className="ds-progress" aria-hidden="true">
+            <span className="done" />
+            <span className="done" />
+            <span />
+          </div>
+          <p className="ds-label">Étape 2 sur 3</p>
         </div>
         <form
-          className="ds-form ds-form--wide"
+          className="ds-panel ds-form ds-rise"
+          style={rank(2)}
+          aria-label="Inscription"
           onSubmit={(e) => {
             e.preventDefault();
             setSent(true);
@@ -402,7 +418,7 @@ function FormScreen({ set }: { set: TokenSet }) {
           </label>
           <div className="ds-row">
             <Button variant="secondary">Retour</Button>
-            <Button>{sent ? 'Enregistré ✓' : 'Continuer'}</Button>
+            <Button>{sent ? 'Enregistré' : 'Continuer'}</Button>
           </div>
         </form>
       </main>
@@ -415,24 +431,34 @@ function ArticleScreen({ set }: { set: TokenSet }) {
     <DSScope set={set} className="ds-screen">
       <DemoTop current="Suivi" />
       <main className="ds-article">
-        <p className="ds-kicker">Journal · 6 min de lecture</p>
-        <h1>Construire un design system qui dure</h1>
-        <p className="ds-lead">
-          Deux couches de tokens, des règles vérifiées à chaque essai, et des versions qu’on peut comparer.
-        </p>
-        <div className="ds-cover" aria-hidden="true" />
-        <p>
-          Les primitives décrivent ce qui existe : une gamme de couleurs, une échelle d’espacements. Les tokens
-          sémantiques disent à quoi elles servent : le fond d’une carte, le texte d’un bouton.
-        </p>
-        <h3>Nommer par l’usage</h3>
-        <p>Un token nommé par l’usage survit à un changement de marque. On change la valeur, pas les écrans.</p>
-        <blockquote>« Le DS n’est pas une palette, c’est un ensemble de décisions. »</blockquote>
-        <p>
-          Chaque version acceptée devient une référence : on la transfère dans Figma, et le code la reçoit par une
-          pull request.
-        </p>
-        <aside className="ds-cta">
+        <header className="ds-intro ds-rise" style={rank(0)}>
+          <h1>Construire un design system qui dure</h1>
+          <p className="ds-lead">
+            Deux couches de tokens, des règles vérifiées à chaque essai, et des versions qu’on peut comparer.
+          </p>
+          <p className="ds-label">Journal · 6 min de lecture</p>
+        </header>
+        {/* Couverture : la palette du projet, en aplats. */}
+        <div className="ds-cover ds-rise" style={rank(1)} aria-hidden="true">
+          <span />
+          <span />
+          <span />
+          <span />
+        </div>
+        <div className="ds-prose ds-rise" style={rank(2)}>
+          <p>
+            Les primitives décrivent ce qui existe : une gamme de couleurs, une échelle d’espacements. Les tokens
+            sémantiques disent à quoi elles servent : le fond d’une carte, le texte d’un bouton.
+          </p>
+          <h2>Nommer par l’usage</h2>
+          <p>Un token nommé par l’usage survit à un changement de marque. On change la valeur, pas les écrans.</p>
+          <blockquote>« Le DS n’est pas une palette, c’est un ensemble de décisions. »</blockquote>
+          <p>
+            Chaque version acceptée devient une référence : on la transfère dans Figma, et le code la reçoit par une
+            pull request.
+          </p>
+        </div>
+        <aside className="ds-cta ds-rise" style={rank(3)}>
           <div>
             <strong>Prêt à essayer ?</strong>
             <p>Changer une couleur dans l’atelier et regarder cette page suivre.</p>

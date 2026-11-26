@@ -34,22 +34,23 @@ textarea {
   font: inherit;
   color: inherit;
 }
-button {
+/* Boutons de l'atelier : bornés hors preview (la preview garde les tokens du projet). */
+:where(body:not(.preview-body)) button {
   border: 1px solid var(--c-line);
   background: var(--c-panel);
   border-radius: 8px;
   padding: 6px 12px;
   cursor: pointer;
 }
-button:hover:not(:disabled) {
+:where(body:not(.preview-body)) button:hover:not(:disabled) {
   border-color: var(--c-muted);
 }
-button.primary {
+:where(body:not(.preview-body)) button.primary {
   background: var(--c-accent);
   border-color: var(--c-accent);
   color: #fff;
 }
-button:disabled {
+:where(body:not(.preview-body)) button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -756,7 +757,6 @@ body.preview-body {
   font-size: var(--font-size-heading, 28px);
   letter-spacing: -0.02em;
 }
-.ds-kicker,
 .ds-label {
   margin: 0;
   font-size: var(--font-size-label, 14px);
@@ -879,7 +879,6 @@ body.preview-body {
 }
 
 /* Surfaces : relief doux, filet clair, rayon des cartes du projet. */
-.ds-card,
 .ds-panel {
   display: grid;
   gap: var(--space-sm, 12px);
@@ -893,28 +892,18 @@ body.preview-body {
     transform 0.35s var(--ds-ease),
     box-shadow 0.35s var(--ds-ease);
 }
-.ds-card:hover,
 .ds-panel.is-lift:hover {
   transform: translateY(-2px);
   box-shadow: var(--ds-shadow-up);
 }
-.ds-card .ds-button,
 .ds-panel .ds-button {
   justify-self: start;
-}
-.ds-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: var(--space-md, 16px);
 }
 /* Grille en mosaïque : un grand panneau, des panneaux d'appui, pas de cartes égales. */
 .ds-bento {
   display: grid;
   grid-template-columns: 1.35fr 1fr;
   gap: var(--space-md, 16px);
-}
-.ds-bento > .is-wide {
-  grid-column: 1 / -1;
 }
 .ds-bento > .is-tall {
   grid-row: span 2;
@@ -945,7 +934,7 @@ body.preview-body {
 }
 .ds-bars span {
   flex: 1;
-  border-radius: var(--radius-control, 8px) var(--radius-control, 8px) var(--space-3xs, 2px) var(--space-3xs, 2px);
+  border-radius: var(--radius-control, 8px) var(--radius-control, 8px) 0 0;
   background: var(--bg-brand-subtle, #eee);
   transform-origin: bottom;
 }
@@ -1032,14 +1021,9 @@ body.preview-body {
   justify-content: space-between;
   align-items: flex-end;
 }
-.ds-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--space-md, 16px);
-}
 .ds-stat strong {
   font-family: var(--font-family-heading, var(--font-family-base, system-ui));
-  font-size: var(--font-size-heading, 28px);
+  font-size: var(--font-size-display, 48px);
   line-height: 1;
   font-weight: var(--font-weight-heading, 700);
   letter-spacing: -0.03em;
@@ -1113,10 +1097,16 @@ body.preview-body {
 }
 .ds-intro {
   display: grid;
+  gap: var(--space-sm, 12px);
+}
+.ds-screen main.ds-narrow {
+  max-width: 720px;
+}
+.ds-steps {
+  display: grid;
   gap: var(--space-xs, 8px);
 }
 .ds-progress {
-  max-width: 640px;
   display: flex;
   gap: var(--space-xs, 8px);
 }
@@ -1128,9 +1118,6 @@ body.preview-body {
 }
 .ds-progress .done {
   background: var(--bg-brand, #333);
-}
-.ds-form--wide {
-  max-width: 640px;
 }
 .ds-fields {
   display: grid;
@@ -1191,29 +1178,66 @@ body.preview-body {
   width: 18px;
   height: 18px;
 }
-.ds-article {
-  max-width: 720px !important;
+.ds-screen main.ds-article {
+  max-width: 760px;
 }
-.ds-article > p:not(.ds-kicker):not(.ds-lead) {
-  margin: 0;
-}
+/* Couverture : la palette du projet en aplats, rien d'inventé. */
 .ds-cover {
-  height: 240px;
-  border-radius: var(--radius-card, 12px);
-  background:
-    radial-gradient(circle at 30% 40%, var(--bg-brand, #333) 0 18%, transparent 19%),
-    linear-gradient(135deg, var(--bg-brand-subtle, #eee), var(--bg-surface-hover, #ddd));
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: var(--space-xs, 8px);
+  height: 260px;
 }
-.ds-article blockquote {
+.ds-cover span {
+  border-radius: var(--radius-card, 12px);
+  background: var(--bg-brand-subtle, #eee);
+}
+.ds-cover span:nth-child(1) {
+  grid-row: span 2;
+  background: var(--bg-brand, #333);
+}
+.ds-cover span:nth-child(2) {
+  grid-column: span 2;
+  background: var(--bg-surface-hover, #ddd);
+}
+.ds-cover span:nth-child(4) {
+  background: var(--bg-surface, #fff);
+  box-shadow: inset 0 0 0 var(--border-width-thin, 1px) var(--ds-line);
+}
+.ds-prose {
+  display: grid;
+  gap: var(--space-md, 16px);
+  max-width: 65ch;
+}
+.ds-prose p {
   margin: 0;
-  padding: var(--space-sm, 12px) var(--space-lg, 24px);
-  border-left: var(--space-2xs, 4px) solid var(--bg-brand, #333);
+}
+.ds-prose h2 {
+  margin-top: var(--space-md, 16px);
+  font-size: var(--font-size-heading, 28px);
+}
+/* Citation : la typo de titre en grand, un trait de marque au-dessus, pas de bordure gauche. */
+.ds-prose blockquote {
+  margin: var(--space-md, 16px) 0;
+  display: grid;
+  gap: var(--space-sm, 12px);
   font-family: var(--font-family-heading, var(--font-family-base, system-ui));
-  font-size: var(--font-size-title, 20px);
+  font-size: var(--font-size-heading, 28px);
+  font-weight: var(--font-weight-heading, 700);
   line-height: var(--font-line-height-heading, 120%);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
   color: var(--text-primary, #111);
 }
+.ds-prose blockquote::before {
+  content: '';
+  width: 40px;
+  height: var(--border-width-medium, 2px);
+  background: var(--bg-brand, #333);
+}
 .ds-cta {
+  box-shadow: 0 24px 48px -28px color-mix(in srgb, var(--bg-brand, #333) 90%, transparent);
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-md, 16px);
@@ -1238,6 +1262,17 @@ body.preview-body {
   .ds-bars span {
     animation: ds-grow 0.9s var(--ds-ease) backwards;
     animation-delay: calc(240ms + var(--i, 0) * 50ms);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ds *,
+  .ds *::before {
+    transition: none !important;
+  }
+  .ds-panel.is-lift:hover,
+  .ds-button:hover,
+  .ds-button:active {
+    transform: none !important;
   }
 }
 @keyframes ds-rise {
@@ -1368,7 +1403,7 @@ body.preview-body {
   background: #fff;
   color-scheme: light;
 }
-button.primary,
+:where(body:not(.preview-body)) button.primary,
 .devices button[aria-pressed='true'] {
   color: var(--c-on-accent);
 }
