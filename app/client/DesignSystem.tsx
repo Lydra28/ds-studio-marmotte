@@ -101,97 +101,108 @@ export function Input({
   );
 }
 
-export function Card({
-  kicker,
-  title,
-  children,
-  action,
-}: {
-  kicker: string;
-  title: string;
-  children: ReactNode;
-  action?: ReactNode;
-}) {
-  return (
-    <article className="ds-card">
-      <p className="ds-kicker">{kicker}</p>
-      <h3>{title}</h3>
-      <p className="ds-text">{children}</p>
-      {action}
-    </article>
-  );
-}
+// Rang d'un bloc dans l'apparition en cascade (styles.css, .ds-rise).
+const rank = (i: number) => ({ '--i': i }) as CSSProperties;
 
-// Écran générique de la preview : textes, actions, cartes, saisie.
+// Écran Composants de la preview : chaque composant du DS dans une mise en
+// page de produit (parti pris « calme et précis », 2026-11-26).
 export function PreviewScreen({ set }: { set: TokenSet }) {
   const [sent, setSent] = useState(false);
+  const week = [38, 52, 46, 64, 58, 76, 88];
   return (
     <DSScope set={set} className="ds-screen">
-      <header className="ds-top">
-        <strong>Projet</strong>
-        <nav aria-label="Navigation de démonstration">
-          <a href="#accueil" aria-current="page">
-            Accueil
-          </a>
-          <a href="#suivi">Suivi</a>
-          <a href="#profil">Profil</a>
-        </nav>
-      </header>
+      <DemoTop current="Accueil" />
       <main>
-        <p className="ds-kicker">Aperçu appliqué</p>
-        <h1>Les tokens en situation.</h1>
-        <p className="ds-lead">
-          Chaque valeur essayée dans l’atelier s’applique ici avant d’être
-          enregistrée.
-        </p>
-        <div className="ds-row">
-          <Button>Action principale</Button>
-          <Button variant="secondary">Secondaire</Button>
-          <Button variant="ghost">Discrète</Button>
-          <Button disabled>Indisponible</Button>
-        </div>
-        <div className="ds-grid">
-          <Card
-            kicker="Statut"
-            title="Tout est sous contrôle"
-            action={<Button variant="secondary">Voir le détail</Button>}
-          >
-            Une carte regroupe une information et son action.
-          </Card>
-          <Card
-            kicker="Historique"
-            title="Trois changements cette semaine"
-            action={<Button variant="ghost">Ouvrir</Button>}
-          >
-            Le texte secondaire doit rester lisible sur la surface.
-          </Card>
-        </div>
-        <form
-          className="ds-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setSent(true);
-          }}
-        >
-          <Input label="Nom" placeholder="Camille" />
-          <Input
-            label="E-mail"
-            type="email"
-            placeholder="camille@"
-            error="Ajouter une adresse complète pour recevoir les alertes."
-          />
-          <Input label="Champ désactivé" placeholder="Non disponible" disabled />
-          <Button>{sent ? 'Enregistré ✓' : 'Enregistrer'}</Button>
-        </form>
-        <section className="ds-states" aria-label="États du bouton">
-          <p className="ds-kicker">Button · State</p>
+        <section className="ds-hero ds-rise" style={rank(0)}>
+          <h1>Les tokens en situation.</h1>
+          <p className="ds-lead">
+            Chaque valeur essayée dans l’atelier s’applique ici avant d’être enregistrée.
+          </p>
           <div className="ds-row">
-            <Button>default</Button>
-            <Button state="hover">hover</Button>
-            <Button state="focus">focus</Button>
-            <Button disabled>disabled</Button>
+            <Button>Action principale</Button>
+            <Button variant="secondary">Secondaire</Button>
+            <Button variant="ghost">Discrète</Button>
+            <Button disabled>Indisponible</Button>
           </div>
         </section>
+        <div className="ds-bento">
+          <section className="ds-panel is-lift ds-rise" style={rank(1)} aria-labelledby="ds-progress">
+            <div className="ds-panel-head">
+              <h2 id="ds-progress">Avancement</h2>
+              <span className="ds-trend">+12 % en 7 jours</span>
+            </div>
+            <p className="ds-figure">
+              86<small> %</small>
+            </p>
+            <p className="ds-text">des composants documentés et vérifiés.</p>
+            <div className="ds-bars" aria-hidden="true">
+              {week.map((h, i) => (
+                <span key={i} style={{ height: `${h}%`, ...rank(i) }} />
+              ))}
+            </div>
+            <div className="ds-axis" aria-hidden="true">
+              {['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'].map((d) => (
+                <span key={d}>{d}</span>
+              ))}
+            </div>
+          </section>
+          <section className="ds-panel ds-list is-lift ds-rise" style={rank(2)} aria-labelledby="ds-activity">
+            <div className="ds-panel-head">
+              <h2 id="ds-activity">Activité</h2>
+              <Button variant="ghost">Tout voir</Button>
+            </div>
+            <ul>
+              {activity.map(([title, when, tone, status]) => (
+                <li key={title}>
+                  <span>
+                    <strong>{title}</strong>
+                    <small>{when}</small>
+                  </span>
+                  <span className={`ds-badge ${tone}`}>{status}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+          <form
+            className="ds-panel ds-form ds-rise"
+            style={rank(3)}
+            aria-labelledby="ds-profile"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setSent(true);
+            }}
+          >
+            <h2 id="ds-profile">Profil</h2>
+            <Input label="Nom" placeholder="Camille" />
+            <Input
+              label="E-mail"
+              type="email"
+              placeholder="camille@"
+              error="Ajouter une adresse complète pour recevoir les alertes."
+            />
+            <Input label="Champ désactivé" placeholder="Non disponible" disabled />
+            <Button>{sent ? 'Enregistré' : 'Enregistrer'}</Button>
+          </form>
+          <section className="ds-panel ds-states ds-rise" style={rank(4)} aria-labelledby="ds-button-states">
+            <h2 id="ds-button-states">États du bouton</h2>
+            <div className="ds-row">
+              <Button>default</Button>
+              <Button state="hover">hover</Button>
+              <Button state="focus">focus</Button>
+              <Button disabled>disabled</Button>
+            </div>
+            <p className="ds-text">
+              Survol, focus clavier et désactivé suivent les tokens de marque, de focus et d’interaction.
+            </p>
+            <h2>Statuts</h2>
+            <div className="ds-row">
+              <span className="ds-badge ok">Validé</span>
+              <span className="ds-badge alert">À revoir</span>
+              <span className="ds-badge">En cours</span>
+              <span className="ds-trend">+12 %</span>
+            </div>
+          </section>
+        </div>
       </main>
     </DSScope>
   );
@@ -271,7 +282,7 @@ export function ScreenPicker({
 function DemoTop({ current }: { current: string }) {
   return (
     <header className="ds-top">
-      <strong>Projet</strong>
+      <strong className="ds-brand">Projet</strong>
       <nav aria-label="Navigation de démonstration">
         {['Accueil', 'Suivi', 'Profil'].map((n) => (
           <a key={n} href={`#${n.toLowerCase()}`} aria-current={n === current ? 'page' : undefined}>

@@ -54,8 +54,10 @@ body.preview-body {
 :where(body:not(.preview-body)) button:active:not(:disabled) {
   transform: translateY(1px);
 }
-/* L'action principale : lime plein, coins pixel, la seule de l'écran. */
-button.primary,
+/* L'action principale : lime plein, coins pixel, la seule de l'écran. Bornée à
+   l'atelier : sans :where, le lime, l'escalier et l'ombre passaient sur les
+   boutons « primary » de la preview (contour vert, 2026-11-26). */
+:where(body:not(.preview-body)) button.primary,
 .draft-bar button.primary {
   background: var(--c-accent);
   border-color: var(--c-accent);

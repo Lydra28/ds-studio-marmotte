@@ -630,96 +630,222 @@ dialog.diff td {
   color: var(--c-muted);
   margin: 20px 0 8px;
 }
-/* ---------- Composants du DS : uniquement des variables issues des tokens ---------- */
+/* ---------- Composants du DS : uniquement des variables issues des tokens ----------
+   Parti pris des écrans d'exemple (2026-11-26, demande de Romain) : « calme et
+   précis ». Grande typo, gros chiffres tabulaires, surfaces en relief doux,
+   barre en verre sur un halo de la marque, un seul mouvement : l'apparition en
+   cascade. Couleurs, rayons, espacements et typos viennent tous des tokens ;
+   ombres, verre et halo en sont dérivés (color-mix), jamais une couleur en dur. */
 body.preview-body {
   margin: 0;
 }
 .ds {
+  --ds-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ds-line: color-mix(in srgb, var(--border-default, #ddd) 70%, transparent);
+  --ds-shadow:
+    0 1px 2px color-mix(in srgb, var(--text-primary, #111) 5%, transparent),
+    0 18px 40px -24px color-mix(in srgb, var(--text-primary, #111) 30%, transparent);
+  --ds-shadow-up:
+    0 1px 2px color-mix(in srgb, var(--text-primary, #111) 6%, transparent),
+    0 24px 48px -24px color-mix(in srgb, var(--text-primary, #111) 38%, transparent);
+  --ds-glass: color-mix(in srgb, var(--bg-surface, #fff) 70%, transparent);
   font-family: var(--font-family-base, system-ui);
   font-size: var(--font-size-body, 16px);
   line-height: var(--font-line-height-body, 150%);
   color: var(--text-primary, #111);
   background: var(--bg-canvas, #fff);
+  -webkit-font-smoothing: antialiased;
+}
+.ds ::selection {
+  background: var(--bg-brand, #333);
+  color: var(--text-on-brand, #fff);
+}
+.ds :focus-visible {
+  outline: var(--border-width-medium, 2px) solid var(--border-focus, #333);
+  outline-offset: 2px;
 }
 .ds-screen {
   min-height: 100vh;
+  background:
+    radial-gradient(70% 420px at 85% -80px, color-mix(in srgb, var(--bg-brand, #333) 16%, transparent), transparent),
+    var(--bg-canvas, #fff);
 }
 .ds-screen main {
-  padding: var(--space-xl, 32px) var(--space-lg, 24px);
-  max-width: 960px;
+  padding: var(--space-2xl, 48px) var(--space-lg, 24px) var(--space-3xl, 64px);
+  max-width: 1040px;
   margin: 0 auto;
   display: grid;
-  gap: var(--space-lg, 24px);
+  gap: var(--space-xl, 32px);
 }
+
+/* Barre du haut : verre sur le halo, collée en haut au défilement. */
 .ds-top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-md, 16px);
   justify-content: space-between;
   align-items: center;
-  padding: var(--space-md, 16px) var(--space-lg, 24px);
-  background: var(--bg-surface, #fff);
-  border-bottom: var(--border-width-thin, 1px) solid var(--border-default, #ddd);
+  padding: var(--space-sm, 12px) var(--space-lg, 24px);
+  background: var(--ds-glass);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  backdrop-filter: blur(18px) saturate(1.4);
+  border-bottom: var(--border-width-thin, 1px) solid var(--ds-line);
+}
+.ds-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs, 8px);
+  font-weight: var(--font-weight-heading, 700);
+  letter-spacing: -0.01em;
+}
+.ds-brand::before {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-control, 8px);
+  background: var(--bg-brand, #333);
 }
 .ds-top nav {
   display: flex;
-  gap: var(--space-md, 16px);
+  gap: var(--space-3xs, 2px);
+  padding: var(--space-3xs, 2px);
+  border-radius: var(--radius-full, 999px);
+  background: color-mix(in srgb, var(--bg-surface-hover, #eee) 70%, transparent);
 }
 .ds-top a {
+  padding: var(--space-2xs, 4px) var(--space-sm, 12px);
+  border-radius: var(--radius-full, 999px);
   color: var(--text-secondary, #444);
   text-decoration: none;
   font-size: var(--font-size-label, 14px);
+  transition: color 0.2s var(--ds-ease), background-color 0.2s var(--ds-ease);
+}
+.ds-top a:hover {
+  color: var(--text-primary, #111);
 }
 .ds-top a[aria-current='page'] {
-  color: var(--text-brand, #333);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary, #111);
   font-weight: var(--font-weight-heading, 700);
+  box-shadow: var(--ds-shadow);
+}
+
+/* Titres : la typo du projet en grand, resserrée, équilibrée. */
+.ds h1,
+.ds h2,
+.ds h3 {
+  font-family: var(--font-family-heading, var(--font-family-base, system-ui));
+  font-weight: var(--font-weight-heading, 700);
+  line-height: var(--font-line-height-heading, 120%);
+  margin: 0;
+  text-wrap: balance;
 }
 .ds h1 {
   font-size: var(--font-size-display, 48px);
-  line-height: var(--font-line-height-heading, 120%);
-  font-weight: var(--font-weight-heading, 700);
-  margin: 0;
+  letter-spacing: -0.03em;
+  max-width: 16ch;
+}
+.ds h2 {
+  font-size: var(--font-size-title, 20px);
+  letter-spacing: -0.01em;
 }
 .ds h3 {
   font-size: var(--font-size-heading, 28px);
-  line-height: var(--font-line-height-heading, 120%);
-  font-weight: var(--font-weight-heading, 700);
-  margin: 0;
+  letter-spacing: -0.02em;
 }
-.ds-kicker {
+.ds-kicker,
+.ds-label {
   margin: 0;
-  font-size: var(--font-size-caption, 12px);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-size: var(--font-size-label, 14px);
   color: var(--text-muted, #666);
 }
 .ds-lead,
 .ds-text {
   margin: 0;
   color: var(--text-secondary, #444);
+  max-width: 60ch;
+}
+.ds-lead {
+  font-size: var(--font-size-title, 20px);
+  line-height: var(--font-line-height-body, 150%);
 }
 .ds-row {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-sm, 12px);
 }
+.ds-hero {
+  display: grid;
+  gap: var(--space-md, 16px);
+  padding-bottom: var(--space-md, 16px);
+}
+.ds-hero .ds-row {
+  margin-top: var(--space-xs, 8px);
+}
+
+/* Gros chiffres : tabulaires, serrés, lisibles d'un coup d'œil. */
+.ds-figure {
+  margin: 0;
+  font-family: var(--font-family-heading, var(--font-family-base, system-ui));
+  font-size: min(calc(var(--font-size-display, 48px) * 1.5), 6rem);
+  font-weight: var(--font-weight-heading, 700);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary, #111);
+}
+.ds-figure small {
+  font-size: 0.45em;
+  letter-spacing: -0.01em;
+  color: var(--text-secondary, #444);
+}
+.ds-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs, 4px);
+  width: fit-content;
+  padding: var(--space-3xs, 2px) var(--space-xs, 8px);
+  border-radius: var(--radius-full, 999px);
+  background: var(--bg-brand-subtle, #eee);
+  color: var(--text-brand, #333);
+  font-size: var(--font-size-caption, 12px);
+  font-weight: var(--font-weight-heading, 700);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Boutons. */
 .ds-button {
   font: inherit;
   font-size: var(--font-size-label, 14px);
   font-weight: var(--font-weight-heading, 700);
   min-height: 44px;
-  padding: var(--space-sm, 12px) var(--space-md, 16px);
+  padding: var(--space-sm, 12px) var(--space-lg, 24px);
   border-radius: var(--radius-control, 8px);
   border: var(--border-width-thin, 1px) solid transparent;
   cursor: pointer;
+  transition:
+    background-color 0.2s var(--ds-ease),
+    border-color 0.2s var(--ds-ease),
+    box-shadow 0.25s var(--ds-ease),
+    transform 0.25s var(--ds-ease);
 }
 .ds-button.primary {
+  /* Jamais la bordure de l'atelier (button.primary plus haut). */
+  border-color: transparent;
   background: var(--bg-brand, #333);
   color: var(--text-on-brand, #fff);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text-on-brand, #fff) 18%, transparent),
+    0 8px 20px -10px color-mix(in srgb, var(--bg-brand, #333) 80%, transparent);
 }
 .ds-button.primary:hover:not(:disabled),
 .ds-button.primary.is-hover {
   background: var(--bg-brand-hover, #111);
+  transform: translateY(-1px);
 }
 .ds-button.secondary {
   background: var(--bg-surface, #fff);
@@ -738,6 +864,9 @@ body.preview-body {
 .ds-button.ghost.is-hover {
   background: var(--bg-brand-subtle, #eee);
 }
+.ds-button:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
 .ds-button:focus-visible,
 .ds-button.is-focus {
   outline: var(--border-width-medium, 2px) solid var(--border-focus, #333);
@@ -746,32 +875,103 @@ body.preview-body {
 .ds-button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Surfaces : relief doux, filet clair, rayon des cartes du projet. */
+.ds-card,
+.ds-panel {
+  display: grid;
+  gap: var(--space-sm, 12px);
+  align-content: start;
+  padding: var(--space-lg, 24px);
+  background: var(--bg-surface, #fff);
+  border: var(--border-width-thin, 1px) solid var(--ds-line);
+  border-radius: var(--radius-card, 12px);
+  box-shadow: var(--ds-shadow);
+  transition:
+    transform 0.35s var(--ds-ease),
+    box-shadow 0.35s var(--ds-ease);
+}
+.ds-card:hover,
+.ds-panel.is-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--ds-shadow-up);
+}
+.ds-card .ds-button,
+.ds-panel .ds-button {
+  justify-self: start;
 }
 .ds-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: var(--space-md, 16px);
 }
-.ds-card {
+/* Grille en mosaïque : un grand panneau, des panneaux d'appui, pas de cartes égales. */
+.ds-bento {
   display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: var(--space-md, 16px);
+}
+.ds-bento > .is-wide {
+  grid-column: 1 / -1;
+}
+.ds-bento > .is-tall {
+  grid-row: span 2;
+}
+@media (max-width: 720px) {
+  .ds-bento {
+    grid-template-columns: 1fr;
+  }
+  .ds-bento > .is-tall {
+    grid-row: auto;
+  }
+}
+.ds-panel-head {
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-sm, 12px);
-  align-content: start;
-  padding: var(--space-lg, 24px);
-  background: var(--bg-surface, #fff);
-  border: var(--border-width-thin, 1px) solid var(--border-default, #ddd);
-  border-radius: var(--radius-card, 12px);
+  justify-content: space-between;
+  align-items: center;
 }
-.ds-card .ds-button {
-  justify-self: start;
+
+/* Barres de la semaine : la dernière porte la marque. */
+.ds-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-xs, 8px);
+  height: 160px;
+  margin-top: var(--space-sm, 12px);
 }
+.ds-bars span {
+  flex: 1;
+  border-radius: var(--radius-control, 8px) var(--radius-control, 8px) var(--space-3xs, 2px) var(--space-3xs, 2px);
+  background: var(--bg-brand-subtle, #eee);
+  transform-origin: bottom;
+}
+.ds-bars span:last-child {
+  background: var(--bg-brand, #333);
+}
+.ds-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--font-size-caption, 12px);
+  color: var(--text-muted, #666);
+}
+
+/* Formulaire. */
 .ds-form {
   display: grid;
   gap: var(--space-md, 16px);
   padding: var(--space-lg, 24px);
   background: var(--bg-surface, #fff);
   border-radius: var(--radius-card, 12px);
-  border: var(--border-width-thin, 1px) solid var(--border-default, #ddd);
+  border: var(--border-width-thin, 1px) solid var(--ds-line);
+  box-shadow: var(--ds-shadow);
   max-width: 480px;
+}
+.ds-panel.ds-form {
+  max-width: none;
 }
 .ds-form .ds-button {
   justify-self: start;
@@ -789,17 +989,24 @@ body.preview-body {
   font-size: var(--font-size-body, 16px);
   min-height: 44px;
   padding: var(--space-xs, 8px) var(--space-sm, 12px);
-  background: var(--bg-surface, #fff);
+  background: var(--bg-canvas, #fff);
   color: var(--text-primary, #111);
   border: var(--border-width-thin, 1px) solid var(--border-interactive, #888);
   border-radius: var(--radius-control, 8px);
+  transition:
+    border-color 0.2s var(--ds-ease),
+    box-shadow 0.2s var(--ds-ease);
 }
 .ds-field input::placeholder {
   color: var(--text-muted, #666);
 }
+.ds-field input:hover:not(:disabled) {
+  border-color: var(--text-secondary, #444);
+}
 .ds-field input:focus-visible {
-  outline: var(--border-width-medium, 2px) solid var(--border-focus, #333);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--border-focus, #333);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--border-focus, #333) 28%, transparent);
 }
 .ds-field input:disabled {
   opacity: 0.5;
@@ -817,7 +1024,7 @@ body.preview-body {
   gap: var(--space-sm, 12px);
 }
 
-/* Écrans d'exemple (tableau de bord, formulaire, article) : tokens sémantiques seulement. */
+/* Écrans d'exemple (tableau de bord, formulaire, article). */
 .ds-head {
   display: flex;
   flex-wrap: wrap;
@@ -833,8 +1040,10 @@ body.preview-body {
 .ds-stat strong {
   font-family: var(--font-family-heading, var(--font-family-base, system-ui));
   font-size: var(--font-size-heading, 28px);
-  line-height: var(--font-line-height-heading, 120%);
+  line-height: 1;
   font-weight: var(--font-weight-heading, 700);
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
   color: var(--text-primary, #111);
 }
 .ds-list ul {
@@ -848,7 +1057,10 @@ body.preview-body {
   justify-content: space-between;
   align-items: center;
   padding: var(--space-sm, 12px) 0;
-  border-top: var(--border-width-thin, 1px) solid var(--border-default, #ddd);
+  border-top: var(--border-width-thin, 1px) solid var(--ds-line);
+}
+.ds-list li:first-child {
+  border-top: 0;
 }
 .ds-list li > span:first-child {
   display: grid;
@@ -860,12 +1072,22 @@ body.preview-body {
 }
 .ds-badge {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs, 4px);
   font-size: var(--font-size-caption, 12px);
   font-weight: var(--font-weight-heading, 700);
   padding: var(--space-3xs, 2px) var(--space-xs, 8px);
   border-radius: var(--radius-full, 999px);
   background: var(--bg-surface-hover, #eee);
   color: var(--text-secondary, #444);
+}
+.ds-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full, 999px);
+  background: currentColor;
 }
 .ds-badge.ok {
   background: var(--bg-brand-subtle, #eee);
@@ -936,10 +1158,14 @@ body.preview-body {
   border: var(--border-width-thin, 1px) solid var(--border-interactive, #888);
   border-radius: var(--radius-control, 8px);
   cursor: pointer;
+  transition:
+    border-color 0.2s var(--ds-ease),
+    background-color 0.2s var(--ds-ease);
 }
 .ds-choices label.is-selected {
-  border: var(--border-width-medium, 2px) solid var(--bg-brand, #333);
+  border-color: var(--bg-brand, #333);
   background: var(--bg-brand-subtle, #eee);
+  box-shadow: inset 0 0 0 1px var(--bg-brand, #333);
 }
 .ds-choices input {
   position: absolute;
@@ -1000,6 +1226,31 @@ body.preview-body {
 }
 .ds-cta p {
   margin: var(--space-3xs, 2px) 0 0;
+}
+
+/* Le seul mouvement : apparition en cascade au chargement de l'écran
+   (--i = rang). Déjà visible sans animation, rien en mouvement réduit. */
+@media (prefers-reduced-motion: no-preference) {
+  .ds-rise {
+    animation: ds-rise 0.7s var(--ds-ease) backwards;
+    animation-delay: calc(var(--i, 0) * 70ms);
+  }
+  .ds-bars span {
+    animation: ds-grow 0.9s var(--ds-ease) backwards;
+    animation-delay: calc(240ms + var(--i, 0) * 50ms);
+  }
+}
+@keyframes ds-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(4px);
+  }
+}
+@keyframes ds-grow {
+  from {
+    transform: scaleY(0.08);
+  }
 }
 
 /* Ajout et retrait de tokens (brouillon). */
@@ -1547,11 +1798,6 @@ dialog.diff::backdrop,
   right: 380px;
 }
 
-/* Titres de la preview : famille de titre si le jeu en définit une. */
-.ds h1,
-.ds h3 {
-  font-family: var(--font-family-heading, var(--font-family-base, system-ui));
-}
 
 /* Mur des DA (direction C) */
 .wall {
