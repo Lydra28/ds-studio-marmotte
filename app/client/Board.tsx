@@ -14,6 +14,10 @@ import { componentName, propNames, type ComponentDoc } from '../shared/component
 import Nomenclature from './Nomenclature.js';
 import { RampGenerator } from './RampGenerator.js';
 
+// N éléments à pas régulier (toutes les gammes représentées dans la bande).
+const sample = <T,>(list: T[], n: number) =>
+  list.length <= n ? list : Array.from({ length: n }, (_, i) => list[Math.floor((i * list.length) / n)]);
+
 type Edit = (key: string, mode: string, value: TokenValue) => void;
 type Add = (key: string, token: Token) => void;
 interface BoardProps {
@@ -83,8 +87,7 @@ function Fold({
         )}
         {count !== undefined && (
           <span className="fold-count">
-            {count}
-            <small>{unit}</small>
+            {count} <small>{unit}</small>
           </span>
         )}
       </div>
@@ -489,9 +492,11 @@ export default function Board({
       drafts: id === 'h-components' ? componentDrafts.size : keys.filter(isDraft).length,
       count: keysOf[id] ? keys.length : undefined,
       unit: id === 'h-components' ? 'fiches' : 'tokens',
-      colors: id === 'h-colors' || id === 'h-tokens'
-        ? keys.filter((k) => set.tokens[k]?.$type === 'color').map((k) => String(resolve(set, k)))
-        : [],
+      // Bande : seulement repliée, 16 couleurs au plus prises à pas régulier.
+      colors:
+        folded.has(id) && (id === 'h-colors' || id === 'h-tokens')
+          ? sample(keys.filter((k) => set.tokens[k]?.$type === 'color'), 16).map((k) => String(resolve(set, k)))
+          : [],
     };
   };
 
