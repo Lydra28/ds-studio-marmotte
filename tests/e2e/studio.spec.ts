@@ -462,13 +462,20 @@ test('boucle : écart signalé, correction essayée, diff validé, preview à jo
 test('écarts : le compteur du haut ouvre l’onglet Corrections, « Tout corriger » met tout en brouillon', async ({ page }) => {
   await page.getByLabel('space/sm', { exact: true }).fill('15');
   await page.getByLabel('space/md', { exact: true }).fill('23');
+  const steps = page.getByRole('navigation', { name: 'Étapes du projet' });
+  await expect(steps.getByRole('listitem')).toHaveText([/Mur des DA/, /Design system/, /Corrections\s*2/, /Versions/]);
   await page.getByRole('button', { name: '2 écart(s) · Corrections' }).click();
-  await expect(page.locator('#corrections')).toBeInViewport();
+  await expect(steps.getByRole('button', { name: 'Corrections', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('.corrections-total strong')).toHaveText('2');
+  const checked = page.getByRole('list', { name: 'Règles vérifiées' }).getByRole('listitem');
+  await expect(checked).toHaveCount(4);
+  await expect(checked.first()).toContainText('2 écart(s)');
   await expect(page.locator('.corrections-group h3')).toHaveText('Espacements en multiples de 4');
   await page.getByRole('button', { name: 'Tout corriger (2)' }).click();
   await expect(page.getByRole('button', { name: /écart\(s\) · Corrections/ })).toHaveCount(0);
   await expect(page.locator('.corrections-total strong')).toHaveText('0');
+  await expect(page.getByText('Aucun écart sur 4 règles.')).toBeVisible();
+  await expect(checked.filter({ hasText: 'conforme' })).toHaveCount(4);
   await page.getByRole('navigation', { name: 'Étapes du projet' }).getByRole('button', { name: 'Design system', exact: true }).click();
   await expect(page.getByLabel('space/sm', { exact: true })).toHaveValue('16');
   await expect(page.getByLabel('space/md', { exact: true })).toHaveValue('24');

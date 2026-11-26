@@ -244,18 +244,24 @@ export function Corrections({
           const n = findings.filter((f) => f.rule === r.id).length;
           return (
             <li key={r.id} className={n ? 'is-warn' : 'is-ok'}>
-              <span className="corrections-count">{n || '✓'}</span>
+              <span className="corrections-count" aria-hidden="true">
+                {n || '✓'}
+              </span>
               {r.label}
+              <span className="sr-only">{n ? ` : ${n} écart(s)` : ' : conforme'}</span>
             </li>
           );
         })}
       </ul>
-      {rules
-        .map((r) => [r, findings.filter((f) => f.rule === r.id)] as const)
-        .filter(([, list]) => list.length > 0)
-        .map(([r, list]) => (
-          <div key={r.id} className="corrections-group">
-            <h3>{r.label}</h3>
+      {[
+        ...rules.map((r) => [r.id, r.label, findings.filter((f) => f.rule === r.id)] as const),
+        // Écart d'une règle inconnue : compté dans le total, donc listé aussi.
+        ['autres', 'Autres écarts', findings.filter((f) => !rules.some((r) => r.id === f.rule))] as const,
+      ]
+        .filter(([, , list]) => list.length > 0)
+        .map(([id, label, list]) => (
+          <div key={id} className="corrections-group">
+            <h3>{label}</h3>
             <ul>
               {list.map((f, i) => (
                 <li key={`${f.rule}-${f.key}-${f.mode}-${i}`}>
@@ -265,7 +271,9 @@ export function Corrections({
                     {f.message}
                   </p>
                   {f.fix ? (
-                    <button onClick={() => onFix(f)}>Essayer {f.fixLabel}</button>
+                    <button onClick={() => onFix(f)} aria-label={`Essayer ${f.fixLabel} pour ${f.key}${f.mode ? ` (${f.mode})` : ''}`}>
+                      Essayer {f.fixLabel}
+                    </button>
                   ) : (
                     f.fixLabel && <small className="hint">Piste : {f.fixLabel}</small>
                   )}

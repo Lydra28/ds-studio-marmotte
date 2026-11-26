@@ -578,7 +578,11 @@ function Workspace({
         multi={multi}
         onOpen={onOpen}
         view={view}
-        onView={(v) => (v === 'versions' ? openVersions(versionsTab) : setView(v))}
+        onView={(v) => {
+          if (v === 'versions') return openVersions(versionsTab);
+          setView(v);
+          if (v === 'corrections') window.scrollTo(0, 0);
+        }}
         versions={versions.map((v) => v.revision)}
         onVersion={(revision) => openVersions('compare', revision)}
         correctionsBadge={
@@ -587,7 +591,10 @@ function Workspace({
               className="tab-badge warn"
               title="Voir les corrections proposées"
               aria-label={`${findings.length} écart(s) · Corrections`}
-              onClick={() => setView('corrections')}
+              onClick={() => {
+                setView('corrections');
+                window.scrollTo(0, 0);
+              }}
             >
               {findings.length}
             </button>
